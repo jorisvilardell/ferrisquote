@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["libs/ferrisquote-domain", "libs/ferrisquote-postgres"]
+members = ["libs/ferrisquote-auth","libs/ferrisquote-domain", "libs/ferrisquote-postgres"]
 
 
 [workspace.package]
