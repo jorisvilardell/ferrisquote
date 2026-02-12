@@ -6,5 +6,5 @@ members = ["libs/ferrisquote-auth","libs/ferrisquote-domain", "libs/ferrisquote-
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["nathaelb <pro.nathaelbonnal@gmail.com>"]
+authors = ["nathaelb <pro.nathaelbonnal@gmail.com>", "jorisvilardell <joris.vilardell@outlook.com>"]
 license = "Apache-2.0"
