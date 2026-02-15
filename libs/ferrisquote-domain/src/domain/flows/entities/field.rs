@@ -1,6 +1,6 @@
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
 
-type FieldId = Uuid;
+use super::ids::FieldId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Field {
@@ -9,13 +9,11 @@ pub struct Field {
     pub label: String,
     pub description: String,
     pub order: u32,
-
     pub config: FieldConfig,
 }
 
 impl Field {
     pub fn new(
-        id: String,
         key: String,
         label: String,
         description: String,
@@ -23,7 +21,25 @@ impl Field {
         config: FieldConfig,
     ) -> Self {
         Field {
-            id: Uuid::new_v4(),
+            id: FieldId::new(),
+            key,
+            label,
+            description,
+            order,
+            config,
+        }
+    }
+
+    pub fn with_id(
+        id: FieldId,
+        key: String,
+        label: String,
+        description: String,
+        order: u32,
+        config: FieldConfig,
+    ) -> Self {
+        Field {
+            id,
             key,
             label,
             description,
@@ -33,6 +49,7 @@ impl Field {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FieldConfig {
     Text(FieldText),
     Number(FieldNumber),
@@ -63,24 +80,29 @@ impl FieldConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldText {
     pub max_length: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldNumber {
     pub min: f64,
     pub max: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldDate {
     pub min: chrono::NaiveDate,
     pub max: chrono::NaiveDate,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldBoolean {
     pub default: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldSelect {
     pub options: Vec<String>,
 }
