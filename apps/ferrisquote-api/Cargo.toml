@@ -42,6 +42,8 @@ uuid = { version = "1.20", features = ["v7", "serde"] }
 
 # Environment variables
 dotenvy = "0.15"
+ferrisquote-postgres = { version = "0.1.0", path = "../../libs/ferrisquote-postgres" }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
 
 [dev-dependencies]
 http-body-util = "0.1"

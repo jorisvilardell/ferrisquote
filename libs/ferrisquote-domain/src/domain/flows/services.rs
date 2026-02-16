@@ -14,6 +14,7 @@ use super::{
 
 /// Implementation of FlowService that orchestrates domain logic
 /// and delegates persistence to a FlowRepository.
+#[derive(Clone)]
 pub struct FlowServiceImpl<R: FlowRepository> {
     repository: R,
 }
