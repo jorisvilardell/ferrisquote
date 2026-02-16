@@ -4,9 +4,15 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod error;
 mod state;
 
+use routes::build_routes::build_routes;
 use state::AppState;
+
+pub mod dto;
+pub mod handlers;
+pub mod routes;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -43,8 +49,8 @@ async fn main() -> anyhow::Result<()> {
     // Static dispatch: compiler infers concrete types at compile time
     let app_state = AppState::new(Arc::new(flow_service));
 
-    // Router minimal (sans routes custom)
-    let app = axum::Router::new().with_state(app_state);
+    // Build router with all routes
+    let app = build_routes(app_state);
 
     // Server
     let port = std::env::var("PORT")
