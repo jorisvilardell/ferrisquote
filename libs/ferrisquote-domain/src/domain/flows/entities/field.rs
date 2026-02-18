@@ -8,7 +8,7 @@ pub struct Field {
     pub key: String,
     pub label: String,
     pub description: String,
-    pub order: u32,
+    pub rank: String,
     pub config: FieldConfig,
 }
 
@@ -17,7 +17,7 @@ impl Field {
         key: String,
         label: String,
         description: String,
-        order: u32,
+        rank: String,
         config: FieldConfig,
     ) -> Self {
         Field {
@@ -25,7 +25,7 @@ impl Field {
             key,
             label,
             description,
-            order,
+            rank,
             config,
         }
     }
@@ -35,7 +35,7 @@ impl Field {
         key: String,
         label: String,
         description: String,
-        order: u32,
+        rank: String,
         config: FieldConfig,
     ) -> Self {
         Field {
@@ -43,7 +43,7 @@ impl Field {
             key,
             label,
             description,
-            order,
+            rank,
             config,
         }
     }
