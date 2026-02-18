@@ -1,0 +1,9 @@
+-- Add up migration script here
+CREATE TABLE flows (
+  id UUID PRIMARY KEY,
+  name VARCHAR(128) NOT NULL,
+  description TEXT,
+
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
