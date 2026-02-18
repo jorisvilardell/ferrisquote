@@ -7,27 +7,27 @@ pub struct Step {
     pub id: StepId,
     pub title: String,
     pub description: String,
-    pub order: u32,
+    pub rank: String,
     pub fields: Vec<Field>,
 }
 
 impl Step {
-    pub fn new(title: String, description: String, order: u32) -> Self {
+    pub fn new(title: String, description: String, rank: String) -> Self {
         Step {
             id: StepId::new(),
             title,
             description,
-            order,
+            rank,
             fields: Vec::new(),
         }
     }
 
-    pub fn with_id(id: StepId, title: String, description: String, order: u32) -> Self {
+    pub fn with_id(id: StepId, title: String, description: String, rank: String) -> Self {
         Step {
             id,
             title,
             description,
-            order,
+            rank,
             fields: Vec::new(),
         }
     }
@@ -36,14 +36,14 @@ impl Step {
         id: StepId,
         title: String,
         description: String,
-        order: u32,
+        rank: String,
         fields: Vec<Field>,
     ) -> Self {
         Step {
             id,
             title,
             description,
-            order,
+            rank,
             fields,
         }
     }
