@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use ferrisquote_domain::{FieldId, StepId, domain::flows::ports::FlowService};
+use ferrisquote_domain::{FieldId, StepId, domain::flows::ports::{FieldService, FlowService, StepService}};
 use validator::Validate;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
 use super::mappers::{map_field_config_from_dto, map_field_to_response, map_flow_to_response};
 
 /// Add a field to a step
-pub async fn add_field<S: FlowService>(
+pub async fn add_field<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(step_id): Path<String>,
     Json(request): Json<CreateFieldRequest>,
@@ -39,7 +39,7 @@ pub async fn add_field<S: FlowService>(
 }
 
 /// Update field configuration
-pub async fn update_field_config<S: FlowService>(
+pub async fn update_field_config<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(field_id): Path<String>,
     Json(request): Json<UpdateFieldConfigRequest>,
@@ -51,7 +51,7 @@ pub async fn update_field_config<S: FlowService>(
 
     let field = state
         .flow_service
-        .update_field_config(field_id, request.label, config)
+        .update_field_config(field_id, Some(request.label), Some(config))
         .await?;
 
     let response = map_field_to_response(field);
@@ -60,7 +60,7 @@ pub async fn update_field_config<S: FlowService>(
 }
 
 /// Remove a field from a step
-pub async fn remove_field<S: FlowService>(
+pub async fn remove_field<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(field_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
@@ -76,7 +76,7 @@ pub async fn remove_field<S: FlowService>(
 }
 
 /// Move a field to a different step or change its order
-pub async fn move_field<S: FlowService>(
+pub async fn move_field<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(field_id): Path<String>,
     Json(request): Json<MoveFieldRequest>,
@@ -84,11 +84,13 @@ pub async fn move_field<S: FlowService>(
     request.validate()?;
 
     let field_id = FieldId::from_uuid(uuid::Uuid::parse_str(&field_id)?);
-    let target_step_id = StepId::from_uuid(request.target_step_id);
+    let target_step_id = request.target_step_id.map(|id| StepId::from_uuid(id));
+    let after_id = request.after_id.map(|id| FieldId::from_uuid(id));
+    let before_id = request.before_id.map(|id| FieldId::from_uuid(id));
 
     let flow = state
         .flow_service
-        .move_field(field_id, target_step_id, request.new_order)
+        .move_field(field_id, target_step_id, after_id, before_id)
         .await?;
 
     let response = map_flow_to_response(flow);

@@ -4,7 +4,8 @@ use axum::{
     Json,
 };
 use ferrisquote_domain::{
-    domain::flows::ports::FlowService, FlowId, StepId,
+    domain::flows::ports::{FieldService, FlowService, StepService},
+    FlowId, StepId,
 };
 use validator::Validate;
 
@@ -17,7 +18,7 @@ use crate::{
 use super::mappers::{map_flow_to_response, map_step_to_response};
 
 /// Add a step to a flow
-pub async fn add_step<S: FlowService>(
+pub async fn add_step<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
     Json(request): Json<CreateStepRequest>,
@@ -32,7 +33,7 @@ pub async fn add_step<S: FlowService>(
 }
 
 /// Remove a step from a flow
-pub async fn remove_step<S: FlowService>(
+pub async fn remove_step<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(step_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
@@ -48,7 +49,7 @@ pub async fn remove_step<S: FlowService>(
 }
 
 /// Reorder a step within a flow
-pub async fn reorder_step<S: FlowService>(
+pub async fn reorder_step<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(step_id): Path<String>,
     Json(request): Json<ReorderStepRequest>,
@@ -56,9 +57,16 @@ pub async fn reorder_step<S: FlowService>(
     request.validate()?;
 
     let step_id = StepId::from_uuid(uuid::Uuid::parse_str(&step_id)?);
+    let after_id = request
+        .after_id
+        .map(|id| StepId::from_uuid(id));
+    let before_id = request
+        .before_id
+        .map(|id| StepId::from_uuid(id));
+
     let flow = state
         .flow_service
-        .reorder_step(step_id, request.new_order)
+        .reorder_step(step_id, after_id, before_id)
         .await?;
 
     let response = map_flow_to_response(flow);

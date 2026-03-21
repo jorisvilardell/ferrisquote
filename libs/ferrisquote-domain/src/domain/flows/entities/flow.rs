@@ -58,7 +58,7 @@ impl Flow {
     }
 
     pub fn reorder_steps(&mut self) {
-        self.steps.sort_by_key(|s| s.order);
+        self.steps.sort_by_key(|a| a.rank.clone());
     }
 
     pub fn update_metadata(&mut self, name: String, description: String) {

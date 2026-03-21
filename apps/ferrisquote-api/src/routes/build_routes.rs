@@ -1,11 +1,13 @@
 use axum::{Router, routing::get};
 
-use ferrisquote_domain::domain::flows::ports::FlowService;
+use ferrisquote_domain::domain::flows::ports::{FieldService, FlowService, StepService};
 
 use crate::{routes::flow_routes, state::AppState};
 
 /// Build the complete API router with all routes
-pub fn build_routes<S: FlowService + Clone + 'static>(state: AppState<S>) -> Router {
+pub fn build_routes<S: FlowService + StepService + FieldService + Clone + 'static>(
+    state: AppState<S>,
+) -> Router {
     Router::new()
         // Health check
         .route("/health", get(health_check))

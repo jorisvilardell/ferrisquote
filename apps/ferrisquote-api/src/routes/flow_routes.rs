@@ -3,12 +3,13 @@ use axum::{
     routing::{delete, get, post, put},
 };
 
-use ferrisquote_domain::domain::flows::ports::FlowService;
+use ferrisquote_domain::domain::flows::ports::{FieldService, FlowService, StepService};
 
 use crate::{handlers, state::AppState};
 
 /// Flow-specific routes
-pub fn flow_routes<S: FlowService + Clone + 'static>() -> Router<AppState<S>> {
+pub fn flow_routes<S: FlowService + StepService + FieldService + Clone + 'static>(
+) -> Router<AppState<S>> {
     Router::new()
         // Flow CRUD
         .route("/", post(handlers::create_flow))

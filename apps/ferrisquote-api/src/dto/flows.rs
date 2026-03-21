@@ -32,8 +32,8 @@ pub struct CreateStepRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct ReorderStepRequest {
-    #[validate(range(min = 0))]
-    pub new_order: u32,
+    pub after_id: Option<Uuid>,
+    pub before_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -59,9 +59,9 @@ pub struct UpdateFieldConfigRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct MoveFieldRequest {
-    pub target_step_id: Uuid,
-    #[validate(range(min = 0))]
-    pub new_order: u32,
+    pub target_step_id: Option<Uuid>,
+    pub after_id: Option<Uuid>,
+    pub before_id: Option<Uuid>,
 }
 
 // ============================================================================
@@ -95,7 +95,7 @@ pub struct StepResponse {
     pub id: Uuid,
     pub title: String,
     pub description: String,
-    pub order: u32,
+    pub rank: String,
     pub fields: Vec<FieldResponse>,
 }
 
@@ -105,7 +105,7 @@ pub struct FieldResponse {
     pub key: String,
     pub label: String,
     pub description: String,
-    pub order: u32,
+    pub rank: String,
     pub config: FieldConfigDto,
 }
 
