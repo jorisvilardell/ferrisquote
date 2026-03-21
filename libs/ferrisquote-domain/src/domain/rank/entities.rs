@@ -25,8 +25,12 @@ impl Into<String> for Rank {
     }
 }
 
-impl Into<&str> for Rank {
-    fn into(self) -> &str {
-        &self.0
+/// Allow converting a reference to `Rank` into `&str`.
+/// We implement `Into<&str>` for `&Rank` (not for `Rank`) because converting
+/// a moved `Rank` into a borrowed `&str` would produce a dangling reference.
+/// Implementing for `&Rank` lets callers do `let s: &str = (&rank).into();`.
+impl<'a> Into<&'a str> for &'a Rank {
+    fn into(self) -> &'a str {
+        self.as_str()
     }
 }

@@ -18,7 +18,17 @@ pub trait FlowRepository: Send + Sync {
     /// List all flows.
     fn list_flows(&self) -> impl Future<Output = Result<Vec<Flow>, DomainError>> + Send;
     /// Update an existing flow.
-    fn update_flow(&self, flow: Flow) -> impl Future<Output = Result<Flow, DomainError>> + Send;
+    ///
+    /// The repository should update only the fields that are provided (`Some(_)`).
+    /// Fields set to `None` must remain unchanged in storage. This avoids a
+    /// full select-and-rewrite on the caller side and lets repositories apply
+    /// partial updates atomically where supported.
+    fn update_flow(
+        &self,
+        id: FlowId,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> impl Future<Output = Result<Flow, DomainError>> + Send;
     /// Delete a flow by id.
     fn delete_flow(&self, id: FlowId) -> impl Future<Output = Result<(), DomainError>> + Send;
 }
@@ -35,8 +45,19 @@ pub trait StepRepository: Send + Sync {
     /// Retrieve a step by id.
     fn get_step(&self, id: StepId) -> impl Future<Output = Result<Step, DomainError>> + Send;
 
-    /// Update an existing step.
-    fn update_step(&self, step: Step) -> impl Future<Output = Result<Step, DomainError>> + Send;
+    /// Update an existing step (partial update).
+    ///
+    /// The repository should update only the fields provided as `Some(...)`.
+    /// Fields set to `None` must remain unchanged in storage. This avoids a
+    /// full select-and-rewrite on the caller side and lets repositories apply
+    /// partial updates atomically where supported.
+    fn update_step(
+        &self,
+        id: StepId,
+        title: Option<String>,
+        description: Option<String>,
+        rank: Option<String>,
+    ) -> impl Future<Output = Result<Step, DomainError>> + Send;
     /// Delete a step by id.
     fn delete_step(&self, id: StepId) -> impl Future<Output = Result<(), DomainError>> + Send;
 }
@@ -50,10 +71,26 @@ pub trait FieldRepository: Send + Sync {
         field: Field,
     ) -> impl Future<Output = Result<Field, DomainError>> + Send;
     /// Update an existing field.
-    fn update_field(&self, field: Field)
-    -> impl Future<Output = Result<Field, DomainError>> + Send;
+    ///
+    /// The repository should update only the fields provided as `Some(...)`.
+    /// Fields set to `None` must remain unchanged in storage. This allows partial
+    /// updates without requiring a full select-and-rewrite.
+    fn update_field(
+        &self,
+        field_id: FieldId,
+        key: Option<String>,
+        label: Option<String>,
+        description: Option<String>,
+        config: Option<FieldConfig>,
+    ) -> impl Future<Output = Result<Field, DomainError>> + Send;
     /// Delete a field by id.
     fn delete_field(&self, id: FieldId) -> impl Future<Output = Result<(), DomainError>> + Send;
+    /// Get all fields for a flow.
+    fn get_flow_fields(
+        &self,
+        flow_id: FlowId,
+        like: Option<String>,
+    ) -> impl Future<Output = Result<Vec<Field>, DomainError>> + Send;
 }
 
 /// Service trait for Flow domain logic.
@@ -68,7 +105,7 @@ pub trait FlowService: Send + Sync {
     fn update_flow_metadata(
         &self,
         id: FlowId,
-        name: String,
+        name: Option<String>,
         description: Option<String>,
     ) -> impl Future<Output = Result<Flow, DomainError>> + Send;
     /// Delete a flow by id.
@@ -92,6 +129,14 @@ pub trait StepService: Send + Sync {
         after_id: Option<StepId>,
         before_id: Option<StepId>,
     ) -> impl Future<Output = Result<Flow, DomainError>> + Send;
+
+    /// Update a step's metadata.
+    fn update_step_metadata(
+        &self,
+        step_id: StepId,
+        title: Option<String>,
+        description: Option<String>,
+    ) -> impl Future<Output = Result<Step, DomainError>> + Send;
 }
 
 /// Service trait for Field domain logic.
@@ -104,12 +149,15 @@ pub trait FieldService: Send + Sync {
         key: String,
         config: FieldConfig,
     ) -> impl Future<Output = Result<Field, DomainError>> + Send;
-    /// Update a field's configuration and label.
+    /// Update a field's configuration and/or label.
+    ///
+    /// This is a partial-update API: only the provided fields (`Some(...)`) are
+    /// changed by the repository. Fields set to `None` are left untouched.
     fn update_field_config(
         &self,
         field_id: FieldId,
-        label: String,
-        config: FieldConfig,
+        label: Option<String>,
+        config: Option<FieldConfig>,
     ) -> impl Future<Output = Result<Field, DomainError>> + Send;
     /// Remove a field by id.
     fn remove_field(
@@ -124,6 +172,12 @@ pub trait FieldService: Send + Sync {
         target_step_id: Option<StepId>,
         after_id: Option<FieldId>,
         before_id: Option<FieldId>,
-        new_order: u32,
     ) -> impl Future<Output = Result<Flow, DomainError>> + Send;
+
+    /// Search for fields within a flow.
+    fn search_flow_fields(
+        &self,
+        flow_id: FlowId,
+        _query: Option<String>,
+    ) -> impl Future<Output = Result<Vec<Field>, DomainError>> + Send;
 }
