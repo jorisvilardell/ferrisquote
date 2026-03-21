@@ -1,4 +1,7 @@
-use ferrisquote_domain::domain::flows::services::FlowServiceImpl;
+use ferrisquote_domain::domain::{
+    flows::services::FlowServiceImpl,
+    rank::services::LexoRankProvider,
+};
 use ferrisquote_postgres::repositories::flow_repository::PostgresFlowRepository;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -30,7 +33,6 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Starting FerrisQuote API (minimal)");
 
-    // DI minimal: repo + service + app_state
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let pool = PgPoolOptions::new()
@@ -39,20 +41,20 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("failed to connect to Postgres");
 
-    // Repository (no Arc needed - PgPool is already Arc internally)
-    let flow_repository = PostgresFlowRepository::new(pool);
+    let repo = PostgresFlowRepository::new(pool);
+    let rank_service = LexoRankProvider;
 
-    // Service (concrete type for static dispatch)
-    let flow_service = FlowServiceImpl::new(flow_repository);
+    let flow_service = FlowServiceImpl::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        rank_service,
+    );
 
-    // AppState with Arc for sharing across handlers
-    // Static dispatch: compiler infers concrete types at compile time
     let app_state = AppState::new(Arc::new(flow_service));
 
-    // Build router with all routes
     let app = build_routes(app_state);
 
-    // Server
     let port = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
