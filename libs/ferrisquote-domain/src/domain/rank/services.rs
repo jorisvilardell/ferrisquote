@@ -1,6 +1,7 @@
 use crate::domain::rank::entities::Rank;
 use crate::domain::rank::ports::RankService;
 
+#[derive(Clone)]
 pub struct LexoRankProvider;
 
 impl RankService for LexoRankProvider {

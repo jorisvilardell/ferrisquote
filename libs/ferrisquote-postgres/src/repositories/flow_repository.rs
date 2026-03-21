@@ -2,12 +2,12 @@ use ferrisquote_domain::domain::{
     error::DomainError,
     flows::{
         entities::{
-            field::Field,
+            field::{Field, FieldConfig},
             flow::Flow,
             ids::{FieldId, FlowId, StepId},
             step::Step,
         },
-        ports::FlowRepository,
+        ports::{FieldRepository, FlowRepository, StepRepository},
     },
 };
 use sqlx::PgPool;
@@ -77,12 +77,14 @@ impl FlowRepository for PostgresFlowRepository {
 
     fn update_flow(
         &self,
-        flow: Flow,
+        id: FlowId,
+        name: Option<String>,
+        description: Option<String>,
     ) -> impl std::future::Future<Output = Result<Flow, DomainError>> + Send {
         async move {
             // TODO: Implement PostgreSQL update
             // UPDATE flows
-            // SET name = $2, description = $3, updated_at = NOW()
+            // SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = NOW()
             // WHERE id = $1
             // RETURNING *
             todo!("Implement update_flow with PostgreSQL")
@@ -102,30 +104,36 @@ impl FlowRepository for PostgresFlowRepository {
         }
     }
 
+}
+
+impl StepRepository for PostgresFlowRepository {
     fn create_step(
         &self,
         flow_id: FlowId,
         step: Step,
     ) -> impl std::future::Future<Output = Result<Step, DomainError>> + Send {
         async move {
-            // TODO: Implement PostgreSQL insert
-            // INSERT INTO steps (id, flow_id, title, description, order, created_at, updated_at)
-            // VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-            // RETURNING *
             todo!("Implement create_step with PostgreSQL")
+        }
+    }
+
+    fn get_step(
+        &self,
+        id: StepId,
+    ) -> impl std::future::Future<Output = Result<Step, DomainError>> + Send {
+        async move {
+            todo!("Implement get_step with PostgreSQL")
         }
     }
 
     fn update_step(
         &self,
-        step: Step,
+        id: StepId,
+        title: Option<String>,
+        description: Option<String>,
+        rank: Option<String>,
     ) -> impl std::future::Future<Output = Result<Step, DomainError>> + Send {
         async move {
-            // TODO: Implement PostgreSQL update
-            // UPDATE steps
-            // SET title = $2, description = $3, order = $4, updated_at = NOW()
-            // WHERE id = $1
-            // RETURNING *
             todo!("Implement update_step with PostgreSQL")
         }
     }
@@ -135,38 +143,31 @@ impl FlowRepository for PostgresFlowRepository {
         id: StepId,
     ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
         async move {
-            // TODO: Implement PostgreSQL delete
-            // DELETE FROM steps WHERE id = $1
-            // Note: Fields should cascade delete via DB constraints
             todo!("Implement delete_step with PostgreSQL")
         }
     }
+}
 
+impl FieldRepository for PostgresFlowRepository {
     fn create_field(
         &self,
         step_id: StepId,
         field: Field,
     ) -> impl std::future::Future<Output = Result<Field, DomainError>> + Send {
         async move {
-            // TODO: Implement PostgreSQL insert
-            // INSERT INTO fields (id, step_id, key, label, description, order, config, created_at, updated_at)
-            // VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-            // RETURNING *
-            // Note: config will be stored as JSONB
             todo!("Implement create_field with PostgreSQL")
         }
     }
 
     fn update_field(
         &self,
-        field: Field,
+        field_id: FieldId,
+        key: Option<String>,
+        label: Option<String>,
+        description: Option<String>,
+        config: Option<FieldConfig>,
     ) -> impl std::future::Future<Output = Result<Field, DomainError>> + Send {
         async move {
-            // TODO: Implement PostgreSQL update
-            // UPDATE fields
-            // SET key = $2, label = $3, description = $4, order = $5, config = $6, updated_at = NOW()
-            // WHERE id = $1
-            // RETURNING *
             todo!("Implement update_field with PostgreSQL")
         }
     }
@@ -176,9 +177,17 @@ impl FlowRepository for PostgresFlowRepository {
         id: FieldId,
     ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
         async move {
-            // TODO: Implement PostgreSQL delete
-            // DELETE FROM fields WHERE id = $1
             todo!("Implement delete_field with PostgreSQL")
+        }
+    }
+
+    fn get_flow_fields(
+        &self,
+        flow_id: FlowId,
+        like: Option<String>,
+    ) -> impl std::future::Future<Output = Result<Vec<Field>, DomainError>> + Send {
+        async move {
+            todo!("Implement get_flow_fields with PostgreSQL")
         }
     }
 }
