@@ -1,10 +1,10 @@
--- Add up migration script here
 CREATE TABLE fields (
   id UUID PRIMARY KEY,
   steps_id UUID NOT NULL,
   "key" VARCHAR(32) NOT NULL,
-  "type" VARCHAR(32) NOT NULL,
-  required BOOLEAN NOT NULL DEFAULT FALSE,
+  label VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  config JSONB NOT NULL,
   rank VARCHAR(255) NOT NULL DEFAULT 'n',
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
