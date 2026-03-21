@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use ferrisquote_domain::{FlowId, domain::flows::ports::FlowService};
+use ferrisquote_domain::{FlowId, domain::flows::ports::{FieldService, FlowService, StepService}};
 use validator::Validate;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
 use super::mappers::map_flow_to_response;
 
 /// Create a new flow
-pub async fn create_flow<S: FlowService>(
+pub async fn create_flow<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Json(request): Json<CreateFlowRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<FlowResponse>>)> {
@@ -31,7 +31,7 @@ pub async fn create_flow<S: FlowService>(
 }
 
 /// Get a flow by ID
-pub async fn get_flow<S: FlowService>(
+pub async fn get_flow<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<FlowResponse>>> {
@@ -43,7 +43,7 @@ pub async fn get_flow<S: FlowService>(
 }
 
 /// List all flows
-pub async fn list_flows<S: FlowService>(
+pub async fn list_flows<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
 ) -> ApiResult<Json<ApiResponse<FlowListResponse>>> {
     let flows = state.flow_service.list_flows().await?;
@@ -64,7 +64,7 @@ pub async fn list_flows<S: FlowService>(
 }
 
 /// Update flow metadata
-pub async fn update_flow_metadata<S: FlowService>(
+pub async fn update_flow_metadata<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
     Json(request): Json<UpdateFlowMetadataRequest>,
@@ -74,7 +74,7 @@ pub async fn update_flow_metadata<S: FlowService>(
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
     let flow = state
         .flow_service
-        .update_flow_metadata(flow_id, request.name, request.description)
+        .update_flow_metadata(flow_id, Some(request.name), request.description)
         .await?;
 
     let response = map_flow_to_response(flow);
@@ -83,7 +83,7 @@ pub async fn update_flow_metadata<S: FlowService>(
 }
 
 /// Delete a flow
-pub async fn delete_flow<S: FlowService>(
+pub async fn delete_flow<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {

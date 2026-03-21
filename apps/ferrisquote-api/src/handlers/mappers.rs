@@ -21,7 +21,7 @@ pub fn map_step_to_response(step: Step) -> StepResponse {
         id: step.id.into_uuid(),
         title: step.title,
         description: step.description,
-        order: step.order,
+        rank: step.rank,
         fields: step.fields.into_iter().map(map_field_to_response).collect(),
     }
 }
@@ -33,7 +33,7 @@ pub fn map_field_to_response(field: Field) -> FieldResponse {
         key: field.key,
         label: field.label,
         description: field.description,
-        order: field.order,
+        rank: field.rank,
         config: map_field_config_to_dto(field.config),
     }
 }
