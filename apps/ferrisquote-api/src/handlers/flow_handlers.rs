@@ -18,6 +18,16 @@ use crate::{
 use super::mappers::map_flow_to_response;
 
 /// Create a new flow
+#[utoipa::path(
+    post,
+    path = "/api/v1/flows",
+    request_body = CreateFlowRequest,
+    responses(
+        (status = 201, description = "Flow created", body = FlowResponse),
+        (status = 400, description = "Validation error"),
+    ),
+    tag = "flows"
+)]
 pub async fn create_flow<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Json(request): Json<CreateFlowRequest>,
@@ -31,6 +41,16 @@ pub async fn create_flow<S: FlowService + StepService + FieldService>(
 }
 
 /// Get a flow by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/flows/{flow_id}",
+    params(("flow_id" = String, Path, description = "Flow UUID")),
+    responses(
+        (status = 200, description = "Flow found", body = FlowResponse),
+        (status = 404, description = "Flow not found"),
+    ),
+    tag = "flows"
+)]
 pub async fn get_flow<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
@@ -43,6 +63,14 @@ pub async fn get_flow<S: FlowService + StepService + FieldService>(
 }
 
 /// List all flows
+#[utoipa::path(
+    get,
+    path = "/api/v1/flows",
+    responses(
+        (status = 200, description = "List of flows", body = FlowListResponse),
+    ),
+    tag = "flows"
+)]
 pub async fn list_flows<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
 ) -> ApiResult<Json<ApiResponse<FlowListResponse>>> {
@@ -64,6 +92,18 @@ pub async fn list_flows<S: FlowService + StepService + FieldService>(
 }
 
 /// Update flow metadata
+#[utoipa::path(
+    put,
+    path = "/api/v1/flows/{flow_id}",
+    params(("flow_id" = String, Path, description = "Flow UUID")),
+    request_body = UpdateFlowMetadataRequest,
+    responses(
+        (status = 200, description = "Flow updated", body = FlowResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Flow not found"),
+    ),
+    tag = "flows"
+)]
 pub async fn update_flow_metadata<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
@@ -83,6 +123,16 @@ pub async fn update_flow_metadata<S: FlowService + StepService + FieldService>(
 }
 
 /// Delete a flow
+#[utoipa::path(
+    delete,
+    path = "/api/v1/flows/{flow_id}",
+    params(("flow_id" = String, Path, description = "Flow UUID")),
+    responses(
+        (status = 200, description = "Flow deleted", body = MessageResponse),
+        (status = 404, description = "Flow not found"),
+    ),
+    tag = "flows"
+)]
 pub async fn delete_flow<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
