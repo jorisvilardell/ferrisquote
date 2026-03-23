@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::future::Future;
 
 use crate::domain::{error::DomainError, flows::entities::ids::FlowId};
 
@@ -26,94 +25,70 @@ impl<ER> EstimatorService for EstimatorServiceImpl<ER>
 where
     ER: EstimatorRepository + Send + Sync,
 {
-    fn create_estimator(
+    async fn create_estimator(
         &self,
         flow_id: FlowId,
         name: String,
-    ) -> impl Future<Output = Result<Estimator, DomainError>> + Send {
-        let repo = &self.repo;
-        async move {
-            let estimator = Estimator::new(flow_id, name);
-            repo.create_estimator(estimator).await
-        }
+    ) -> Result<Estimator, DomainError> {
+        let estimator = Estimator::new(flow_id, name);
+        self.repo.create_estimator(estimator).await
     }
 
-    fn get_estimator(
-        &self,
-        id: EstimatorId,
-    ) -> impl Future<Output = Result<Estimator, DomainError>> + Send {
-        let repo = &self.repo;
-        async move { repo.get_estimator(id).await }
+    async fn get_estimator(&self, id: EstimatorId) -> Result<Estimator, DomainError> {
+        self.repo.get_estimator(id).await
     }
 
-    fn list_estimators_for_flow(
+    async fn list_estimators_for_flow(
         &self,
         flow_id: FlowId,
-    ) -> impl Future<Output = Result<Vec<Estimator>, DomainError>> + Send {
-        let repo = &self.repo;
-        async move { repo.list_estimators_for_flow(flow_id).await }
+    ) -> Result<Vec<Estimator>, DomainError> {
+        self.repo.list_estimators_for_flow(flow_id).await
     }
 
-    fn update_estimator(
+    async fn update_estimator(
         &self,
         id: EstimatorId,
         name: Option<String>,
-    ) -> impl Future<Output = Result<Estimator, DomainError>> + Send {
-        let repo = &self.repo;
-        async move { repo.update_estimator(id, name).await }
+    ) -> Result<Estimator, DomainError> {
+        self.repo.update_estimator(id, name).await
     }
 
-    fn delete_estimator(
-        &self,
-        id: EstimatorId,
-    ) -> impl Future<Output = Result<(), DomainError>> + Send {
-        let repo = &self.repo;
-        async move { repo.delete_estimator(id).await }
+    async fn delete_estimator(&self, id: EstimatorId) -> Result<(), DomainError> {
+        self.repo.delete_estimator(id).await
     }
 
-    fn add_variable(
+    async fn add_variable(
         &self,
         estimator_id: EstimatorId,
         name: String,
         expression: String,
         description: String,
-    ) -> impl Future<Output = Result<EstimatorVariable, DomainError>> + Send {
-        let repo = &self.repo;
-        async move {
-            let variable = EstimatorVariable::new(name, expression, description);
-            repo.add_variable(estimator_id, variable).await
-        }
+    ) -> Result<EstimatorVariable, DomainError> {
+        let variable = EstimatorVariable::new(name, expression, description);
+        self.repo.add_variable(estimator_id, variable).await
     }
 
-    fn update_variable(
+    async fn update_variable(
         &self,
         id: EstimatorVariableId,
         name: Option<String>,
         expression: Option<String>,
         description: Option<String>,
-    ) -> impl Future<Output = Result<EstimatorVariable, DomainError>> + Send {
-        let repo = &self.repo;
-        async move { repo.update_variable(id, name, expression, description).await }
+    ) -> Result<EstimatorVariable, DomainError> {
+        self.repo.update_variable(id, name, expression, description).await
     }
 
-    fn remove_variable(
-        &self,
-        id: EstimatorVariableId,
-    ) -> impl Future<Output = Result<(), DomainError>> + Send {
-        let repo = &self.repo;
-        async move { repo.remove_variable(id).await }
+    async fn remove_variable(&self, id: EstimatorVariableId) -> Result<(), DomainError> {
+        self.repo.remove_variable(id).await
     }
 
-    fn evaluate(
+    async fn evaluate(
         &self,
         estimator_id: EstimatorId,
         field_values: HashMap<String, f64>,
-    ) -> impl Future<Output = Result<HashMap<String, f64>, DomainError>> + Send {
-        let repo = &self.repo;
-        async move {
-            let estimator = repo.get_estimator(estimator_id).await?;
-            evaluate_estimator(&estimator, &field_values)
-        }
+    ) -> Result<HashMap<String, f64>, DomainError> {
+        let estimator = self.repo.get_estimator(estimator_id).await?;
+        evaluate_estimator(&estimator, &field_values)
     }
 }
 
