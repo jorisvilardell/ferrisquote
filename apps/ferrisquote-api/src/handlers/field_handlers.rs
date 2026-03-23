@@ -8,8 +8,8 @@ use validator::Validate;
 
 use crate::{
     dto::{
-        ApiResponse, CreateFieldRequest, FieldResponse, MessageResponse, MoveFieldRequest,
-        UpdateFieldConfigRequest,
+        ApiResponse, CreateFieldRequest, FieldResponse, FlowResponse, MessageResponse,
+        MoveFieldRequest, UpdateFieldConfigRequest,
     },
     error::ApiResult,
     state::AppState,
@@ -18,6 +18,18 @@ use crate::{
 use super::mappers::{map_field_config_from_dto, map_field_to_response, map_flow_to_response};
 
 /// Add a field to a step
+#[utoipa::path(
+    post,
+    path = "/api/v1/flows/steps/{step_id}/fields",
+    params(("step_id" = String, Path, description = "Step UUID")),
+    request_body = CreateFieldRequest,
+    responses(
+        (status = 201, description = "Field created", body = FieldResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Step not found"),
+    ),
+    tag = "fields"
+)]
 pub async fn add_field<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(step_id): Path<String>,
@@ -39,6 +51,18 @@ pub async fn add_field<S: FlowService + StepService + FieldService>(
 }
 
 /// Update field configuration
+#[utoipa::path(
+    put,
+    path = "/api/v1/flows/fields/{field_id}",
+    params(("field_id" = String, Path, description = "Field UUID")),
+    request_body = UpdateFieldConfigRequest,
+    responses(
+        (status = 200, description = "Field updated", body = FieldResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Field not found"),
+    ),
+    tag = "fields"
+)]
 pub async fn update_field_config<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(field_id): Path<String>,
@@ -60,6 +84,16 @@ pub async fn update_field_config<S: FlowService + StepService + FieldService>(
 }
 
 /// Remove a field from a step
+#[utoipa::path(
+    delete,
+    path = "/api/v1/flows/fields/{field_id}",
+    params(("field_id" = String, Path, description = "Field UUID")),
+    responses(
+        (status = 200, description = "Field removed", body = MessageResponse),
+        (status = 404, description = "Field not found"),
+    ),
+    tag = "fields"
+)]
 pub async fn remove_field<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(field_id): Path<String>,
@@ -76,6 +110,17 @@ pub async fn remove_field<S: FlowService + StepService + FieldService>(
 }
 
 /// Move a field to a different step or change its order
+#[utoipa::path(
+    put,
+    path = "/api/v1/flows/fields/{field_id}/move",
+    params(("field_id" = String, Path, description = "Field UUID")),
+    request_body = MoveFieldRequest,
+    responses(
+        (status = 200, description = "Field moved, returns updated flow", body = FlowResponse),
+        (status = 404, description = "Field not found"),
+    ),
+    tag = "fields"
+)]
 pub async fn move_field<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(field_id): Path<String>,

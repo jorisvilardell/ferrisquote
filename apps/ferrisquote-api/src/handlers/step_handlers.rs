@@ -10,7 +10,7 @@ use ferrisquote_domain::{
 use validator::Validate;
 
 use crate::{
-    dto::{ApiResponse, CreateStepRequest, MessageResponse, ReorderStepRequest, StepResponse},
+    dto::{ApiResponse, CreateStepRequest, FlowResponse, MessageResponse, ReorderStepRequest, StepResponse},
     error::ApiResult,
     state::AppState,
 };
@@ -18,6 +18,18 @@ use crate::{
 use super::mappers::{map_flow_to_response, map_step_to_response};
 
 /// Add a step to a flow
+#[utoipa::path(
+    post,
+    path = "/api/v1/flows/{flow_id}/steps",
+    params(("flow_id" = String, Path, description = "Flow UUID")),
+    request_body = CreateStepRequest,
+    responses(
+        (status = 201, description = "Step created", body = StepResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Flow not found"),
+    ),
+    tag = "steps"
+)]
 pub async fn add_step<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(flow_id): Path<String>,
@@ -33,6 +45,16 @@ pub async fn add_step<S: FlowService + StepService + FieldService>(
 }
 
 /// Remove a step from a flow
+#[utoipa::path(
+    delete,
+    path = "/api/v1/flows/steps/{step_id}",
+    params(("step_id" = String, Path, description = "Step UUID")),
+    responses(
+        (status = 200, description = "Step removed", body = MessageResponse),
+        (status = 404, description = "Step not found"),
+    ),
+    tag = "steps"
+)]
 pub async fn remove_step<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(step_id): Path<String>,
@@ -49,6 +71,17 @@ pub async fn remove_step<S: FlowService + StepService + FieldService>(
 }
 
 /// Reorder a step within a flow
+#[utoipa::path(
+    put,
+    path = "/api/v1/flows/steps/{step_id}/reorder",
+    params(("step_id" = String, Path, description = "Step UUID")),
+    request_body = ReorderStepRequest,
+    responses(
+        (status = 200, description = "Step reordered, returns updated flow", body = FlowResponse),
+        (status = 404, description = "Step not found"),
+    ),
+    tag = "steps"
+)]
 pub async fn reorder_step<S: FlowService + StepService + FieldService>(
     State(state): State<AppState<S>>,
     Path(step_id): Path<String>,
