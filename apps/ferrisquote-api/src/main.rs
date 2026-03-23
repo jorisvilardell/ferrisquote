@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod error;
+mod openapi;
 mod state;
 
 use routes::build_routes::build_routes;
