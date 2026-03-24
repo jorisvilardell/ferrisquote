@@ -75,7 +75,19 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+@keyframes collapsible-down {
+    from { height: 0; overflow: hidden; }
+    to { height: var(--radix-collapsible-content-height); overflow: hidden; }
+}
+
+@keyframes collapsible-up {
+    from { height: var(--radix-collapsible-content-height); overflow: hidden; }
+    to { height: 0; overflow: hidden; }
+}
+
 @theme inline {
+    --animate-collapsible-down: collapsible-down 0.2s ease-out;
+    --animate-collapsible-up: collapsible-up 0.2s ease-out;
     --font-sans: 'IBM Plex Sans', sans-serif;
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
