@@ -34,6 +34,7 @@ function stepsToEdges(steps: FlowStep[]): Edge[] {
     source: step.id,
     target: steps[i + 1].id,
     type: "smoothstep",
+    animated: true,
   }))
 }
 
@@ -62,6 +63,9 @@ export function PageFlowCanvas() {
           nodesConnectable={false}
           edgesReconnectable={false}
           edgesFocusable={false}
+          defaultEdgeOptions={{
+            style: { strokeWidth: 2, stroke: "var(--primary)" },
+          }}
         >
           <Background />
           <Controls />
