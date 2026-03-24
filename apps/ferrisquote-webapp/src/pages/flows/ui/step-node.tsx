@@ -3,7 +3,7 @@ import { Pencil, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { FlowStep } from "../feature/flow.types"
 
-export type StepNodeData = Pick<FlowStep, "title" | "description" | "rank" | "fields">
+export type StepNodeData = Pick<FlowStep, "title" | "description" | "fields"> & { index: number }
 
 type StepNodeProps = NodeProps<Node<StepNodeData>>
 
@@ -47,8 +47,8 @@ export function StepNode({ data, selected }: StepNodeProps) {
 
       {/* Header */}
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b border-border/60">
-        <span className="text-xs font-mono text-muted-foreground">{data.rank}</span>
-        <p className="text-sm font-medium leading-tight flex-1 truncate">{data.title}</p>
+        <span className="text-xs font-mono text-muted-foreground">{data.index}</span>
+        <p className="text-base font-semibold leading-tight flex-1 truncate">{data.title}</p>
       </div>
 
       {/* Body */}

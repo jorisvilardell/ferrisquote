@@ -20,9 +20,9 @@ function stepsToNodes(steps: FlowStep[]): Node<StepNodeData>[] {
     type: "stepNode",
     position: { x: 0, y: i * (NODE_HEIGHT + NODE_GAP) },
     data: {
+      index: i + 1,
       title: step.title,
       description: step.description,
-      rank: step.rank,
       fields: step.fields,
     },
   }))
