@@ -16,7 +16,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@radix-ui/react-collapsible"
 import { ChevronRight, GitBranch, LayoutDashboard, FileText, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
-import logo from "@/assets/logo.png"
+import logo from "@/assets/ferrisquote.svg"
 import { useFlowStore } from "@/store/flow.store"
 import { mockFlowResponse } from "@/pages/flows/feature/flow.mock"
 import { FLOW_URL, FLOWS_URL } from "@/routes/sub-router/flow.router"
