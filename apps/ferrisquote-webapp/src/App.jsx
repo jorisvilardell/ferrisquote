@@ -1,24 +1,18 @@
 import './App.css'
-import { Routes, Route } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
 import { Layout } from '@/components/layouts/layout'
-import { PageFlowCanvas } from '@/pages/flows/feature/page-flow-canvas'
+import { PageFlows } from '@/pages/flows/page-flows'
+import { QUOTES_URL } from '@/routes/router'
 
 function App() {
   return (
-    <Layout>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <>
-              <h1 className="text-2xl font-bold">Welcome to FerrisQuote</h1>
-              <p className="text-muted-foreground mt-2">Select a section from the navigation.</p>
-            </>
-          }
-        />
-        <Route path="/quotes/flows/:flowId" element={<PageFlowCanvas />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path={`${QUOTES_URL()}/flows/*`} element={<PageFlows />} />
+        <Route path="/" element={<Navigate to={QUOTES_URL()} replace />} />
+        <Route path={`${QUOTES_URL()}`} element={<Navigate to={`${QUOTES_URL()}/flows`} replace />} />
+      </Route>
+    </Routes>
   )
 }
 

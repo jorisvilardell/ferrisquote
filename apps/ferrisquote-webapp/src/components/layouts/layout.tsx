@@ -1,14 +1,9 @@
+import { Outlet } from "react-router"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { NavSidebar } from "./nav-sidebar"
-import { RightSidebar } from "./right-sidebar"
 
-interface LayoutProps {
-  children: React.ReactNode
-  rightSidebar?: React.ReactNode
-}
-
-export function Layout({ children, rightSidebar }: LayoutProps) {
+export function Layout() {
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden">
@@ -18,10 +13,9 @@ export function Layout({ children, rightSidebar }: LayoutProps) {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="h-4" />
           </header>
-          <div className="flex flex-1 overflow-hidden">
-            <main className="flex-1 overflow-y-auto p-6">{children}</main>
-            {rightSidebar && <RightSidebar>{rightSidebar}</RightSidebar>}
-          </div>
+          <main className="flex-1 overflow-y-auto p-6">
+            <Outlet />
+          </main>
         </SidebarInset>
       </div>
     </SidebarProvider>

@@ -19,14 +19,16 @@ import { Link, useLocation } from "react-router"
 import logo from "@/assets/logo.png"
 import { useFlowStore } from "@/store/flow.store"
 import { mockFlowResponse } from "@/pages/flows/feature/flow.mock"
+import { FLOW_URL, FLOWS_URL } from "@/routes/sub-router/flow.router"
+import { QUOTES_URL } from "@/routes/router"
 
 const DEFAULT_FLOW_ID = mockFlowResponse.data.id
 
 export function NavSidebar() {
   const location = useLocation()
-  const quotesOpen = location.pathname.startsWith("/quotes")
+  const quotesOpen = location.pathname.startsWith(QUOTES_URL())
   const lastFlowId = useFlowStore((s) => s.lastFlowId)
-  const flowsUrl = `/quotes/flows/${lastFlowId ?? DEFAULT_FLOW_ID}`
+  const flowsUrl = FLOW_URL(lastFlowId ?? DEFAULT_FLOW_ID)
 
   return (
     <Sidebar>
@@ -70,7 +72,7 @@ export function NavSidebar() {
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton
                           asChild
-                          isActive={location.pathname.startsWith("/quotes/flows")}
+                          isActive={location.pathname.startsWith(FLOWS_URL())}
                         >
                           <Link to={flowsUrl}>
                             <GitBranch />
