@@ -23,3 +23,8 @@ export type FlowApiResponse = {
   success: true
   data: Flow
 }
+
+export type FlowListApiResponse = {
+  success: true
+  data: Flow[]
+}
