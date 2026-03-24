@@ -4,6 +4,7 @@ import { useParams } from "react-router"
 import "@xyflow/react/dist/style.css"
 import { StepNode, type StepNodeData } from "../ui/step-node"
 import { FieldNode, type FieldNodeData } from "../ui/field-node"
+import { CanvasToolbar } from "../ui/canvas-toolbar"
 import { mockFlowResponse, mockFlowListResponse } from "./flow.mock"
 import type { Flow } from "./flow.types"
 import { useFlowStore } from "@/store/flow.store"
@@ -47,7 +48,6 @@ function buildGraph(
     }
     nodes.push(stepNode)
 
-    // Edge to next step
     if (i < flow.steps.length - 1) {
       edges.push({
         id: `e-${step.id}-${flow.steps[i + 1].id}`,
@@ -61,16 +61,18 @@ function buildGraph(
     if (isExpanded && step.fields.length > 0) {
       const totalFieldsHeight =
         step.fields.length * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP) - FIELD_NODE_GAP
+      const hueStep = step.fields.length > 1 ? 200 / (step.fields.length - 1) : 0
 
       step.fields.forEach((field, j) => {
         const fieldNodeId = `field-${field.id}`
         const fieldY = stepY + j * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP)
+        const color = `hsl(${28 + j * hueStep}, 85%, 55%)`
 
         const fieldNode: Node<FieldNodeData> = {
           id: fieldNodeId,
           type: "fieldNode",
           position: { x: FIELD_X_OFFSET, y: fieldY },
-          data: { label: field.label, type: field.type },
+          data: { label: field.label, type: field.type, color },
         }
         nodes.push(fieldNode)
 
@@ -81,11 +83,10 @@ function buildGraph(
           target: fieldNodeId,
           type: "smoothstep",
           animated: false,
-          style: { strokeWidth: 1.5, stroke: "var(--muted-foreground)" },
+          style: { strokeWidth: 1.5, stroke: color },
         })
       })
 
-      // Push subsequent step nodes down to make space
       const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
       yOffset += extraSpace + STEP_NODE_GAP
     }
@@ -118,8 +119,8 @@ export function PageFlowCanvas() {
   }
 
   return (
-    <div className="flex flex-col h-full -m-6">
-      <div className="px-6 py-4 border-b shrink-0 flex items-center justify-between">
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="px-6 py-4 border-b shrink-0">
         <FlowListDrawer flows={mockFlowListResponse.data} currentFlowId={flowId} currentFlowName={flow.name} />
       </div>
       <div className="flex-1">
@@ -140,6 +141,7 @@ export function PageFlowCanvas() {
         >
           <Background />
           <Controls />
+          <CanvasToolbar onAddStep={() => {}} onReorder={() => {}} />
         </ReactFlow>
       </div>
     </div>
