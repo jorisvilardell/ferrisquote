@@ -15,8 +15,8 @@
     --popover-foreground: oklch(0.145 0 0);
     --primary: oklch(0.61 0.1357 49.76);
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.52 0.19 243);
+    --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.97 0 0);
     --muted-foreground: oklch(0.556 0 0);
     --accent: oklch(0.97 0 0);
@@ -34,7 +34,7 @@
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: #E8431A;
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.922 0 0);
+    --sidebar-accent: oklch(0.92 0 0);
     --sidebar-accent-foreground: oklch(0.145 0 0);
     --sidebar-border: oklch(0.9 0 0);
     --sidebar-ring: oklch(0.708 0 0);
@@ -50,7 +50,7 @@
     --popover-foreground: oklch(0.985 0 0);
     --primary: oklch(0.922 0 0);
     --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
+    --secondary: oklch(0.42 0.17 243);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
     --muted-foreground: oklch(0.708 0 0);
@@ -69,13 +69,39 @@
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: #E8431A;
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent: transparent;
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 8%);
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+@keyframes collapsible-down {
+    from {
+        height: 0;
+        overflow: hidden;
+    }
+
+    to {
+        height: var(--radix-collapsible-content-height);
+        overflow: hidden;
+    }
+}
+
+@keyframes collapsible-up {
+    from {
+        height: var(--radix-collapsible-content-height);
+        overflow: hidden;
+    }
+
+    to {
+        height: 0;
+        overflow: hidden;
+    }
+}
+
 @theme inline {
+    --animate-collapsible-down: collapsible-down 0.3s cubic-bezier(0.62, -0.01, 0.07, 0.99);
+    --animate-collapsible-up: collapsible-up 0.3s cubic-bezier(0.62, -0.01, 0.07, 0.99);
     --font-sans: 'IBM Plex Sans', sans-serif;
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);

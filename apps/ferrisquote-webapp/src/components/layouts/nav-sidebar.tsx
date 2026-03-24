@@ -9,19 +9,26 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { FileText, LayoutDashboard, Settings } from "lucide-react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@radix-ui/react-collapsible"
+import { ChevronRight, GitBranch, LayoutDashboard, FileText, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
-import logo from "@/assets/logo.png"
+import logo from "@/assets/ferrisquote.svg"
+import { useFlowStore } from "@/store/flow.store"
+import { mockFlowResponse } from "@/pages/flows/feature/flow.mock"
+import { FLOW_URL, FLOWS_URL } from "@/routes/sub-router/flow.router"
+import { HOME_URL, QUOTES_URL } from "@/routes/router"
 
-const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Quotes", url: "/quotes", icon: FileText },
-  { title: "Settings", url: "/settings", icon: Settings },
-]
+const DEFAULT_FLOW_ID = mockFlowResponse.data.id
 
 export function NavSidebar() {
   const location = useLocation()
+  const quotesOpen = location.pathname.startsWith(QUOTES_URL())
+  const lastFlowId = useFlowStore((s) => s.lastFlowId)
+  const flowsUrl = FLOW_URL(lastFlowId ?? DEFAULT_FLOW_ID)
 
   return (
     <Sidebar>
@@ -39,19 +46,55 @@ export function NavSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.url}
-                  >
-                    <Link to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
+
+              {/* Dashboard */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.pathname === HOME_URL()}>
+                  <Link to={HOME_URL()}>
+                    <LayoutDashboard />
+                    <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Quotes (collapsible) */}
+              <Collapsible defaultOpen={quotesOpen} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton isActive={location.pathname === "/quotes"}>
+                      <FileText />
+                      <span>Quotes</span>
+                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={location.pathname.startsWith(FLOWS_URL())}
+                        >
+                          <Link to={flowsUrl}>
+                            <GitBranch />
+                            <span>Flows</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
                 </SidebarMenuItem>
-              ))}
+              </Collapsible>
+
+              {/* Settings */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.pathname === "/settings"}>
+                  <Link to="/settings">
+                    <Settings />
+                    <span>Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
