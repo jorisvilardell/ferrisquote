@@ -17,10 +17,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@radix-ui/r
 import { ChevronRight, GitBranch, LayoutDashboard, FileText, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import logo from "@/assets/logo.png"
+import { useFlowStore } from "@/store/flow.store"
+import { mockFlowResponse } from "@/pages/flows/feature/flow.mock"
+
+const DEFAULT_FLOW_ID = mockFlowResponse.data.id
 
 export function NavSidebar() {
   const location = useLocation()
   const quotesOpen = location.pathname.startsWith("/quotes")
+  const lastFlowId = useFlowStore((s) => s.lastFlowId)
+  const flowsUrl = `/quotes/flows/${lastFlowId ?? DEFAULT_FLOW_ID}`
 
   return (
     <Sidebar>
@@ -66,7 +72,7 @@ export function NavSidebar() {
                           asChild
                           isActive={location.pathname.startsWith("/quotes/flows")}
                         >
-                          <Link to="/quotes/flows">
+                          <Link to={flowsUrl}>
                             <GitBranch />
                             <span>Flows</span>
                           </Link>
