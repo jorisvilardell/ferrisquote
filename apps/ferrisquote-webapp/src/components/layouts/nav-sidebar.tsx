@@ -9,19 +9,18 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { FileText, LayoutDashboard, Settings } from "lucide-react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@radix-ui/react-collapsible"
+import { ChevronRight, GitBranch, LayoutDashboard, FileText, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import logo from "@/assets/logo.png"
 
-const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Quotes", url: "/quotes", icon: FileText },
-  { title: "Settings", url: "/settings", icon: Settings },
-]
-
 export function NavSidebar() {
   const location = useLocation()
+  const quotesOpen = location.pathname.startsWith("/quotes")
 
   return (
     <Sidebar>
@@ -39,19 +38,55 @@ export function NavSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.url}
-                  >
-                    <Link to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
+
+              {/* Dashboard */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.pathname === "/"}>
+                  <Link to="/">
+                    <LayoutDashboard />
+                    <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Quotes (collapsible) */}
+              <Collapsible defaultOpen={quotesOpen} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton isActive={location.pathname === "/quotes"}>
+                      <FileText />
+                      <span>Quotes</span>
+                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={location.pathname.startsWith("/quotes/flows")}
+                        >
+                          <Link to="/quotes/flows">
+                            <GitBranch />
+                            <span>Flows</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
                 </SidebarMenuItem>
-              ))}
+              </Collapsible>
+
+              {/* Settings */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.pathname === "/settings"}>
+                  <Link to="/settings">
+                    <Settings />
+                    <span>Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
