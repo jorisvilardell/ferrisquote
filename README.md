@@ -1,4 +1,8 @@
-# FerrisQuote 🦀
+# FerrisQuote
+
+<p align="center">
+  <img src="./ferrisquote.png" alt="FerrisQuote logo" width="180" />
+</p>
 
 **A high-performance, customizable quoting and estimation engine built in Rust.**
 
