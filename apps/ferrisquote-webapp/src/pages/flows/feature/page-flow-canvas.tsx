@@ -22,7 +22,7 @@ const FIELD_X_OFFSET = 280
 
 function buildGraph(
   flow: Flow,
-  expandedStepId: string | null,
+  expandedStepIds: Set<string>,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
@@ -30,7 +30,7 @@ function buildGraph(
 
   for (let i = 0; i < flow.steps.length; i++) {
     const step = flow.steps[i]
-    const isExpanded = step.id === expandedStepId
+    const isExpanded = expandedStepIds.has(step.id)
     const stepY = i * (STEP_NODE_HEIGHT + STEP_NODE_GAP) + yOffset
 
     const stepNode: Node<StepNodeData> = {
@@ -99,18 +99,22 @@ export function PageFlowCanvas() {
   const setLastFlowId = useFlowStore((s) => s.setLastFlowId)
   const flow = mockFlowListResponse.data.find((f) => f.id === flowId) ?? mockFlowResponse.data
 
-  const [expandedStepId, setExpandedStepId] = useState<string | null>(null)
+  const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (flowId) setLastFlowId(flowId)
-    setExpandedStepId(null)
+    setExpandedStepIds(new Set())
   }, [flowId, setLastFlowId])
 
-  const { nodes, edges } = buildGraph(flow, expandedStepId)
+  const { nodes, edges } = buildGraph(flow, expandedStepIds)
 
   function handleNodeClick(_: React.MouseEvent, node: Node) {
     if (node.type !== "stepNode") return
-    setExpandedStepId((prev) => (prev === node.id ? null : node.id))
+    setExpandedStepIds((prev) => {
+      const next = new Set(prev)
+      next.has(node.id) ? next.delete(node.id) : next.add(node.id)
+      return next
+    })
   }
 
   return (
