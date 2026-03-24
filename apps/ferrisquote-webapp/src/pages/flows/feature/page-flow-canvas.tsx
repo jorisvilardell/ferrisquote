@@ -3,9 +3,10 @@ import { useEffect } from "react"
 import { useParams } from "react-router"
 import "@xyflow/react/dist/style.css"
 import { StepNode, type StepNodeData } from "../ui/step-node"
-import { mockFlowResponse } from "./flow.mock"
+import { mockFlowResponse, mockFlowListResponse } from "./flow.mock"
 import type { FlowStep } from "./flow.types"
 import { useFlowStore } from "@/store/flow.store"
+import { FlowListDrawer } from "../ui/flow-list-drawer"
 
 const nodeTypes: NodeTypes = {
   stepNode: StepNode,
@@ -41,7 +42,7 @@ function stepsToEdges(steps: FlowStep[]): Edge[] {
 export function PageFlowCanvas() {
   const { flowId } = useParams<{ flowId: string }>()
   const setLastFlowId = useFlowStore((s) => s.setLastFlowId)
-  const flow = mockFlowResponse.data
+  const flow = mockFlowListResponse.data.find((f) => f.id === flowId) ?? mockFlowResponse.data
   const nodes = stepsToNodes(flow.steps)
   const edges = stepsToEdges(flow.steps)
 
@@ -51,8 +52,8 @@ export function PageFlowCanvas() {
 
   return (
     <div className="flex flex-col h-full -m-6">
-      <div className="px-6 py-4 border-b shrink-0">
-        <h1 className="text-xl font-semibold">{flow.name ?? flowId ?? "Flow"}</h1>
+      <div className="px-6 py-4 border-b shrink-0 flex items-center justify-between">
+        <FlowListDrawer flows={mockFlowListResponse.data} currentFlowId={flowId} currentFlowName={flow.name} />
       </div>
       <div className="flex-1">
         <ReactFlow
