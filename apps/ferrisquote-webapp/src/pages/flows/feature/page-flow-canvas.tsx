@@ -63,6 +63,7 @@ export function PageFlowCanvas() {
           nodesConnectable={false}
           edgesReconnectable={false}
           edgesFocusable={false}
+          elementsSelectable={false}
           defaultEdgeOptions={{
             style: { strokeWidth: 2, stroke: "var(--primary)" },
           }}
