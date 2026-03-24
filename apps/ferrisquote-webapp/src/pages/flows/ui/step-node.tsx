@@ -3,7 +3,10 @@ import { Pencil, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { FlowStep } from "../feature/flow.types"
 
-export type StepNodeData = Pick<FlowStep, "title" | "description" | "fields"> & { index: number }
+export type StepNodeData = Pick<FlowStep, "title" | "description" | "fields"> & {
+  index: number
+  isExpanded?: boolean
+}
 
 type StepNodeProps = NodeProps<Node<StepNodeData>>
 
@@ -11,8 +14,8 @@ export function StepNode({ data, selected }: StepNodeProps) {
   return (
     <div
       className={cn(
-        "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow",
-        selected
+        "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer",
+        selected || data.isExpanded
           ? "border-primary ring-2 ring-primary/20 shadow-md"
           : "border-border hover:border-primary/50 hover:shadow-md"
       )}
@@ -67,6 +70,12 @@ export function StepNode({ data, selected }: StepNodeProps) {
         type="source"
         position={Position.Bottom}
         className="!border-2 !border-background !bg-primary !w-3 !h-3"
+      />
+      <Handle
+        id="right"
+        type="source"
+        position={Position.Right}
+        className="!border-2 !border-background !bg-muted-foreground !w-2.5 !h-2.5"
       />
     </div>
   )
