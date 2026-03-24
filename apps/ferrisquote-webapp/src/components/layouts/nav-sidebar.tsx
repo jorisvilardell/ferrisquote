@@ -20,7 +20,7 @@ import logo from "@/assets/logo.png"
 import { useFlowStore } from "@/store/flow.store"
 import { mockFlowResponse } from "@/pages/flows/feature/flow.mock"
 import { FLOW_URL, FLOWS_URL } from "@/routes/sub-router/flow.router"
-import { QUOTES_URL } from "@/routes/router"
+import { HOME_URL, QUOTES_URL } from "@/routes/router"
 
 const DEFAULT_FLOW_ID = mockFlowResponse.data.id
 
@@ -49,8 +49,8 @@ export function NavSidebar() {
 
               {/* Dashboard */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.pathname === "/"}>
-                  <Link to="/">
+                <SidebarMenuButton asChild isActive={location.pathname === HOME_URL()}>
+                  <Link to={HOME_URL()}>
                     <LayoutDashboard />
                     <span>Dashboard</span>
                   </Link>
