@@ -9,22 +9,24 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 import { FLOW_URL } from "@/routes/sub-router/flow.router"
-import type { Flow } from "../feature/flow.types"
+import { useListFlows } from "@/api/flows.api"
 
 type Props = {
-  flows: Flow[]
   currentFlowId?: string
   currentFlowName?: string
 }
 
-export function FlowListDrawer({ flows, currentFlowId, currentFlowName }: Props) {
+export function FlowListDrawer({ currentFlowId, currentFlowName }: Props) {
   const navigate = useNavigate()
+  const { data } = useListFlows()
+  const flows = data?.data.flows ?? []
 
   return (
     <Drawer direction="right">
       <DrawerTrigger asChild>
         <Button variant="ghost" className="gap-1.5 text-xl font-semibold px-2">
           {currentFlowName ?? "Flow"}
+          <ChevronRight className="size-4 text-muted-foreground" />
         </Button>
       </DrawerTrigger>
       <DrawerContent>
@@ -36,8 +38,9 @@ export function FlowListDrawer({ flows, currentFlowId, currentFlowName }: Props)
             <DrawerTrigger key={flow.id} asChild>
               <button
                 onClick={() => navigate(FLOW_URL(flow.id))}
-                className={`flex flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent ${flow.id === currentFlowId ? "bg-accent font-medium" : ""
-                  }`}
+                className={`flex flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent ${
+                  flow.id === currentFlowId ? "bg-accent font-medium" : ""
+                }`}
               >
                 <span className="text-sm">{flow.name}</span>
                 {flow.description && (

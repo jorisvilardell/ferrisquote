@@ -18,17 +18,14 @@ import { ChevronRight, GitBranch, LayoutDashboard, FileText, Settings } from "lu
 import { Link, useLocation } from "react-router"
 import logo from "@/assets/ferrisquote.svg"
 import { useFlowStore } from "@/store/flow.store"
-import { mockFlowResponse } from "@/pages/flows/feature/flow.mock"
 import { FLOW_URL, FLOWS_URL } from "@/routes/sub-router/flow.router"
 import { HOME_URL, QUOTES_URL } from "@/routes/router"
-
-const DEFAULT_FLOW_ID = mockFlowResponse.data.id
 
 export function NavSidebar() {
   const location = useLocation()
   const quotesOpen = location.pathname.startsWith(QUOTES_URL())
   const lastFlowId = useFlowStore((s) => s.lastFlowId)
-  const flowsUrl = FLOW_URL(lastFlowId ?? DEFAULT_FLOW_ID)
+  const flowsUrl = lastFlowId ? FLOW_URL(lastFlowId) : FLOWS_URL()
 
   return (
     <Sidebar>
