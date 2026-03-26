@@ -6,7 +6,7 @@ type AuthStore = {
   setAccessToken: (token: string | null) => void
 }
 
-export const authStore = create<AuthStore>()(
+export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
       accessToken: null,
@@ -15,5 +15,3 @@ export const authStore = create<AuthStore>()(
     { name: "auth-store" },
   ),
 )
-
-export const useAuthStore = authStore

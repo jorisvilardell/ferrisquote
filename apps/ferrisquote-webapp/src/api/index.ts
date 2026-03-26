@@ -1,29 +1,29 @@
-import { createApiClient, type ApiClient, type Fetcher } from "./api.client"
-import { TanstackQueryApiClient } from "./api.tanstack"
-import { authStore } from "@/store/auth.store"
+import { createApiClient, type ApiClient, type Fetcher } from "./api.client";
+import { TanstackQueryApiClient } from "./api.tanstack";
+import { useAuthStore } from "@/store/auth.store";
 
 declare global {
   interface Window {
-    api: ApiClient
-    tanstackApi: TanstackQueryApiClient
+    api: ApiClient;
+    tanstackApi: TanstackQueryApiClient;
   }
 }
 
 const fetcher: Fetcher = {
   fetch: async (input) => {
-    const headers = new Headers()
-    const accessToken = authStore.getState().accessToken
+    const headers = new Headers();
+    const accessToken = useAuthStore.getState().accessToken;
 
     if (input.urlSearchParams) {
-      input.url.search = input.urlSearchParams.toString()
+      input.url.search = input.urlSearchParams.toString();
     }
 
-    let body: BodyInit | undefined
+    let body: BodyInit | undefined;
     if (
       ["post", "put", "patch", "delete"].includes(input.method.toLowerCase()) &&
       input.parameters?.body !== undefined
     ) {
-      const bodyData = input.parameters.body
+      const bodyData = input.parameters.body;
       if (
         bodyData instanceof URLSearchParams ||
         bodyData instanceof FormData ||
@@ -31,21 +31,21 @@ const fetcher: Fetcher = {
         bodyData instanceof Blob ||
         bodyData instanceof ArrayBuffer
       ) {
-        body = bodyData as BodyInit
+        body = bodyData as BodyInit;
       } else {
-        body = JSON.stringify(bodyData)
-        headers.set("Content-Type", "application/json")
+        body = JSON.stringify(bodyData);
+        headers.set("Content-Type", "application/json");
       }
     }
 
     if (accessToken) {
-      headers.set("Authorization", `Bearer ${accessToken}`)
+      headers.set("Authorization", `Bearer ${accessToken}`);
     }
 
     if (input.parameters?.header) {
       Object.entries(input.parameters.header).forEach(([key, value]) => {
-        if (value != null) headers.set(key, String(value))
-      })
+        if (value != null) headers.set(key, String(value));
+      });
     }
 
     const response = await fetch(input.url, {
@@ -53,29 +53,31 @@ const fetcher: Fetcher = {
       ...(body && { body }),
       headers,
       ...input.overrides,
-    })
+    });
 
     if (!response.ok) {
-      let errorBody: Record<string, unknown> | undefined
+      let errorBody: Record<string, unknown> | undefined;
       try {
-        errorBody = await response.json()
+        errorBody = await response.json();
       } catch {
         // ignore
       }
-      const error: Error & { status?: number; data?: Record<string, unknown> } = new Error(
-        (errorBody?.message as string) ?? `HTTP ${response.status}: ${response.statusText}`,
-      )
-      error.status = response.status
-      error.data = errorBody
-      throw error
+      const error: Error & { status?: number; data?: Record<string, unknown> } =
+        new Error(
+          (errorBody?.message as string) ??
+            `HTTP ${response.status}: ${response.statusText}`,
+        );
+      error.status = response.status;
+      error.data = errorBody;
+      throw error;
     }
 
-    return response
+    return response;
   },
-}
+};
 
 export function initApiClient(baseUrl: string) {
-  const api = createApiClient(fetcher, baseUrl)
-  window.api = api
-  window.tanstackApi = new TanstackQueryApiClient(api)
+  const api = createApiClient(fetcher, baseUrl);
+  window.api = api;
+  window.tanstackApi = new TanstackQueryApiClient(api);
 }
