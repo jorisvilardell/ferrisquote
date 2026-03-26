@@ -1,14 +1,15 @@
 import { ReactFlow, Background, Controls, type NodeTypes, type Node, type Edge } from "@xyflow/react"
 import { useEffect, useState } from "react"
 import { useParams } from "react-router"
-import "@xyflow/react/dist/style.css"
 import { StepNode, type StepNodeData } from "../ui/step-node"
 import { FieldNode, type FieldNodeData } from "../ui/field-node"
 import { CanvasToolbar } from "../ui/canvas-toolbar"
-import { mockFlowResponse, mockFlowListResponse } from "./flow.mock"
 import type { Flow } from "./flow.types"
+import type { Schemas } from "@/api/api.client"
+import { useGetFlow } from "@/api/flows.api"
 import { useFlowStore } from "@/store/flow.store"
 import { FlowListDrawer } from "../ui/flow-list-drawer"
+import "@xyflow/react/dist/style.css"
 
 const nodeTypes: NodeTypes = {
   stepNode: StepNode,
@@ -20,6 +21,25 @@ const STEP_NODE_GAP = 60
 const FIELD_NODE_HEIGHT = 56
 const FIELD_NODE_GAP = 16
 const FIELD_X_OFFSET = 280
+
+function mapApiFlow(apiFlow: Schemas.FlowResponse): Flow {
+  return {
+    id: apiFlow.id,
+    name: apiFlow.name,
+    description: apiFlow.description,
+    steps: apiFlow.steps.map((step) => ({
+      id: step.id,
+      title: step.title,
+      description: step.description,
+      rank: step.rank,
+      fields: step.fields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.config.type,
+      })),
+    })),
+  }
+}
 
 function buildGraph(
   flow: Flow,
@@ -98,16 +118,22 @@ function buildGraph(
 export function PageFlowCanvas() {
   const { flowId } = useParams<{ flowId: string }>()
   const setLastFlowId = useFlowStore((s) => s.setLastFlowId)
-  const flow = mockFlowListResponse.data.find((f) => f.id === flowId) ?? mockFlowResponse.data
+
+  const { data: flowData, error } = useGetFlow(flowId ?? "")
+
+  const flow: Flow | null = flowData?.data ? mapApiFlow(flowData.data) : null
+  const is404 = !!error
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (flowId) setLastFlowId(flowId)
+    if (flowId && !is404) setLastFlowId(flowId)
     setExpandedStepIds(new Set())
-  }, [flowId, setLastFlowId])
+  }, [flowId, is404, setLastFlowId])
 
-  const { nodes, edges } = buildGraph(flow, expandedStepIds)
+  const { nodes, edges } = flow
+    ? buildGraph(flow, expandedStepIds)
+    : { nodes: [], edges: [] }
 
   function handleNodeClick(_: React.MouseEvent, node: Node) {
     if (node.type !== "stepNode") return
@@ -121,7 +147,7 @@ export function PageFlowCanvas() {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="px-6 py-4 border-b shrink-0">
-        <FlowListDrawer flows={mockFlowListResponse.data} currentFlowId={flowId} currentFlowName={flow.name} />
+        <FlowListDrawer currentFlowId={flowId} currentFlowName={flow?.name} />
       </div>
       <div className="flex-1">
         <ReactFlow
