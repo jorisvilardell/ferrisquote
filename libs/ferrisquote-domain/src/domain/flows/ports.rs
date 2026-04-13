@@ -57,6 +57,10 @@ pub trait StepRepository: Send + Sync {
         title: Option<String>,
         description: Option<String>,
         rank: Option<String>,
+        is_repeatable: Option<bool>,
+        repeat_label: Option<Option<String>>,
+        min_repeats: Option<u32>,
+        max_repeats: Option<Option<u32>>,
     ) -> impl Future<Output = Result<Step, DomainError>> + Send;
     /// Delete a step by id.
     fn delete_step(&self, id: StepId) -> impl Future<Output = Result<(), DomainError>> + Send;
@@ -136,6 +140,10 @@ pub trait StepService: Send + Sync {
         step_id: StepId,
         title: Option<String>,
         description: Option<String>,
+        is_repeatable: Option<bool>,
+        repeat_label: Option<Option<String>>,
+        min_repeats: Option<u32>,
+        max_repeats: Option<Option<u32>>,
     ) -> impl Future<Output = Result<Step, DomainError>> + Send;
 }
 
