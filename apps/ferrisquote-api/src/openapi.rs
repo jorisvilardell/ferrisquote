@@ -4,7 +4,7 @@ use crate::dto::{
     ApiResponse, CreateFieldRequest, CreateFlowRequest, CreateStepRequest, FieldConfigDto,
     FieldResponse, FlowListResponse, FlowResponse, FlowSummaryResponse, MessageResponse,
     MoveFieldRequest, ReorderStepRequest, StepResponse, UpdateFieldConfigRequest,
-    UpdateFlowMetadataRequest,
+    UpdateFlowMetadataRequest, UpdateStepMetadataRequest,
 };
 
 #[derive(OpenApi)]
@@ -23,6 +23,7 @@ use crate::dto::{
         crate::handlers::step_handlers::add_step,
         crate::handlers::step_handlers::remove_step,
         crate::handlers::step_handlers::reorder_step,
+        crate::handlers::step_handlers::update_step_metadata,
         crate::handlers::field_handlers::add_field,
         crate::handlers::field_handlers::update_field_config,
         crate::handlers::field_handlers::remove_field,
@@ -35,6 +36,7 @@ use crate::dto::{
         FlowListResponse,
         FlowSummaryResponse,
         CreateStepRequest,
+        UpdateStepMetadataRequest,
         ReorderStepRequest,
         StepResponse,
         CreateFieldRequest,
