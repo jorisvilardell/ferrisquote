@@ -22,6 +22,10 @@ pub fn map_step_to_response(step: Step) -> StepResponse {
         title: step.title,
         description: step.description,
         rank: step.rank,
+        is_repeatable: step.is_repeatable,
+        repeat_label: step.repeat_label,
+        min_repeats: step.min_repeats,
+        max_repeats: step.max_repeats,
         fields: step.fields.into_iter().map(map_field_to_response).collect(),
     }
 }

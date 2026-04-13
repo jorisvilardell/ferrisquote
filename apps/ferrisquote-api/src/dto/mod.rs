@@ -5,5 +5,5 @@ pub use flows::{
     ApiResponse, CreateFieldRequest, CreateFlowRequest, CreateStepRequest, FieldConfigDto,
     FieldResponse, FlowListResponse, FlowResponse, FlowSummaryResponse, MessageResponse,
     MoveFieldRequest, ReorderStepRequest, StepResponse, UpdateFieldConfigRequest,
-    UpdateFlowMetadataRequest,
+    UpdateFlowMetadataRequest, UpdateStepMetadataRequest,
 };
