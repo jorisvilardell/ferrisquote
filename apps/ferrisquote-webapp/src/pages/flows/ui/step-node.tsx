@@ -1,23 +1,28 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Pencil, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { FlowStep } from "../feature/flow.types"
+import type { Schemas } from "@/api/api.client"
 
-export type StepNodeData = Pick<FlowStep, "title" | "description" | "fields"> & {
+export type StepNodeData = {
   index: number
+  title: string
+  description: string
+  fields: Schemas.FieldResponse[]
   isExpanded?: boolean
+  onEdit: () => void
+  onDelete: () => void
 }
 
 type StepNodeProps = NodeProps<Node<StepNodeData>>
 
-export function StepNode({ data, selected }: StepNodeProps) {
+export function StepNode({ data }: StepNodeProps) {
   return (
     <div
       className={cn(
         "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer",
-        selected || data.isExpanded
+        data.isExpanded
           ? "border-primary ring-2 ring-primary/20 shadow-md"
-          : "border-border hover:border-primary/50 hover:shadow-md"
+          : "border-border hover:border-primary/50 hover:shadow-md",
       )}
     >
       <Handle
@@ -32,7 +37,7 @@ export function StepNode({ data, selected }: StepNodeProps) {
           className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm hover:border-primary hover:text-primary transition-colors"
           onClick={(e) => {
             e.stopPropagation()
-            // TODO: open edit panel
+            data.onEdit()
           }}
         >
           <Pencil className="w-3 h-3" />
@@ -41,7 +46,7 @@ export function StepNode({ data, selected }: StepNodeProps) {
           className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm hover:border-destructive hover:text-destructive transition-colors"
           onClick={(e) => {
             e.stopPropagation()
-            // TODO: delete step
+            data.onDelete()
           }}
         >
           <Trash2 className="w-3 h-3" />

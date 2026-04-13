@@ -32,11 +32,16 @@ export const useUpdateFlow = (flowId: string) => {
   return useMutation({
     ...window.tanstackApi.mutation("put", "/api/v1/flows/{flow_id}").mutationOptions,
     onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}", {
-          path: { flow_id: flowId },
-        }).queryKey,
-      }),
+      Promise.all([
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/flows").queryKey,
+        }),
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}", {
+            path: { flow_id: flowId },
+          }).queryKey,
+        }),
+      ]),
   })
 }
 
