@@ -10,7 +10,7 @@ use ferrisquote_domain::{
 use validator::Validate;
 
 use crate::{
-    dto::{ApiResponse, CreateStepRequest, FlowResponse, MessageResponse, ReorderStepRequest, StepResponse},
+    dto::{ApiResponse, CreateStepRequest, FlowResponse, MessageResponse, ReorderStepRequest, StepResponse, UpdateStepMetadataRequest},
     error::ApiResult,
     state::AppState,
 };
@@ -103,6 +103,45 @@ pub async fn reorder_step<S: FlowService + StepService + FieldService>(
         .await?;
 
     let response = map_flow_to_response(flow);
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Update a step's metadata
+#[utoipa::path(
+    put,
+    path = "/api/v1/flows/steps/{step_id}",
+    params(("step_id" = String, Path, description = "Step UUID")),
+    request_body = UpdateStepMetadataRequest,
+    responses(
+        (status = 200, description = "Step updated", body = StepResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Step not found"),
+    ),
+    tag = "steps"
+)]
+pub async fn update_step_metadata<S: FlowService + StepService + FieldService>(
+    State(state): State<AppState<S>>,
+    Path(step_id): Path<String>,
+    Json(request): Json<UpdateStepMetadataRequest>,
+) -> ApiResult<Json<ApiResponse<StepResponse>>> {
+    request.validate()?;
+
+    let step_id = StepId::from_uuid(uuid::Uuid::parse_str(&step_id)?);
+    let step = state
+        .flow_service
+        .update_step_metadata(
+            step_id,
+            request.title,
+            request.description,
+            request.is_repeatable,
+            request.repeat_label,
+            request.min_repeats,
+            request.max_repeats,
+        )
+        .await?;
+
+    let response = map_step_to_response(step);
 
     Ok(Json(ApiResponse::success(response)))
 }

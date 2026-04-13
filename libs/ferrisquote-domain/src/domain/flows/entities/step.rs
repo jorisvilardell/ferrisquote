@@ -8,6 +8,10 @@ pub struct Step {
     pub title: String,
     pub description: String,
     pub rank: String,
+    pub is_repeatable: bool,
+    pub repeat_label: Option<String>,
+    pub min_repeats: u32,
+    pub max_repeats: Option<u32>,
     pub fields: Vec<Field>,
 }
 
@@ -18,6 +22,10 @@ impl Step {
             title,
             description,
             rank,
+            is_repeatable: false,
+            repeat_label: None,
+            min_repeats: 1,
+            max_repeats: None,
             fields: Vec::new(),
         }
     }
@@ -28,6 +36,10 @@ impl Step {
             title,
             description,
             rank,
+            is_repeatable: false,
+            repeat_label: None,
+            min_repeats: 1,
+            max_repeats: None,
             fields: Vec::new(),
         }
     }
@@ -37,6 +49,10 @@ impl Step {
         title: String,
         description: String,
         rank: String,
+        is_repeatable: bool,
+        repeat_label: Option<String>,
+        min_repeats: u32,
+        max_repeats: Option<u32>,
         fields: Vec<Field>,
     ) -> Self {
         Step {
@@ -44,6 +60,10 @@ impl Step {
             title,
             description,
             rank,
+            is_repeatable,
+            repeat_label,
+            min_repeats,
+            max_repeats,
             fields,
         }
     }

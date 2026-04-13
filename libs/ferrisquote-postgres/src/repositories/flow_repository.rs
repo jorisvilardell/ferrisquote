@@ -50,7 +50,7 @@ async fn load_steps_for_flows(
 
     // Fetch steps for all given flows in one query
     let step_rows = sqlx::query(
-        "SELECT id, flow_id, title, description, rank \
+        "SELECT id, flow_id, title, description, rank, is_repeatable, repeat_label, min_repeats, max_repeats \
          FROM steps \
          WHERE flow_id = ANY($1) \
          ORDER BY flow_id, rank",
@@ -105,6 +105,10 @@ async fn load_steps_for_flows(
             row.get("title"),
             row.get::<Option<String>, _>("description").unwrap_or_default(),
             row.get("rank"),
+            row.get("is_repeatable"),
+            row.get("repeat_label"),
+            row.get::<i32, _>("min_repeats") as u32,
+            row.get::<Option<i32>, _>("max_repeats").map(|v| v as u32),
             fields,
         );
         steps_by_flow
@@ -235,14 +239,18 @@ impl FlowRepository for PostgresFlowRepository {
 impl StepRepository for PostgresFlowRepository {
     async fn create_step(&self, flow_id: FlowId, step: Step) -> Result<Step, DomainError> {
         sqlx::query(
-            "INSERT INTO steps (id, flow_id, title, description, rank, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
+            "INSERT INTO steps (id, flow_id, title, description, rank, is_repeatable, repeat_label, min_repeats, max_repeats, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())",
         )
         .bind(step.id.into_uuid())
         .bind(flow_id.into_uuid())
         .bind(&step.title)
         .bind(&step.description)
         .bind(&step.rank)
+        .bind(step.is_repeatable)
+        .bind(&step.repeat_label)
+        .bind(step.min_repeats as i32)
+        .bind(step.max_repeats.map(|v| v as i32))
         .execute(&*self.pool)
         .await
         .map_err(|e| DomainError::repository(e.to_string()))?;
@@ -252,7 +260,7 @@ impl StepRepository for PostgresFlowRepository {
 
     async fn get_step(&self, id: StepId) -> Result<Step, DomainError> {
         let row = sqlx::query(
-            "SELECT id, title, description, rank FROM steps WHERE id = $1",
+            "SELECT id, title, description, rank, is_repeatable, repeat_label, min_repeats, max_repeats FROM steps WHERE id = $1",
         )
         .bind(id.into_uuid())
         .fetch_optional(&*self.pool)
@@ -290,6 +298,10 @@ impl StepRepository for PostgresFlowRepository {
             row.get("title"),
             row.get::<Option<String>, _>("description").unwrap_or_default(),
             row.get("rank"),
+            row.get("is_repeatable"),
+            row.get("repeat_label"),
+            row.get::<i32, _>("min_repeats") as u32,
+            row.get::<Option<i32>, _>("max_repeats").map(|v| v as u32),
             fields,
         ))
     }
@@ -300,12 +312,20 @@ impl StepRepository for PostgresFlowRepository {
         title: Option<String>,
         description: Option<String>,
         rank: Option<String>,
+        is_repeatable: Option<bool>,
+        repeat_label: Option<Option<String>>,
+        min_repeats: Option<u32>,
+        max_repeats: Option<Option<u32>>,
     ) -> Result<Step, DomainError> {
         sqlx::query(
             "UPDATE steps \
              SET title = COALESCE($2, title), \
                  description = COALESCE($3, description), \
                  rank = COALESCE($4, rank), \
+                 is_repeatable = COALESCE($5, is_repeatable), \
+                 repeat_label = CASE WHEN $6 THEN $7 ELSE repeat_label END, \
+                 min_repeats = COALESCE($8, min_repeats), \
+                 max_repeats = CASE WHEN $9 THEN $10 ELSE max_repeats END, \
                  updated_at = NOW() \
              WHERE id = $1",
         )
@@ -313,13 +333,19 @@ impl StepRepository for PostgresFlowRepository {
         .bind(title)
         .bind(description)
         .bind(rank)
+        .bind(is_repeatable)
+        .bind(repeat_label.is_some())
+        .bind(repeat_label.flatten())
+        .bind(min_repeats.map(|v| v as i32))
+        .bind(max_repeats.is_some())
+        .bind(max_repeats.flatten().map(|v| v as i32))
         .execute(&*self.pool)
         .await
         .map_err(|e| DomainError::repository(e.to_string()))?;
 
         // Reload the step with its fields
         let row = sqlx::query(
-            "SELECT id, title, description, rank FROM steps WHERE id = $1",
+            "SELECT id, title, description, rank, is_repeatable, repeat_label, min_repeats, max_repeats FROM steps WHERE id = $1",
         )
         .bind(id.into_uuid())
         .fetch_optional(&*self.pool)

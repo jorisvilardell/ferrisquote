@@ -153,7 +153,7 @@ where
         };
 
         self.step_repo
-            .update_step(step_id, None, None, Some(new_rank.as_str().to_string()))
+            .update_step(step_id, None, None, Some(new_rank.as_str().to_string()), None, None, None, None)
             .await?;
 
         let flows = self.flow_repo.list_flows().await?;
@@ -168,8 +168,14 @@ where
         step_id: StepId,
         title: Option<String>,
         description: Option<String>,
+        is_repeatable: Option<bool>,
+        repeat_label: Option<Option<String>>,
+        min_repeats: Option<u32>,
+        max_repeats: Option<Option<u32>>,
     ) -> Result<Step, DomainError> {
-        self.step_repo.update_step(step_id, title, description, None).await
+        self.step_repo
+            .update_step(step_id, title, description, None, is_repeatable, repeat_label, min_repeats, max_repeats)
+            .await
     }
 }
 

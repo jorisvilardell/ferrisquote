@@ -29,6 +29,24 @@ pub struct CreateStepRequest {
     pub title: String,
     #[validate(length(max = 1000))]
     pub description: Option<String>,
+    pub is_repeatable: Option<bool>,
+    #[validate(length(max = 255))]
+    pub repeat_label: Option<String>,
+    pub min_repeats: Option<u32>,
+    pub max_repeats: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+pub struct UpdateStepMetadataRequest {
+    #[validate(length(min = 1, max = 255))]
+    pub title: Option<String>,
+    #[validate(length(max = 1000))]
+    pub description: Option<String>,
+    pub is_repeatable: Option<bool>,
+    #[validate(length(max = 255))]
+    pub repeat_label: Option<Option<String>>,
+    pub min_repeats: Option<u32>,
+    pub max_repeats: Option<Option<u32>>,
 }
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
@@ -98,6 +116,10 @@ pub struct StepResponse {
     pub title: String,
     pub description: String,
     pub rank: String,
+    pub is_repeatable: bool,
+    pub repeat_label: Option<String>,
+    pub min_repeats: u32,
+    pub max_repeats: Option<u32>,
     pub fields: Vec<FieldResponse>,
 }
 

@@ -19,6 +19,7 @@ pub fn flow_routes<S: FlowService + StepService + FieldService + Clone + 'static
         .route("/{flow_id}", delete(handlers::delete_flow))
         // Step management
         .route("/{flow_id}/steps", post(handlers::add_step))
+        .route("/steps/{step_id}", put(handlers::update_step_metadata))
         .route("/steps/{step_id}", delete(handlers::remove_step))
         .route("/steps/{step_id}/reorder", put(handlers::reorder_step))
         // Field management
