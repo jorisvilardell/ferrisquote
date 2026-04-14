@@ -84,6 +84,19 @@ export const useRemoveStep = (flowId: string) => {
   })
 }
 
+export const useUpdateStep = (flowId: string) => {
+  const qc = useQueryClient()
+  return useMutation({
+    ...window.tanstackApi.mutation("put", "/api/v1/flows/steps/{step_id}").mutationOptions,
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}", {
+          path: { flow_id: flowId },
+        }).queryKey,
+      }),
+  })
+}
+
 export const useReorderStep = (flowId: string) => {
   const qc = useQueryClient()
   return useMutation({

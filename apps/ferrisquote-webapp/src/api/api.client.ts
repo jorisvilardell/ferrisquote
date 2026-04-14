@@ -24,7 +24,11 @@ export namespace Schemas {
     description: string;
     fields: Array<FieldResponse>;
     id: string;
+    is_repeatable: boolean;
+    max_repeats?: number | null;
+    min_repeats: number;
     rank: string;
+    repeat_label?: string | null;
     title: string;
   };
   export type ApiResponse_FlowResponse = {
@@ -33,12 +37,27 @@ export namespace Schemas {
   };
   export type ApiResponse_MessageResponse = { data: { message: string }; success: boolean };
   export type ApiResponse_StepResponse = {
-    data: { description: string; fields: Array<FieldResponse>; id: string; rank: string; title: string };
+    data: { description: string; fields: Array<FieldResponse>; id: string; is_repeatable: boolean; max_repeats?: number | null; min_repeats: number; rank: string; repeat_label?: string | null; title: string };
     success: boolean;
   };
   export type CreateFieldRequest = { config: FieldConfigDto; key: string; label: string };
   export type CreateFlowRequest = { description?: (string | null) | undefined; name: string };
-  export type CreateStepRequest = { description?: (string | null) | undefined; title: string };
+  export type CreateStepRequest = {
+    description?: (string | null) | undefined;
+    is_repeatable?: boolean | undefined;
+    max_repeats?: number | undefined;
+    min_repeats?: number | undefined;
+    repeat_label?: (string | null) | undefined;
+    title: string;
+  };
+  export type UpdateStepMetadataRequest = {
+    description?: (string | null) | undefined;
+    is_repeatable?: boolean | undefined;
+    max_repeats?: (number | null) | undefined;
+    min_repeats?: number | undefined;
+    repeat_label?: (string | null) | undefined;
+    title?: (string | null) | undefined;
+  };
   export type FlowListResponse = { flows: Array<FlowSummaryResponse> };
   export type FlowResponse = { description: string; id: string; name: string; steps: Array<StepResponse> };
   export type MessageResponse = { message: string };
@@ -103,6 +122,17 @@ export namespace Endpoints {
       body: Schemas.MoveFieldRequest;
     };
     responses: { 200: Schemas.FlowResponse; 404: unknown };
+  };
+  export type put_Update_step_metadata = {
+    method: "PUT";
+    path: "/api/v1/flows/steps/{step_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { step_id: string };
+
+      body: Schemas.UpdateStepMetadataRequest;
+    };
+    responses: { 200: Schemas.StepResponse; 400: unknown; 404: unknown };
   };
   export type delete_Remove_step = {
     method: "DELETE";
@@ -193,6 +223,7 @@ export type EndpointByMethod = {
   put: {
     "/api/v1/flows/fields/{field_id}": Endpoints.put_Update_field_config;
     "/api/v1/flows/fields/{field_id}/move": Endpoints.put_Move_field;
+    "/api/v1/flows/steps/{step_id}": Endpoints.put_Update_step_metadata;
     "/api/v1/flows/steps/{step_id}/reorder": Endpoints.put_Reorder_step;
     "/api/v1/flows/{flow_id}": Endpoints.put_Update_flow_metadata;
   };
