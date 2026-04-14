@@ -353,11 +353,16 @@ impl StepRepository for PostgresFlowRepository {
         .map_err(|e| DomainError::repository(e.to_string()))?
         .ok_or_else(|| DomainError::not_found("Step", id.to_string()))?;
 
-        Ok(Step::with_id(
+        Ok(Step::with_fields(
             StepId::from_uuid(row.get("id")),
             row.get("title"),
             row.get::<Option<String>, _>("description").unwrap_or_default(),
             row.get("rank"),
+            row.get("is_repeatable"),
+            row.get("repeat_label"),
+            row.get::<i32, _>("min_repeats") as u32,
+            row.get::<Option<i32>, _>("max_repeats").map(|v| v as u32),
+            vec![],
         ))
     }
 

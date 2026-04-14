@@ -1,7 +1,19 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 use validator::Validate;
+
+/// Deserializes a double-option field so that:
+/// - absent key   → `None`       (don't touch)
+/// - `null`       → `Some(None)` (set to null)
+/// - `value`      → `Some(Some(value))`
+fn deserialize_double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Ok(Some(Option::deserialize(deserializer)?))
+}
 
 // ============================================================================
 // Request DTOs
@@ -44,8 +56,10 @@ pub struct UpdateStepMetadataRequest {
     pub description: Option<String>,
     pub is_repeatable: Option<bool>,
     #[validate(length(max = 255))]
+    #[serde(default, deserialize_with = "deserialize_double_option")]
     pub repeat_label: Option<Option<String>>,
     pub min_repeats: Option<u32>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
     pub max_repeats: Option<Option<u32>>,
 }
 
