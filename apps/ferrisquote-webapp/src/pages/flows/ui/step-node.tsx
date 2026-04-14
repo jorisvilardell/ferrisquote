@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
-import { Pencil, Trash2 } from "lucide-react"
+import { Pencil, Trash2, Repeat } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Schemas } from "@/api/api.client"
 
@@ -9,6 +9,7 @@ export type StepNodeData = {
   description: string
   fields: Schemas.FieldResponse[]
   isExpanded?: boolean
+  isRepeatable?: boolean
   onEdit: () => void
   onDelete: () => void
 }
@@ -57,6 +58,11 @@ export function StepNode({ data }: StepNodeProps) {
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b border-border/60">
         <span className="text-xs font-mono text-muted-foreground">{data.index}</span>
         <p className="text-base font-semibold leading-tight flex-1 truncate">{data.title}</p>
+        {data.isRepeatable && (
+          <span className="flex items-center gap-1 text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full shrink-0" title="Repeatable step">
+            <Repeat className="w-3 h-3" />
+          </span>
+        )}
       </div>
 
       {/* Body */}
