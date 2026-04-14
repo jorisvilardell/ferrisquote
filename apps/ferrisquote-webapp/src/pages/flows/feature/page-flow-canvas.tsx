@@ -19,6 +19,7 @@ import type { Schemas } from "@/api/api.client"
 import {
   useGetFlow,
   useAddStep,
+  useUpdateStep,
   useRemoveStep,
   useAddField,
   useUpdateField,
@@ -66,6 +67,7 @@ function buildGraph(
         description: step.description,
         fields: step.fields,
         isExpanded,
+        isRepeatable: step.is_repeatable,
         onEdit: () => onEditStep(step.id),
         onDelete: () => onDeleteStep(step.id),
       },
@@ -151,6 +153,7 @@ export function PageFlowCanvas() {
 
   // ─── Mutations ───────────────────────────────────────────────────────────────
   const { mutate: addStep } = useAddStep(flowId ?? "")
+  const { mutate: updateStep } = useUpdateStep(flowId ?? "")
   const { mutate: removeStep } = useRemoveStep(flowId ?? "")
   const { mutate: addField } = useAddField(flowId ?? "")
   const { mutate: updateField } = useUpdateField(flowId ?? "")
@@ -300,6 +303,7 @@ export function PageFlowCanvas() {
         field={panelField}
         onClose={() => setPanelState(null)}
         onAddStep={handleAddStep}
+        onUpdateStep={(stepId, data) => updateStep({ path: { step_id: stepId }, body: data })}
         onAddField={handleAddField}
         onEditField={handleEditField}
         onDeleteField={handleDeleteField}
