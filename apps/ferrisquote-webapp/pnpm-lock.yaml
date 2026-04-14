@@ -95,9 +95,6 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
-      typed-openapi:
-        specifier: ^2.2.4
-        version: 2.2.4(openapi-types@12.1.3)(react@19.2.4)
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -138,6 +135,9 @@ importers:
       shadcn:
         specifier: ^4.1.0
         version: 4.1.0(@types/node@25.5.0)(typescript@6.0.2)
+      typed-openapi:
+        specifier: ^2.2.4
+        version: 2.2.4(openapi-types@12.1.3)(react@19.2.4)
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
