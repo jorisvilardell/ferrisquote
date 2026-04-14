@@ -91,7 +91,7 @@ pub struct MoveFieldRequest {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum FieldConfigDto {
     Text { max_length: u32 },
-    Number { min: f64, max: f64 },
+    Number { min: Option<f64>, max: Option<f64> },
     /// ISO 8601 date strings
     Date { min: String, max: String },
     Boolean { default: bool },

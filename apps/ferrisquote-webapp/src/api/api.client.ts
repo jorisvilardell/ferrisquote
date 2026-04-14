@@ -2,7 +2,7 @@ export namespace Schemas {
   // <Schemas>
   export type FieldConfigDto =
     | { max_length: number; type: "text" }
-    | { max: number; min: number; type: "number" }
+    | { max?: number | null; min?: number | null; type: "number" }
     | { max: string; min: string; type: "date" }
     | { default: boolean; type: "boolean" }
     | { options: Array<string>; type: "select" };

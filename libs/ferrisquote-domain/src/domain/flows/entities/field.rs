@@ -63,7 +63,7 @@ impl FieldConfig {
         FieldConfig::Text(FieldText { max_length })
     }
 
-    pub fn new_number(min: f64, max: f64) -> Self {
+    pub fn new_number(min: Option<f64>, max: Option<f64>) -> Self {
         FieldConfig::Number(FieldNumber { min, max })
     }
 
@@ -87,8 +87,8 @@ pub struct FieldText {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldNumber {
-    pub min: f64,
-    pub max: f64,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
