@@ -45,7 +45,7 @@ function defaultConfig(type: FieldType): Schemas.FieldConfigDto {
     case "text":
       return { type: "text", max_length: 255 }
     case "number":
-      return { type: "number", min: 0, max: 100 }
+      return { type: "number", min: null, max: null }
     case "date":
       return { type: "date", min: "", max: "" }
     case "boolean":
@@ -123,8 +123,11 @@ function FieldConfigForm({
           <Input
             id="num_min"
             type="number"
-            value={config.min}
-            onChange={(e) => onChange({ ...config, min: Number(e.target.value) })}
+            placeholder="No limit"
+            value={config.min ?? ""}
+            onChange={(e) =>
+              onChange({ ...config, min: e.target.value === "" ? null : Number(e.target.value) })
+            }
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -132,8 +135,11 @@ function FieldConfigForm({
           <Input
             id="num_max"
             type="number"
-            value={config.max}
-            onChange={(e) => onChange({ ...config, max: Number(e.target.value) })}
+            placeholder="No limit"
+            value={config.max ?? ""}
+            onChange={(e) =>
+              onChange({ ...config, max: e.target.value === "" ? null : Number(e.target.value) })
+            }
           />
         </div>
       </div>
