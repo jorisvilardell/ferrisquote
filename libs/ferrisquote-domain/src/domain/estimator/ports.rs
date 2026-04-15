@@ -5,6 +5,7 @@ use crate::domain::{error::DomainError, flows::entities::ids::FlowId};
 use super::entities::{
     estimator::Estimator,
     ids::{EstimatorId, EstimatorVariableId},
+    submission::SubmissionData,
     variable::EstimatorVariable,
 };
 
@@ -112,18 +113,15 @@ pub trait EstimatorService: Send + Sync {
 
     // --- Evaluation ---
 
-    /// Evaluate all variables of an estimator given a map of field values.
-    ///
-    /// `field_values` maps `field_key` → numeric value (e.g. `"surface"` → `50.0`).
-    ///
-    /// Returns a map of `variable_name` → computed value.
-    ///
-    /// Variables are resolved in dependency order.  A `DomainError::ValidationError`
-    /// is returned if a circular dependency is detected or if an expression cannot
-    /// be evaluated.
     fn evaluate(
         &self,
         estimator_id: EstimatorId,
         field_values: HashMap<String, f64>,
+    ) -> impl Future<Output = Result<HashMap<String, f64>, DomainError>> + Send;
+
+    fn evaluate_submission(
+        &self,
+        estimator_id: EstimatorId,
+        data: SubmissionData,
     ) -> impl Future<Output = Result<HashMap<String, f64>, DomainError>> + Send;
 }
