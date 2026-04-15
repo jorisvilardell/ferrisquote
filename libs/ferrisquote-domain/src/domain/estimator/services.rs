@@ -6,6 +6,7 @@ use super::{
     entities::{
         estimator::Estimator,
         ids::{EstimatorId, EstimatorVariableId},
+        submission::SubmissionData,
         variable::EstimatorVariable,
     },
     ports::{EstimatorRepository, EstimatorService},
@@ -90,6 +91,15 @@ where
         let estimator = self.repo.get_estimator(estimator_id).await?;
         evaluate_estimator(&estimator, &field_values)
     }
+
+    async fn evaluate_submission(
+        &self,
+        estimator_id: EstimatorId,
+        data: SubmissionData,
+    ) -> Result<HashMap<String, f64>, DomainError> {
+        let estimator = self.repo.get_estimator(estimator_id).await?;
+        evaluate_estimator_with_submission(&estimator, &data)
+    }
 }
 
 // ============================================================================
@@ -135,6 +145,122 @@ pub fn evaluate_estimator(
     }
 
     Ok(results)
+}
+
+pub fn evaluate_estimator_with_submission(
+    estimator: &Estimator,
+    data: &SubmissionData,
+) -> Result<HashMap<String, f64>, DomainError> {
+    let order = topological_sort(&estimator.variables)?;
+
+    use evalexpr::ContextWithMutableVariables;
+    let mut ctx = evalexpr::HashMapContext::<evalexpr::DefaultNumericTypes>::new();
+
+    for (key, &value) in &data.field_values {
+        ctx.set_value(key.clone(), evalexpr::Value::Float(value))
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+    }
+
+    let var_by_id: HashMap<EstimatorVariableId, &EstimatorVariable> =
+        estimator.variables.iter().map(|v| (v.id, v)).collect();
+
+    let mut results = HashMap::new();
+
+    for id in order {
+        let var = var_by_id[&id];
+        let expr = resolve_aggregations(&var.expression, data)?;
+        let expr = prepare_expression(&expr);
+
+        let value = evalexpr::eval_float_with_context(&expr, &ctx).map_err(|e| {
+            DomainError::validation(format!(
+                "Failed to evaluate variable '{}': {}",
+                var.name, e
+            ))
+        })?;
+
+        ctx.set_value(var.name.clone(), evalexpr::Value::Float(value))
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+
+        results.insert(var.name.clone(), value);
+    }
+
+    Ok(results)
+}
+
+fn resolve_aggregations(expr: &str, data: &SubmissionData) -> Result<String, DomainError> {
+    let mut result = expr.to_string();
+
+    while let Some(pos) = find_aggregation(&result) {
+        let (func_name, arg, start, end) = pos;
+        let replacement = match func_name.as_str() {
+            "SUM" => {
+                let values = data
+                    .iteration_values
+                    .get(&arg)
+                    .ok_or_else(|| {
+                        DomainError::validation(format!(
+                            "SUM references unknown repeatable field '{arg}'"
+                        ))
+                    })?;
+                values.iter().sum::<f64>()
+            }
+            "AVG" => {
+                let values = data
+                    .iteration_values
+                    .get(&arg)
+                    .ok_or_else(|| {
+                        DomainError::validation(format!(
+                            "AVG references unknown repeatable field '{arg}'"
+                        ))
+                    })?;
+                if values.is_empty() {
+                    0.0
+                } else {
+                    values.iter().sum::<f64>() / values.len() as f64
+                }
+            }
+            "COUNT_ITER" => {
+                let count = data
+                    .iteration_counts
+                    .get(&arg)
+                    .ok_or_else(|| {
+                        DomainError::validation(format!(
+                            "COUNT_ITER references unknown step '{arg}'"
+                        ))
+                    })?;
+                *count as f64
+            }
+            _ => {
+                return Err(DomainError::validation(format!(
+                    "Unknown aggregation function '{func_name}'"
+                )));
+            }
+        };
+        let formatted = format_float(replacement);
+        result = format!("{}{formatted}{}", &result[..start], &result[end..]);
+    }
+
+    Ok(result)
+}
+
+fn format_float(v: f64) -> String {
+    let s = v.to_string();
+    if s.contains('.') { s } else { format!("{s}.0") }
+}
+
+fn find_aggregation(expr: &str) -> Option<(String, String, usize, usize)> {
+    for func in &["SUM", "AVG", "COUNT_ITER"] {
+        if let Some(start) = expr.find(&format!("{func}(")) {
+            let after_paren = start + func.len() + 1;
+            if let Some(close) = expr[after_paren..].find(')') {
+                let end = after_paren + close + 1;
+                let inner = expr[after_paren..after_paren + close].trim();
+                let arg = inner.strip_prefix('@').unwrap_or(inner).to_string();
+                return Some((func.to_string(), arg, start, end));
+            }
+        }
+    }
+    None
 }
 
 /// Strip `@` prefixes so `@surface * @prix` becomes `surface * prix`,
@@ -267,7 +393,6 @@ mod tests {
 
     #[test]
     fn test_variable_dependency_chain() {
-        // ht depends on surface and prix, ttc depends on ht
         let estimator = make_estimator(vec![
             make_var("ht", "@surface * @prix"),
             make_var("ttc", "@ht * 1.2"),
@@ -293,5 +418,128 @@ mod tests {
         let estimator = make_estimator(vec![make_var("tva", "0.2")]);
         let result = evaluate_estimator(&estimator, &HashMap::new()).unwrap();
         assert_eq!(result["tva"], 0.2);
+    }
+
+    // ========================================================================
+    // Aggregation tests
+    // ========================================================================
+
+    #[test]
+    fn test_sum_with_multiple_iterations() {
+        let estimator = make_estimator(vec![make_var("total", "SUM(@surface) * @prix")]);
+        let data = SubmissionData {
+            field_values: HashMap::from([("prix".to_string(), 10.0)]),
+            iteration_values: HashMap::from([(
+                "surface".to_string(),
+                vec![5.0, 10.0, 15.0],
+            )]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["total"], 300.0);
+    }
+
+    #[test]
+    fn test_sum_with_zero_iterations() {
+        let estimator = make_estimator(vec![make_var("total", "SUM(@surface)")]);
+        let data = SubmissionData {
+            field_values: HashMap::new(),
+            iteration_values: HashMap::from([("surface".to_string(), vec![])]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["total"], 0.0);
+    }
+
+    #[test]
+    fn test_sum_with_single_iteration() {
+        let estimator = make_estimator(vec![make_var("total", "SUM(@surface)")]);
+        let data = SubmissionData {
+            field_values: HashMap::new(),
+            iteration_values: HashMap::from([("surface".to_string(), vec![42.0])]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["total"], 42.0);
+    }
+
+    #[test]
+    fn test_avg_with_multiple_iterations() {
+        let estimator = make_estimator(vec![make_var("avg_surface", "AVG(@surface)")]);
+        let data = SubmissionData {
+            field_values: HashMap::new(),
+            iteration_values: HashMap::from([(
+                "surface".to_string(),
+                vec![10.0, 20.0, 30.0],
+            )]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["avg_surface"], 20.0);
+    }
+
+    #[test]
+    fn test_avg_with_zero_iterations() {
+        let estimator = make_estimator(vec![make_var("avg_surface", "AVG(@surface)")]);
+        let data = SubmissionData {
+            field_values: HashMap::new(),
+            iteration_values: HashMap::from([("surface".to_string(), vec![])]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["avg_surface"], 0.0);
+    }
+
+    #[test]
+    fn test_count_iterations() {
+        let estimator = make_estimator(vec![
+            make_var("count", "COUNT_ITER(@rooms)"),
+            make_var("cost", "@count * 100.0"),
+        ]);
+        let data = SubmissionData {
+            field_values: HashMap::new(),
+            iteration_values: HashMap::new(),
+            iteration_counts: HashMap::from([("rooms".to_string(), 5)]),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["count"], 5.0);
+        assert_eq!(result["cost"], 500.0);
+    }
+
+    #[test]
+    fn test_mixed_static_and_aggregated() {
+        let estimator = make_estimator(vec![
+            make_var("total_surface", "SUM(@surface)"),
+            make_var("ht", "@total_surface * @prix_unitaire"),
+            make_var("ttc", "@ht * 1.2"),
+        ]);
+        let data = SubmissionData {
+            field_values: HashMap::from([("prix_unitaire".to_string(), 50.0)]),
+            iteration_values: HashMap::from([(
+                "surface".to_string(),
+                vec![10.0, 20.0, 30.0],
+            )]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
+        assert_eq!(result["total_surface"], 60.0);
+        assert_eq!(result["ht"], 3000.0);
+        assert!((result["ttc"] - 3600.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_sum_unknown_field_errors() {
+        let estimator = make_estimator(vec![make_var("total", "SUM(@unknown)")]);
+        let data = SubmissionData::default();
+        let result = evaluate_estimator_with_submission(&estimator, &data);
+        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+    }
+
+    #[test]
+    fn test_count_iter_unknown_step_errors() {
+        let estimator = make_estimator(vec![make_var("n", "COUNT_ITER(@unknown_step)")]);
+        let data = SubmissionData::default();
+        let result = evaluate_estimator_with_submission(&estimator, &data);
+        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
     }
 }
