@@ -1,8 +1,12 @@
 use ferrisquote_domain::domain::{
+    estimator::services::EstimatorServiceImpl,
     flows::services::FlowServiceImpl,
     rank::services::LexoRankProvider,
 };
-use ferrisquote_postgres::repositories::flow_repository::PostgresFlowRepository;
+use ferrisquote_postgres::repositories::{
+    estimator_repository::PostgresEstimatorRepository,
+    flow_repository::PostgresFlowRepository,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -42,17 +46,22 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("failed to connect to Postgres");
 
-    let repo = PostgresFlowRepository::new(pool);
+    let pg_pool = Arc::new(pool);
+
+    let flow_repo = PostgresFlowRepository::with_pool(pg_pool.clone());
+    let estimator_repo = PostgresEstimatorRepository::with_pool(pg_pool);
     let rank_service = LexoRankProvider;
 
     let flow_service = FlowServiceImpl::new(
-        repo.clone(),
-        repo.clone(),
-        repo.clone(),
+        flow_repo.clone(),
+        flow_repo.clone(),
+        flow_repo.clone(),
         rank_service,
     );
 
-    let app_state = AppState::new(Arc::new(flow_service));
+    let estimator_service = EstimatorServiceImpl::new(estimator_repo);
+
+    let app_state = AppState::new(Arc::new(flow_service), Arc::new(estimator_service));
 
     let app = build_routes(app_state);
 
