@@ -68,6 +68,14 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
         </p>
       </div>
 
+      <Handle
+        id="right"
+        type="source"
+        position={Position.Right}
+        className="!border-2 !border-background !w-2.5 !h-2.5"
+        style={{ backgroundColor: ROSE }}
+      />
+
       {/* Variables list */}
       <div className="px-3 py-2 space-y-1">
         {data.variables.length === 0 ? (

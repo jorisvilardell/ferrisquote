@@ -199,6 +199,7 @@ type Props = {
   field: Schemas.FieldResponse | null
   estimator: Schemas.EstimatorResponse | null
   availableFieldKeys: string[]
+  otherEstimators: Array<{ name: string; variables: string[] }>
   onClose: () => void
   onAddStep: (data: { title: string; description: string }) => void
   onUpdateStep: (stepId: string, data: Schemas.UpdateStepMetadataRequest) => void
@@ -219,6 +220,7 @@ export function FlowEditPanel({
   field,
   estimator,
   availableFieldKeys,
+  otherEstimators,
   onClose,
   onAddStep,
   onUpdateStep,
@@ -273,6 +275,7 @@ export function FlowEditPanel({
           <EstimatorDetailsPanel
             estimator={estimator}
             availableFieldKeys={availableFieldKeys}
+            otherEstimators={otherEstimators}
             onClose={onClose}
             onUpdateName={onUpdateEstimatorName}
             onAddVariable={onAddVariable}
@@ -723,6 +726,7 @@ const AGG_FUNCTIONS = ["SUM", "AVG", "COUNT_ITER"] as const
 function EstimatorDetailsPanel({
   estimator,
   availableFieldKeys,
+  otherEstimators,
   onClose,
   onUpdateName,
   onAddVariable,
@@ -731,6 +735,7 @@ function EstimatorDetailsPanel({
 }: {
   estimator: Schemas.EstimatorResponse
   availableFieldKeys: string[]
+  otherEstimators: Array<{ name: string; variables: string[] }>
   onClose: () => void
   onUpdateName: (estimatorId: string, name: string) => void
   onAddVariable: (estimatorId: string) => void
@@ -794,6 +799,7 @@ function EstimatorDetailsPanel({
             variable={v}
             estimatorId={estimator.id}
             availableFieldKeys={availableFieldKeys}
+            otherEstimators={otherEstimators}
             onUpdate={onUpdateVariable}
             onDelete={onDeleteVariable}
           />
@@ -819,12 +825,14 @@ function VariableCard({
   variable,
   estimatorId,
   availableFieldKeys,
+  otherEstimators,
   onUpdate,
   onDelete,
 }: {
   variable: Schemas.VariableResponse
   estimatorId: string
   availableFieldKeys: string[]
+  otherEstimators: Array<{ name: string; variables: string[] }>
   onUpdate: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
   onDelete: (estimatorId: string, variableId: string) => void
 }) {
@@ -834,10 +842,22 @@ function VariableCard({
   const exprRef = useRef<HTMLTextAreaElement>(null)
 
   const suggestions = [
+    // Field keys
     ...availableFieldKeys
       .filter((k) => k.includes(suggestionFilter))
-      .map((k) => ({ label: `@${k}`, insert: `@${k}` })),
-    ...AGG_FUNCTIONS.map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)` })),
+      .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "fields" as const })),
+    // Aggregation functions
+    ...AGG_FUNCTIONS.map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "functions" as const })),
+    // Cross-estimator variables
+    ...otherEstimators.flatMap((est) =>
+      est.variables
+        .filter((v) => `${est.name}.${v}`.toLowerCase().includes(suggestionFilter.toLowerCase()))
+        .map((v) => ({
+          label: `@${est.name}.${v}`,
+          insert: `@${est.name}.${v}`,
+          group: "estimators" as const,
+        })),
+    ),
   ]
 
   function insertSuggestion(insert: string) {
@@ -862,12 +882,12 @@ function VariableCard({
 
   function handleExpressionChange(value: string) {
     onUpdate(estimatorId, variable.id, { expression: value })
-    // Check if user is typing after @
     const el = exprRef.current
     if (el) {
       const pos = el.selectionStart ?? value.length
       const before = value.substring(0, pos)
-      const atMatch = before.match(/@([a-z0-9_]*)$/)
+      // Match @Name.var or @key patterns
+      const atMatch = before.match(/@([A-Za-z0-9_.]*)$/)
       if (atMatch) {
         setSuggestionFilter(atMatch[1])
         setShowSuggestions(true)
@@ -951,19 +971,32 @@ function VariableCard({
               }}
             />
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-40 overflow-y-auto rounded-md border bg-popover shadow-md">
-                {suggestions.map((s) => (
-                  <button
-                    key={s.insert}
-                    className="w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      insertSuggestion(s.insert)
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+                {suggestions.map((s, i) => {
+                  const prevGroup = i > 0 ? suggestions[i - 1].group : null
+                  const showGroupLabel = s.group !== prevGroup
+                  return (
+                    <div key={s.insert}>
+                      {showGroupLabel && (
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          {s.group === "fields" ? "Fields" : s.group === "functions" ? "Functions" : "Other estimators"}
+                        </div>
+                      )}
+                      <button
+                        className={cn(
+                          "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
+                          s.group === "estimators" && "text-purple-500",
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          insertSuggestion(s.insert)
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

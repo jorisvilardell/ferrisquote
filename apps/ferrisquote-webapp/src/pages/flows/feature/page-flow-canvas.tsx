@@ -208,10 +208,14 @@ function buildGraph(
   }
 
   // ─── Estimator nodes (right column) ──────────────────────────────────────
+  const CROSS_COLOR = "hsl(270, 70%, 60%)"
+  const estNameToNodeId = new Map<string, string>()
   let estimatorY = 0
 
+  // First pass: create nodes and register name→nodeId
   for (const est of estimators) {
     const estimatorNodeId = `estimator-${est.id}`
+    estNameToNodeId.set(est.name, estimatorNodeId)
     const varCount = est.variables.length
     const nodeHeight = 44 + Math.max(varCount, 1) * 22
 
@@ -227,73 +231,109 @@ function buildGraph(
       },
     }
     nodes.push(estNode)
+    estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
+  }
+
+  // Second pass: create edges
+  for (const est of estimators) {
+    const estimatorNodeId = `estimator-${est.id}`
 
     for (const v of est.variables) {
       const refs = extractExprRefs(v.expression)
       for (const ref of refs) {
-        const info = fieldKeyMap.get(ref.key)
-        if (!info) continue
+        if (ref.type === "cross") {
+          // Cross-estimator edge
+          const sourceNodeId = estNameToNodeId.get(ref.estimatorName)
+          if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
+            edges.push({
+              id: `e-cross-${est.id}-${v.id}-${ref.estimatorName}.${ref.variableName}`,
+              source: sourceNodeId,
+              sourceHandle: "right",
+              target: estimatorNodeId,
+              type: "smoothstep",
+              animated: true,
+              style: { strokeWidth: 2, stroke: CROSS_COLOR, opacity: 0.8 },
+              label: `${ref.variableName}`,
+              labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
+              labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+              labelBgPadding: [4, 2] as [number, number],
+            })
+          }
+        } else {
+          // Field reference edge
+          const info = fieldKeyMap.get(ref.key)
+          if (!info) continue
 
-        // If the step is expanded, connect from the field node; otherwise from the step node
-        const sourceId = info.expanded ? info.fieldNodeId : info.stepId
-        const sourceHandle = info.expanded ? "right" : "right"
-        const isAgg = ref.aggregation !== false
+          const sourceId = info.expanded ? info.fieldNodeId : info.stepId
+          const isAgg = ref.aggregation !== false
 
-        edges.push({
-          id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
-          source: sourceId,
-          sourceHandle,
-          target: estimatorNodeId,
-          type: "smoothstep",
-          animated: isAgg,
-          style: {
-            strokeWidth: isAgg ? 2 : 1.5,
-            stroke: ROSE_COLOR,
-            opacity: 0.7,
-            strokeDasharray: isAgg ? "6 3" : undefined,
-          },
-          label: isAgg ? ref.aggregation : undefined,
-          labelStyle: isAgg ? { fill: ROSE_COLOR, fontSize: 10, fontWeight: 600 } : undefined,
-          labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
-          labelBgPadding: isAgg ? [4, 2] as [number, number] : undefined,
-        })
+          edges.push({
+            id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
+            source: sourceId,
+            sourceHandle: "right",
+            target: estimatorNodeId,
+            type: "smoothstep",
+            animated: isAgg,
+            style: {
+              strokeWidth: isAgg ? 2 : 1.5,
+              stroke: ROSE_COLOR,
+              opacity: 0.7,
+              strokeDasharray: isAgg ? "6 3" : undefined,
+            },
+            label: isAgg ? ref.aggregation : undefined,
+            labelStyle: isAgg ? { fill: ROSE_COLOR, fontSize: 10, fontWeight: 600 } : undefined,
+            labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
+            labelBgPadding: isAgg ? [4, 2] as [number, number] : undefined,
+          })
+        }
       }
     }
-
-    estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
   }
 
   return { nodes, edges, stepPositions }
 }
 
-type FieldRef = { key: string; aggregation: false }
-type AggregationRef = { key: string; aggregation: "SUM" | "AVG" | "COUNT_ITER" }
-type ExprRef = FieldRef | AggregationRef
+type FieldRef = { type: "field"; key: string; aggregation: false }
+type AggregationRef = { type: "field"; key: string; aggregation: "SUM" | "AVG" | "COUNT_ITER" }
+type CrossRef = { type: "cross"; estimatorName: string; variableName: string }
+type ExprRef = FieldRef | AggregationRef | CrossRef
 
 function extractExprRefs(expression: string): ExprRef[] {
   const refs: ExprRef[] = []
   const seen = new Set<string>()
 
-  // Match aggregation functions: SUM(@key), AVG(@key), COUNT_ITER(@key)
-  const aggRegex = /(SUM|AVG|COUNT_ITER)\(\s*@([a-z][a-z0-9_]*)\s*\)/g
+  // Match cross-estimator references: @EstimatorName.var_name
+  const crossRegex = /@([A-Z][A-Za-z0-9_ ]*)\.([a-z][a-z0-9_]*)/g
   let match: RegExpExecArray | null
-  while ((match = aggRegex.exec(expression)) !== null) {
-    const tag = `${match[1]}:${match[2]}`
+  while ((match = crossRegex.exec(expression)) !== null) {
+    const tag = `cross:${match[1].trim()}.${match[2]}`
     if (!seen.has(tag)) {
       seen.add(tag)
-      refs.push({ key: match[2], aggregation: match[1] as AggregationRef["aggregation"] })
+      refs.push({ type: "cross", estimatorName: match[1].trim(), variableName: match[2] })
     }
   }
 
-  // Match bare @key references (not inside an aggregation function)
-  // Remove aggregation calls first to avoid double-matching
-  const stripped = expression.replace(/(SUM|AVG|COUNT_ITER)\(\s*@[a-z][a-z0-9_]*\s*\)/g, "")
+  // Remove cross-refs before scanning for other patterns
+  const noCross = expression.replace(/@[A-Z][A-Za-z0-9_ ]*\.[a-z][a-z0-9_]*/g, "")
+
+  // Match aggregation functions: SUM(@key), AVG(@key), COUNT_ITER(@key)
+  const aggRegex = /(SUM|AVG|COUNT_ITER)\(\s*@([a-z][a-z0-9_]*)\s*\)/g
+  while ((match = aggRegex.exec(noCross)) !== null) {
+    const tag = `agg:${match[1]}:${match[2]}`
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      refs.push({ type: "field", key: match[2], aggregation: match[1] as AggregationRef["aggregation"] })
+    }
+  }
+
+  // Match bare @key references
+  const stripped = noCross.replace(/(SUM|AVG|COUNT_ITER)\(\s*@[a-z][a-z0-9_]*\s*\)/g, "")
   const bareRegex = /@([a-z][a-z0-9_]*)/g
   while ((match = bareRegex.exec(stripped)) !== null) {
     const tag = `bare:${match[1]}`
     if (!seen.has(tag)) {
       seen.add(tag)
-      refs.push({ key: match[1], aggregation: false })
+      refs.push({ type: "field", key: match[1], aggregation: false })
     }
   }
 
@@ -861,6 +901,10 @@ function PageFlowCanvasInner() {
             field={panelField}
             estimator={panelEstimator}
             availableFieldKeys={availableFieldKeys}
+            otherEstimators={estimators
+              .filter((e) => e.id !== panelEstimator?.id)
+              .map((e) => ({ name: e.name, variables: e.variables.map((v) => v.name) }))
+            }
             onClose={() => setPanelState(null)}
             onAddStep={handleAddStep}
             onUpdateStep={(stepId, data) =>
