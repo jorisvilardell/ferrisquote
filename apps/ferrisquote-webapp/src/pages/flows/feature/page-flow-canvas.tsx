@@ -62,6 +62,7 @@ function buildGraph(
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
   dropIndicatorIndex: number | null,
+  selectedEstimatorId: string | null,
   onEditStep: (stepId: string) => void,
   onDeleteStep: (stepId: string) => void,
   onEditField: (fieldId: string, stepId: string) => void,
@@ -239,6 +240,7 @@ function buildGraph(
       id: estimatorNodeId,
       type: "estimatorNode",
       position: { x: ESTIMATOR_X_OFFSET, y: estimatorY },
+      selected: selectedEstimatorId === est.id,
       data: {
         name: est.name,
         variables: est.variables,
@@ -481,6 +483,7 @@ function PageFlowCanvasInner() {
     setPanelState(null)
     setDeletingStep(null)
     setDeletingField(null)
+    setDeletingEstimator(null)
     setLinkingField(false)
     setLocalEstimators(null)
   }, [flowId, is404, setLastFlowId])
@@ -542,12 +545,24 @@ function PageFlowCanvasInner() {
     setPanelState({ mode: "estimator-details", estimatorId })
   }, [])
 
+  const [deletingEstimator, setDeletingEstimator] = useState<{ id: string; name: string } | null>(null)
+
   const handleDeleteEstimator = useCallback(
-    (_estimatorId: string) => {
-      // TODO: implement delete estimator confirmation dialog (issue #65)
+    (estimatorId: string) => {
+      const est = estimators.find((e) => e.id === estimatorId)
+      setDeletingEstimator({ id: estimatorId, name: est?.name ?? "this estimator" })
     },
-    [],
+    [estimators],
   )
+
+  const confirmDeleteEstimator = useCallback(() => {
+    if (!deletingEstimator) return
+    setLocalEstimators((prev) => (prev ?? []).filter((e) => e.id !== deletingEstimator.id))
+    if (panelState?.mode === "estimator-details" && panelState.estimatorId === deletingEstimator.id) {
+      setPanelState(null)
+    }
+    setDeletingEstimator(null)
+  }, [deletingEstimator, panelState])
 
   // ─── Sheet submit handlers ───────────────────────────────────────────────────
   function handleAddStep(data: { title: string; description: string }) {
@@ -791,6 +806,7 @@ function PageFlowCanvasInner() {
         expandedStepIds,
         linkingField,
         dropIndicatorIndex,
+        panelState?.mode === "estimator-details" ? panelState.estimatorId : null,
         handleEditStep,
         handleDeleteStep,
         handleOpenEditField,
@@ -855,6 +871,29 @@ function PageFlowCanvasInner() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={confirmDeleteField}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deletingEstimator !== null}
+        onOpenChange={(open) => !open && setDeletingEstimator(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete estimator?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deletingEstimator?.name}" and all its variables will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteEstimator}
             >
               Delete
             </AlertDialogAction>
