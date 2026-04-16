@@ -62,12 +62,9 @@ function buildGraph(
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
   dropIndicatorIndex: number | null,
-  selectedEstimatorId: string | null,
-  onEditStep: (stepId: string) => void,
+  selectedNodeId: string | null,
   onDeleteStep: (stepId: string) => void,
-  onEditField: (fieldId: string, stepId: string) => void,
   onDeleteField: (fieldId: string, stepId: string) => void,
-  onEditEstimator: (estimatorId: string) => void,
   onDeleteEstimator: (estimatorId: string) => void,
 ): { nodes: Node[]; edges: Edge[]; stepPositions: Map<string, number> } {
   const nodes: Node[] = []
@@ -119,6 +116,7 @@ function buildGraph(
       type: "stepNode",
       position: { x: 0, y: stepY },
       draggable: true,
+      selected: selectedNodeId === step.id,
       data: {
         index: i + 1,
         title: step.title,
@@ -127,7 +125,6 @@ function buildGraph(
         isExpanded,
         isRepeatable: step.is_repeatable,
         linkTarget: !!linkingField,
-        onEdit: () => onEditStep(step.id),
         onDelete: () => onDeleteStep(step.id),
       },
     }
@@ -157,11 +154,11 @@ function buildGraph(
           id: fieldNodeId,
           type: "fieldNode",
           position: { x: FIELD_X_OFFSET, y: fieldY },
+          selected: selectedNodeId === fieldNodeId,
           data: {
             label: field.label,
             type: field.config.type,
             color,
-            onEdit: () => onEditField(field.id, step.id),
             onDelete: () => onDeleteField(field.id, step.id),
           },
         }
@@ -240,12 +237,11 @@ function buildGraph(
       id: estimatorNodeId,
       type: "estimatorNode",
       position: { x: ESTIMATOR_X_OFFSET, y: estimatorY },
-      selected: selectedEstimatorId === est.id,
+      selected: selectedNodeId === estimatorNodeId,
       data: {
         name: est.name,
         variables: est.variables,
         color,
-        onEdit: () => onEditEstimator(est.id),
         onDelete: () => onDeleteEstimator(est.id),
       },
     }
@@ -499,10 +495,6 @@ function PageFlowCanvasInner() {
   }, [linkingField])
 
   // ─── Panel callbacks ─────────────────────────────────────────────────────────
-  const handleEditStep = useCallback((stepId: string) => {
-    setPanelState({ mode: "step-details", stepId })
-  }, [])
-
   const handleDeleteStep = useCallback(
     (stepId: string) => {
       const step = flow?.steps.find((s) => s.id === stepId) ?? null
@@ -540,10 +532,6 @@ function PageFlowCanvasInner() {
     }
     setDeletingField(null)
   }, [deletingField, removeField, panelState])
-
-  const handleEditEstimator = useCallback((estimatorId: string) => {
-    setPanelState({ mode: "estimator-details", estimatorId })
-  }, [])
 
   const [deletingEstimator, setDeletingEstimator] = useState<{ id: string; name: string } | null>(null)
 
@@ -709,6 +697,20 @@ function PageFlowCanvasInner() {
       return
     }
 
+    if (node.type === "fieldNode") {
+      const fieldId = node.id.replace("field-", "")
+      // Find which step owns this field
+      const stepId = flow?.steps.find((s) => s.fields.some((f) => f.id === fieldId))?.id
+      if (stepId) {
+        setPanelState((prev) =>
+          prev?.mode === "edit-field" && prev.fieldId === fieldId
+            ? { mode: "step-details", stepId }
+            : { mode: "edit-field", fieldId, stepId },
+        )
+      }
+      return
+    }
+
     if (node.type !== "stepNode") return
     setExpandedStepIds((prev) => {
       if (prev.has(node.id)) return new Set()
@@ -806,12 +808,12 @@ function PageFlowCanvasInner() {
         expandedStepIds,
         linkingField,
         dropIndicatorIndex,
-        panelState?.mode === "estimator-details" ? panelState.estimatorId : null,
-        handleEditStep,
+        panelState?.mode === "estimator-details" ? `estimator-${panelState.estimatorId}`
+          : panelState?.mode === "step-details" ? panelState.stepId
+          : panelState?.mode === "edit-field" ? `field-${panelState.fieldId}`
+          : null,
         handleDeleteStep,
-        handleOpenEditField,
         handleDeleteField,
-        handleEditEstimator,
         handleDeleteEstimator,
       )
     : { nodes: [], edges: [], stepPositions: new Map<string, number>() }

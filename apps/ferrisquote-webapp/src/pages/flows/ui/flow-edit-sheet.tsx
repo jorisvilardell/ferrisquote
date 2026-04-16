@@ -345,6 +345,8 @@ function AddStepForm({
 
 // ─── Step Details Panel ───────────────────────────────────────────────────────
 
+const STEP_COLOR = "hsl(28, 85%, 55%)"
+
 function StepDetailsPanel({
   step,
   onClose,
@@ -360,13 +362,55 @@ function StepDetailsPanel({
   onEditField: (fieldId: string, stepId: string) => void
   onDeleteField: (fieldId: string, stepId: string) => void
 }) {
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [title, setTitle] = useState(step.title)
+
+  useEffect(() => {
+    setTitle(step.title)
+    setEditingTitle(false)
+  }, [step.id, step.title])
+
   return (
     <>
-      <PanelHeader
-        title={step.title}
-        description={step.description || undefined}
-        onClose={onClose}
-      />
+      <div className="flex items-center gap-2 px-5 pt-4 pb-2 border-b shrink-0">
+        {editingTitle ? (
+          <Input
+            autoFocus
+            className="text-base font-semibold h-8"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => {
+              if (title.trim() && title.trim() !== step.title) {
+                onUpdateStep(step.id, { title: title.trim() })
+              }
+              setEditingTitle(false)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (title.trim() && title.trim() !== step.title) {
+                  onUpdateStep(step.id, { title: title.trim() })
+                }
+                setEditingTitle(false)
+              }
+              if (e.key === "Escape") {
+                setTitle(step.title)
+                setEditingTitle(false)
+              }
+            }}
+          />
+        ) : (
+          <button
+            className="flex-1 text-left text-base font-semibold truncate hover:opacity-80 transition-opacity"
+            style={{ color: STEP_COLOR }}
+            onClick={() => setEditingTitle(true)}
+          >
+            {step.title}
+          </button>
+        )}
+        <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
 
       {/* Repeatable configuration */}
       <StepRepeatableConfig step={step} onUpdateStep={onUpdateStep} />

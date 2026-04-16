@@ -1,12 +1,11 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
-import { Pencil, Trash2, Calculator } from "lucide-react"
+import { Trash2, Calculator } from "lucide-react"
 import type { Schemas } from "@/api/api.client"
 
 export type EstimatorNodeData = {
   name: string
   variables: Schemas.VariableResponse[]
   color: string
-  onEdit: () => void
   onDelete: () => void
 }
 
@@ -31,18 +30,6 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
 
       {/* Hover actions */}
       <div className="absolute -top-3 right-2 hidden group-hover:flex items-center gap-1 z-10">
-        <button
-          className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm transition-colors"
-          style={{ color: undefined }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = c; e.currentTarget.style.borderColor = c }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = ""; e.currentTarget.style.borderColor = "" }}
-          onClick={(e) => {
-            e.stopPropagation()
-            data.onEdit()
-          }}
-        >
-          <Pencil className="w-3 h-3" />
-        </button>
         <button
           className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm hover:border-destructive hover:text-destructive transition-colors"
           onClick={(e) => {
