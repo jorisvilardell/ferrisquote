@@ -12,6 +12,7 @@ use super::{
     ports::{EstimatorRepository, EstimatorService},
 };
 
+#[derive(Clone)]
 pub struct EstimatorServiceImpl<ER> {
     repo: ER,
 }

@@ -1,10 +1,12 @@
 use utoipa::OpenApi;
 
 use crate::dto::{
-    ApiResponse, CreateFieldRequest, CreateFlowRequest, CreateStepRequest, FieldConfigDto,
-    FieldResponse, FlowListResponse, FlowResponse, FlowSummaryResponse, MessageResponse,
-    MoveFieldRequest, ReorderStepRequest, StepResponse, UpdateFieldConfigRequest,
-    UpdateFlowMetadataRequest, UpdateStepMetadataRequest,
+    ApiResponse, CreateEstimatorRequest, CreateFieldRequest, CreateFlowRequest,
+    CreateStepRequest, CreateVariableRequest, EstimatorListResponse, EstimatorResponse,
+    EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest, FieldConfigDto, FieldResponse,
+    FlowListResponse, FlowResponse, FlowSummaryResponse, MessageResponse, MoveFieldRequest,
+    ReorderStepRequest, StepResponse, UpdateEstimatorRequest, UpdateFieldConfigRequest,
+    UpdateFlowMetadataRequest, UpdateStepMetadataRequest, UpdateVariableRequest, VariableResponse,
 };
 
 #[derive(OpenApi)]
@@ -12,7 +14,7 @@ use crate::dto::{
     info(
         title = "FerrisQuote API",
         version = "0.1.0",
-        description = "API for managing quote flows, steps and fields"
+        description = "API for managing quote flows, steps, fields and estimators"
     ),
     paths(
         crate::handlers::flow_handlers::create_flow,
@@ -28,6 +30,16 @@ use crate::dto::{
         crate::handlers::field_handlers::update_field_config,
         crate::handlers::field_handlers::remove_field,
         crate::handlers::field_handlers::move_field,
+        crate::handlers::estimator_handlers::create_estimator,
+        crate::handlers::estimator_handlers::list_estimators,
+        crate::handlers::estimator_handlers::get_estimator,
+        crate::handlers::estimator_handlers::update_estimator,
+        crate::handlers::estimator_handlers::delete_estimator,
+        crate::handlers::estimator_handlers::add_variable,
+        crate::handlers::estimator_handlers::update_variable,
+        crate::handlers::estimator_handlers::remove_variable,
+        crate::handlers::estimator_handlers::evaluate,
+        crate::handlers::estimator_handlers::evaluate_submission,
     ),
     components(schemas(
         CreateFlowRequest,
@@ -44,17 +56,33 @@ use crate::dto::{
         MoveFieldRequest,
         FieldResponse,
         FieldConfigDto,
+        CreateEstimatorRequest,
+        UpdateEstimatorRequest,
+        EstimatorResponse,
+        EstimatorListResponse,
+        CreateVariableRequest,
+        UpdateVariableRequest,
+        VariableResponse,
+        EvaluateRequest,
+        EvaluateSubmissionRequest,
+        EvaluateResponse,
         MessageResponse,
         ApiResponse<FlowResponse>,
         ApiResponse<FlowListResponse>,
         ApiResponse<StepResponse>,
         ApiResponse<FieldResponse>,
+        ApiResponse<EstimatorResponse>,
+        ApiResponse<EstimatorListResponse>,
+        ApiResponse<VariableResponse>,
+        ApiResponse<EvaluateResponse>,
         ApiResponse<MessageResponse>,
     )),
     tags(
         (name = "flows", description = "Flow management"),
         (name = "steps", description = "Step management"),
         (name = "fields", description = "Field management"),
+        (name = "estimators", description = "Estimator management"),
+        (name = "estimator_variables", description = "Estimator variable management"),
     )
 )]
 pub struct ApiDoc;

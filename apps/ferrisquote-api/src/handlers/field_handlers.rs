@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use ferrisquote_domain::{FieldId, StepId, domain::flows::ports::{FieldService, FlowService, StepService}};
+use ferrisquote_domain::{FieldId, StepId, domain::{estimator::ports::EstimatorService, flows::ports::{FieldService, FlowService, StepService}}};
 use validator::Validate;
 
 use crate::{
@@ -30,8 +30,8 @@ use super::mappers::{map_field_config_from_dto, map_field_to_response, map_flow_
     ),
     tag = "fields"
 )]
-pub async fn add_field<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn add_field<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(step_id): Path<String>,
     Json(request): Json<CreateFieldRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<FieldResponse>>)> {
@@ -63,8 +63,8 @@ pub async fn add_field<S: FlowService + StepService + FieldService>(
     ),
     tag = "fields"
 )]
-pub async fn update_field_config<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn update_field_config<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(field_id): Path<String>,
     Json(request): Json<UpdateFieldConfigRequest>,
 ) -> ApiResult<Json<ApiResponse<FieldResponse>>> {
@@ -94,8 +94,8 @@ pub async fn update_field_config<S: FlowService + StepService + FieldService>(
     ),
     tag = "fields"
 )]
-pub async fn remove_field<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn remove_field<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(field_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let field_id = FieldId::from_uuid(uuid::Uuid::parse_str(&field_id)?);
@@ -121,8 +121,8 @@ pub async fn remove_field<S: FlowService + StepService + FieldService>(
     ),
     tag = "fields"
 )]
-pub async fn move_field<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn move_field<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(field_id): Path<String>,
     Json(request): Json<MoveFieldRequest>,
 ) -> ApiResult<Json<ApiResponse<crate::dto::FlowResponse>>> {

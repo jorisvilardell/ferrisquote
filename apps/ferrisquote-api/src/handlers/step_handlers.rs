@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use ferrisquote_domain::{
-    domain::flows::ports::{FieldService, FlowService, StepService},
+    domain::{estimator::ports::EstimatorService, flows::ports::{FieldService, FlowService, StepService}},
     FlowId, StepId,
 };
 use validator::Validate;
@@ -30,8 +30,8 @@ use super::mappers::{map_flow_to_response, map_step_to_response};
     ),
     tag = "steps"
 )]
-pub async fn add_step<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn add_step<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(flow_id): Path<String>,
     Json(request): Json<CreateStepRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<StepResponse>>)> {
@@ -55,8 +55,8 @@ pub async fn add_step<S: FlowService + StepService + FieldService>(
     ),
     tag = "steps"
 )]
-pub async fn remove_step<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn remove_step<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(step_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let step_id = StepId::from_uuid(uuid::Uuid::parse_str(&step_id)?);
@@ -82,8 +82,8 @@ pub async fn remove_step<S: FlowService + StepService + FieldService>(
     ),
     tag = "steps"
 )]
-pub async fn reorder_step<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn reorder_step<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(step_id): Path<String>,
     Json(request): Json<ReorderStepRequest>,
 ) -> ApiResult<Json<ApiResponse<crate::dto::FlowResponse>>> {
@@ -120,8 +120,8 @@ pub async fn reorder_step<S: FlowService + StepService + FieldService>(
     ),
     tag = "steps"
 )]
-pub async fn update_step_metadata<S: FlowService + StepService + FieldService>(
-    State(state): State<AppState<S>>,
+pub async fn update_step_metadata<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
     Path(step_id): Path<String>,
     Json(request): Json<UpdateStepMetadataRequest>,
 ) -> ApiResult<Json<ApiResponse<StepResponse>>> {

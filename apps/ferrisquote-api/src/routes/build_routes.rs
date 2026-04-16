@@ -3,13 +3,23 @@ use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use ferrisquote_domain::domain::flows::ports::{FieldService, FlowService, StepService};
+use ferrisquote_domain::domain::{
+    estimator::ports::EstimatorService,
+    flows::ports::{FieldService, FlowService, StepService},
+};
 
-use crate::{openapi::ApiDoc, routes::flow_routes, state::AppState};
+use crate::{
+    openapi::ApiDoc,
+    routes::{estimator_routes, flow_routes},
+    state::AppState,
+};
 
 /// Build the complete API router with all routes
-pub fn build_routes<S: FlowService + StepService + FieldService + Clone + 'static>(
-    state: AppState<S>,
+pub fn build_routes<
+    FS: FlowService + StepService + FieldService + Clone + 'static,
+    ES: EstimatorService + Clone + 'static,
+>(
+    state: AppState<FS, ES>,
 ) -> Router {
     let allowed_origins = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
@@ -27,6 +37,9 @@ pub fn build_routes<S: FlowService + StepService + FieldService + Clone + 'stati
     let api = Router::new()
         .route("/health", get(health_check))
         .nest("/api/v1/flows", flow_routes::flow_routes())
+        .nest("/api/v1/flows", estimator_routes::estimator_flow_routes())
+        .nest("/api/v1/estimators", estimator_routes::estimator_routes())
+        .nest("/api/v1/variables", estimator_routes::variable_routes())
         .with_state(state);
 
     Router::new()
