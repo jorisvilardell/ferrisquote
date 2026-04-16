@@ -57,7 +57,11 @@ export function CanvasToolbar({ onClickStep, onClickField }: Props) {
   return (
     <Panel position="bottom-center">
       <TooltipProvider delayDuration={300}>
-        <div className="flex items-center gap-1.5 rounded-xl border bg-popover px-3 py-2 shadow-lg">
+        <div
+          className="flex items-center gap-1.5 rounded-xl border bg-popover px-3 py-2 shadow-lg"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => e.stopPropagation()}
+        >
           <ToolbarItem
             type="stepNode"
             icon={Footprints}
