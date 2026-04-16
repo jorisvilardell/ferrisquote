@@ -49,6 +49,13 @@ export function FieldNode({ data }: NodeProps<Node<FieldNodeData>>) {
 
       <p className="text-sm font-medium leading-tight truncate">{data.label}</p>
       <p className="text-xs text-muted-foreground mt-0.5">{data.type}</p>
+
+      <Handle
+        id="right"
+        type="source"
+        position={Position.Right}
+        className="!border-2 !border-background !bg-muted-foreground !w-2 !h-2"
+      />
     </div>
   )
 }

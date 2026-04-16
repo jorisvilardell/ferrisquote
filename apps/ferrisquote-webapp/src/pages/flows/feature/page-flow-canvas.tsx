@@ -76,7 +76,8 @@ function buildGraph(
   const stepPositions = new Map<string, number>()
   let yOffset = 0
 
-  const fieldKeyToNodeId = new Map<string, string>()
+  // field key → { fieldNodeId, stepId, expanded }
+  const fieldKeyMap = new Map<string, { fieldNodeId: string; stepId: string; expanded: boolean }>()
 
   for (let i = 0; i < flow.steps.length; i++) {
     const step = flow.steps[i]
@@ -86,7 +87,11 @@ function buildGraph(
     stepPositions.set(step.id, stepY)
 
     for (const field of step.fields) {
-      fieldKeyToNodeId.set(field.key, `field-${field.id}`)
+      fieldKeyMap.set(field.key, {
+        fieldNodeId: `field-${field.id}`,
+        stepId: step.id,
+        expanded: isExpanded,
+      })
     }
 
     // Drop indicator before this step
@@ -224,19 +229,34 @@ function buildGraph(
     nodes.push(estNode)
 
     for (const v of est.variables) {
-      const refs = extractFieldRefs(v.expression)
+      const refs = extractExprRefs(v.expression)
       for (const ref of refs) {
-        const sourceNodeId = fieldKeyToNodeId.get(ref)
-        if (sourceNodeId) {
-          edges.push({
-            id: `e-est-${est.id}-${v.id}-${ref}`,
-            source: sourceNodeId,
-            target: estimatorNodeId,
-            type: "smoothstep",
-            animated: false,
-            style: { strokeWidth: 1.5, stroke: ROSE_COLOR, opacity: 0.6 },
-          })
-        }
+        const info = fieldKeyMap.get(ref.key)
+        if (!info) continue
+
+        // If the step is expanded, connect from the field node; otherwise from the step node
+        const sourceId = info.expanded ? info.fieldNodeId : info.stepId
+        const sourceHandle = info.expanded ? "right" : "right"
+        const isAgg = ref.aggregation !== false
+
+        edges.push({
+          id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
+          source: sourceId,
+          sourceHandle,
+          target: estimatorNodeId,
+          type: "smoothstep",
+          animated: isAgg,
+          style: {
+            strokeWidth: isAgg ? 2 : 1.5,
+            stroke: ROSE_COLOR,
+            opacity: 0.7,
+            strokeDasharray: isAgg ? "6 3" : undefined,
+          },
+          label: isAgg ? ref.aggregation : undefined,
+          labelStyle: isAgg ? { fill: ROSE_COLOR, fontSize: 10, fontWeight: 600 } : undefined,
+          labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
+          labelBgPadding: isAgg ? [4, 2] as [number, number] : undefined,
+        })
       }
     }
 
@@ -246,13 +266,37 @@ function buildGraph(
   return { nodes, edges, stepPositions }
 }
 
-function extractFieldRefs(expression: string): string[] {
-  const refs: string[] = []
-  const regex = /@([a-z][a-z0-9_]*)/g
+type FieldRef = { key: string; aggregation: false }
+type AggregationRef = { key: string; aggregation: "SUM" | "AVG" | "COUNT_ITER" }
+type ExprRef = FieldRef | AggregationRef
+
+function extractExprRefs(expression: string): ExprRef[] {
+  const refs: ExprRef[] = []
+  const seen = new Set<string>()
+
+  // Match aggregation functions: SUM(@key), AVG(@key), COUNT_ITER(@key)
+  const aggRegex = /(SUM|AVG|COUNT_ITER)\(\s*@([a-z][a-z0-9_]*)\s*\)/g
   let match: RegExpExecArray | null
-  while ((match = regex.exec(expression)) !== null) {
-    refs.push(match[1])
+  while ((match = aggRegex.exec(expression)) !== null) {
+    const tag = `${match[1]}:${match[2]}`
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      refs.push({ key: match[2], aggregation: match[1] as AggregationRef["aggregation"] })
+    }
   }
+
+  // Match bare @key references (not inside an aggregation function)
+  // Remove aggregation calls first to avoid double-matching
+  const stripped = expression.replace(/(SUM|AVG|COUNT_ITER)\(\s*@[a-z][a-z0-9_]*\s*\)/g, "")
+  const bareRegex = /@([a-z][a-z0-9_]*)/g
+  while ((match = bareRegex.exec(stripped)) !== null) {
+    const tag = `bare:${match[1]}`
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      refs.push({ key: match[1], aggregation: false })
+    }
+  }
+
   return refs
 }
 
