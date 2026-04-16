@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useParams } from "react-router"
 import { StepNode, type StepNodeData } from "../ui/step-node"
 import { FieldNode, type FieldNodeData } from "../ui/field-node"
+import { EstimatorNode, type EstimatorNodeData } from "../ui/estimator-node"
 import { CanvasToolbar } from "../ui/canvas-toolbar"
 import { FlowEditPanel, type PanelState } from "../ui/flow-edit-sheet"
 import {
@@ -25,6 +26,7 @@ import {
   useUpdateField,
   useRemoveField,
 } from "@/api/flows.api"
+import { useListEstimators } from "@/api/estimators.api"
 import { useFlowStore } from "@/store/flow.store"
 import { FlowListDrawer } from "../ui/flow-list-drawer"
 import "@xyflow/react/dist/style.css"
@@ -32,6 +34,7 @@ import "@xyflow/react/dist/style.css"
 const nodeTypes: NodeTypes = {
   stepNode: StepNode,
   fieldNode: FieldNode,
+  estimatorNode: EstimatorNode,
 }
 
 const STEP_NODE_HEIGHT = 90
@@ -39,23 +42,37 @@ const STEP_NODE_GAP = 60
 const FIELD_NODE_HEIGHT = 56
 const FIELD_NODE_GAP = 16
 const FIELD_X_OFFSET = 280
+const ESTIMATOR_X_OFFSET = 560
+const ESTIMATOR_NODE_GAP = 24
+const ROSE_COLOR = "hsl(330, 80%, 60%)"
 
 function buildGraph(
   flow: Schemas.FlowResponse,
+  estimators: Schemas.EstimatorResponse[],
   expandedStepIds: Set<string>,
   onEditStep: (stepId: string) => void,
   onDeleteStep: (stepId: string) => void,
   onEditField: (fieldId: string, stepId: string) => void,
   onDeleteField: (fieldId: string, stepId: string) => void,
+  onEditEstimator: (estimatorId: string) => void,
+  onDeleteEstimator: (estimatorId: string) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
   let yOffset = 0
 
+  // Build a map of field key → field node ID for estimator edges
+  const fieldKeyToNodeId = new Map<string, string>()
+
   for (let i = 0; i < flow.steps.length; i++) {
     const step = flow.steps[i]
     const isExpanded = expandedStepIds.has(step.id)
     const stepY = i * (STEP_NODE_HEIGHT + STEP_NODE_GAP) + yOffset
+
+    // Register all field keys for edge resolution
+    for (const field of step.fields) {
+      fieldKeyToNodeId.set(field.key, `field-${field.id}`)
+    }
 
     const stepNode: Node<StepNodeData> = {
       id: step.id,
@@ -124,7 +141,60 @@ function buildGraph(
     }
   }
 
+  // ─── Estimator nodes (right column) ──────────────────────────────────────
+  let estimatorY = 0
+
+  for (const est of estimators) {
+    const estimatorNodeId = `estimator-${est.id}`
+    const varCount = est.variables.length
+    const nodeHeight = 44 + Math.max(varCount, 1) * 22
+
+    const estNode: Node<EstimatorNodeData> = {
+      id: estimatorNodeId,
+      type: "estimatorNode",
+      position: { x: ESTIMATOR_X_OFFSET, y: estimatorY },
+      data: {
+        name: est.name,
+        variables: est.variables,
+        onEdit: () => onEditEstimator(est.id),
+        onDelete: () => onDeleteEstimator(est.id),
+      },
+    }
+    nodes.push(estNode)
+
+    // Create edges from field nodes to estimator node for referenced @fields
+    for (const v of est.variables) {
+      const refs = extractFieldRefs(v.expression)
+      for (const ref of refs) {
+        const sourceNodeId = fieldKeyToNodeId.get(ref)
+        if (sourceNodeId) {
+          edges.push({
+            id: `e-est-${est.id}-${v.id}-${ref}`,
+            source: sourceNodeId,
+            target: estimatorNodeId,
+            type: "smoothstep",
+            animated: false,
+            style: { strokeWidth: 1.5, stroke: ROSE_COLOR, opacity: 0.6 },
+          })
+        }
+      }
+    }
+
+    estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
+  }
+
   return { nodes, edges }
+}
+
+/** Extract @field_key references from an expression string */
+function extractFieldRefs(expression: string): string[] {
+  const refs: string[] = []
+  const regex = /@([a-z][a-z0-9_]*)/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(expression)) !== null) {
+    refs.push(match[1])
+  }
+  return refs
 }
 
 export function PageFlowCanvas() {
@@ -132,8 +202,10 @@ export function PageFlowCanvas() {
   const setLastFlowId = useFlowStore((s) => s.setLastFlowId)
 
   const { data: flowData, error } = useGetFlow(flowId ?? "")
+  const { data: estimatorsData } = useListEstimators(flowId ?? "")
 
   const flow = flowData?.data ?? null
+  const estimators = estimatorsData?.data?.estimators ?? []
   const is404 = !!error
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
@@ -149,6 +221,11 @@ export function PageFlowCanvas() {
   const panelField =
     panelState?.mode === "edit-field"
       ? panelStep?.fields.find((f) => f.id === panelState.fieldId) ?? null
+      : null
+
+  const panelEstimator =
+    panelState?.mode === "estimator-details"
+      ? estimators.find((e) => e.id === panelState.estimatorId) ?? null
       : null
 
   // ─── Mutations ───────────────────────────────────────────────────────────────
@@ -194,6 +271,17 @@ export function PageFlowCanvas() {
     [removeField],
   )
 
+  const handleEditEstimator = useCallback((estimatorId: string) => {
+    setPanelState({ mode: "estimator-details", estimatorId })
+  }, [])
+
+  const handleDeleteEstimator = useCallback(
+    (_estimatorId: string) => {
+      // TODO: implement delete estimator confirmation dialog (issue #65)
+    },
+    [],
+  )
+
   // ─── Sheet submit handlers ───────────────────────────────────────────────────
   function handleAddStep(data: { title: string; description: string }) {
     addStep({
@@ -223,8 +311,17 @@ export function PageFlowCanvas() {
     })
   }
 
-  // ─── Single click → toggle expand (exclusive) + open/close step panel ────────
+  // ─── Single click → toggle expand (exclusive) + open/close panel ──────────
   function handleNodeClick(_: React.MouseEvent, node: Node) {
+    if (node.type === "estimatorNode") {
+      const estimatorId = node.id.replace("estimator-", "")
+      setPanelState((prev) =>
+        prev?.mode === "estimator-details" && prev.estimatorId === estimatorId
+          ? null
+          : { mode: "estimator-details", estimatorId },
+      )
+      return
+    }
     if (node.type !== "stepNode") return
     setExpandedStepIds((prev) => {
       if (prev.has(node.id)) return new Set()
@@ -236,7 +333,7 @@ export function PageFlowCanvas() {
   }
 
   const { nodes, edges } = flow
-    ? buildGraph(flow, expandedStepIds, handleEditStep, handleDeleteStep, handleOpenEditField, handleDeleteField)
+    ? buildGraph(flow, estimators, expandedStepIds, handleEditStep, handleDeleteStep, handleOpenEditField, handleDeleteField, handleEditEstimator, handleDeleteEstimator)
     : { nodes: [], edges: [] }
 
   return (
@@ -283,7 +380,7 @@ export function PageFlowCanvas() {
           nodesConnectable={false}
           edgesReconnectable={false}
           edgesFocusable={false}
-          elementsSelectable={false}
+          elementsSelectable={true}
           defaultEdgeOptions={{
             style: { strokeWidth: 2, stroke: "var(--primary)" },
           }}
@@ -301,6 +398,7 @@ export function PageFlowCanvas() {
         state={panelState}
         step={panelStep}
         field={panelField}
+        estimator={panelEstimator}
         onClose={() => setPanelState(null)}
         onAddStep={handleAddStep}
         onUpdateStep={(stepId, data) => updateStep({ path: { step_id: stepId }, body: data })}

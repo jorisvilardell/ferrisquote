@@ -69,6 +69,19 @@ export namespace Schemas {
   export type ReorderStepRequest = Partial<{ after_id: string | null; before_id: string | null }>;
   export type UpdateFieldConfigRequest = { config: FieldConfigDto; label: string };
   export type UpdateFlowMetadataRequest = { description?: (string | null) | undefined; name: string };
+  export type VariableResponse = { id: string; name: string; expression: string; description: string };
+  export type EstimatorResponse = { id: string; flow_id: string; name: string; variables: Array<VariableResponse> };
+  export type EstimatorListResponse = { estimators: Array<EstimatorResponse> };
+  export type ApiResponse_EstimatorListResponse = { data: EstimatorListResponse; success: boolean };
+  export type ApiResponse_EstimatorResponse = { data: EstimatorResponse; success: boolean };
+  export type ApiResponse_VariableResponse = { data: VariableResponse; success: boolean };
+  export type CreateEstimatorRequest = { name: string };
+  export type UpdateEstimatorRequest = { name?: (string | null) | undefined };
+  export type CreateVariableRequest = { name: string; expression: string; description?: (string | null) | undefined };
+  export type UpdateVariableRequest = { name?: (string | null) | undefined; expression?: (string | null) | undefined; description?: (string | null) | undefined };
+  export type EvaluateRequest = { field_values: Record<string, number> };
+  export type EvaluateResponse = { results: Record<string, number> };
+  export type ApiResponse_EvaluateResponse = { data: EvaluateResponse; success: boolean };
 
   // </Schemas>
 }
@@ -206,6 +219,93 @@ export namespace Endpoints {
     responses: { 201: Schemas.StepResponse; 400: unknown; 404: unknown };
   };
 
+  export type get_List_estimators = {
+    method: "GET";
+    path: "/api/v1/flows/{flow_id}/estimators";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+    };
+    responses: { 200: Schemas.EstimatorListResponse };
+  };
+  export type post_Create_estimator = {
+    method: "POST";
+    path: "/api/v1/flows/{flow_id}/estimators";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+      body: Schemas.CreateEstimatorRequest;
+    };
+    responses: { 201: Schemas.EstimatorResponse; 400: unknown };
+  };
+  export type get_Get_estimator = {
+    method: "GET";
+    path: "/api/v1/estimators/{estimator_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+    };
+    responses: { 200: Schemas.EstimatorResponse; 404: unknown };
+  };
+  export type put_Update_estimator = {
+    method: "PUT";
+    path: "/api/v1/estimators/{estimator_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+      body: Schemas.UpdateEstimatorRequest;
+    };
+    responses: { 200: Schemas.EstimatorResponse; 400: unknown; 404: unknown };
+  };
+  export type delete_Delete_estimator = {
+    method: "DELETE";
+    path: "/api/v1/estimators/{estimator_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+    };
+    responses: { 200: Schemas.MessageResponse; 404: unknown };
+  };
+  export type post_Add_variable = {
+    method: "POST";
+    path: "/api/v1/estimators/{estimator_id}/variables";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+      body: Schemas.CreateVariableRequest;
+    };
+    responses: { 201: Schemas.VariableResponse; 400: unknown; 404: unknown };
+  };
+  export type put_Update_variable = {
+    method: "PUT";
+    path: "/api/v1/variables/{variable_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { variable_id: string };
+      body: Schemas.UpdateVariableRequest;
+    };
+    responses: { 200: Schemas.VariableResponse; 400: unknown; 404: unknown };
+  };
+  export type delete_Remove_variable = {
+    method: "DELETE";
+    path: "/api/v1/variables/{variable_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { variable_id: string };
+    };
+    responses: { 200: Schemas.MessageResponse; 404: unknown };
+  };
+  export type post_Evaluate = {
+    method: "POST";
+    path: "/api/v1/estimators/{estimator_id}/evaluate";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+      body: Schemas.EvaluateRequest;
+    };
+    responses: { 200: Schemas.EvaluateResponse; 400: unknown; 404: unknown };
+  };
+
   // </Endpoints>
 }
 
@@ -214,11 +314,16 @@ export type EndpointByMethod = {
   get: {
     "/api/v1/flows": Endpoints.get_List_flows;
     "/api/v1/flows/{flow_id}": Endpoints.get_Get_flow;
+    "/api/v1/flows/{flow_id}/estimators": Endpoints.get_List_estimators;
+    "/api/v1/estimators/{estimator_id}": Endpoints.get_Get_estimator;
   };
   post: {
     "/api/v1/flows": Endpoints.post_Create_flow;
     "/api/v1/flows/steps/{step_id}/fields": Endpoints.post_Add_field;
     "/api/v1/flows/{flow_id}/steps": Endpoints.post_Add_step;
+    "/api/v1/flows/{flow_id}/estimators": Endpoints.post_Create_estimator;
+    "/api/v1/estimators/{estimator_id}/variables": Endpoints.post_Add_variable;
+    "/api/v1/estimators/{estimator_id}/evaluate": Endpoints.post_Evaluate;
   };
   put: {
     "/api/v1/flows/fields/{field_id}": Endpoints.put_Update_field_config;
@@ -226,11 +331,15 @@ export type EndpointByMethod = {
     "/api/v1/flows/steps/{step_id}": Endpoints.put_Update_step_metadata;
     "/api/v1/flows/steps/{step_id}/reorder": Endpoints.put_Reorder_step;
     "/api/v1/flows/{flow_id}": Endpoints.put_Update_flow_metadata;
+    "/api/v1/estimators/{estimator_id}": Endpoints.put_Update_estimator;
+    "/api/v1/variables/{variable_id}": Endpoints.put_Update_variable;
   };
   delete: {
     "/api/v1/flows/fields/{field_id}": Endpoints.delete_Remove_field;
     "/api/v1/flows/steps/{step_id}": Endpoints.delete_Remove_step;
     "/api/v1/flows/{flow_id}": Endpoints.delete_Delete_flow;
+    "/api/v1/estimators/{estimator_id}": Endpoints.delete_Delete_estimator;
+    "/api/v1/variables/{variable_id}": Endpoints.delete_Remove_variable;
   };
 };
 
