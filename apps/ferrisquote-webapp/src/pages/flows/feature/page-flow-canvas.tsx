@@ -54,8 +54,6 @@ const FIELD_NODE_GAP = 16
 const FIELD_X_OFFSET = 280
 const ESTIMATOR_X_OFFSET = 560
 const ESTIMATOR_NODE_GAP = 24
-const ROSE_COLOR = "hsl(330, 80%, 60%)"
-
 const DRAG_DATA_KEY = "application/ferrisquote-node"
 
 function buildGraph(
@@ -208,14 +206,32 @@ function buildGraph(
   }
 
   // ─── Estimator nodes (right column) ──────────────────────────────────────
-  const CROSS_COLOR = "hsl(270, 70%, 60%)"
+  // Color range: rose-violet (hsl 330, 70%, 55%) → rose clair (hsl 340, 80%, 72%)
+  const CROSS_COLOR = "hsl(320, 60%, 55%)"
   const estNameToNodeId = new Map<string, string>()
+  const estIdToColor = new Map<string, string>()
   let estimatorY = 0
 
   // First pass: create nodes and register name→nodeId
-  for (const est of estimators) {
+  for (let ei = 0; ei < estimators.length; ei++) {
+    const est = estimators[ei]
     const estimatorNodeId = `estimator-${est.id}`
     estNameToNodeId.set(est.name, estimatorNodeId)
+
+    // First node is darkest rose, each next one lighter
+    // Fixed step of 4% lightness per node, but if too many nodes
+    // would exceed the pale limit (82%), compress the range to fit
+    const DARK = 55   // darkest (first node)
+    const PALE = 82   // lightest allowed
+    const STEP = 4    // ideal lightness step per node
+    const needed = DARK + (estimators.length - 1) * STEP
+    const actualRange = needed > PALE ? PALE - DARK : (estimators.length - 1) * STEP
+    const lgt = estimators.length > 1
+      ? DARK + (ei / (estimators.length - 1)) * actualRange
+      : DARK
+    const color = `hsl(335, 70%, ${lgt}%)`
+    estIdToColor.set(est.id, color)
+
     const varCount = est.variables.length
     const nodeHeight = 44 + Math.max(varCount, 1) * 22
 
@@ -226,6 +242,7 @@ function buildGraph(
       data: {
         name: est.name,
         variables: est.variables,
+        color,
         onEdit: () => onEditEstimator(est.id),
         onDelete: () => onDeleteEstimator(est.id),
       },
@@ -237,12 +254,12 @@ function buildGraph(
   // Second pass: create edges
   for (const est of estimators) {
     const estimatorNodeId = `estimator-${est.id}`
+    const estColor = estIdToColor.get(est.id) ?? "hsl(330, 75%, 58%)"
 
     for (const v of est.variables) {
       const refs = extractExprRefs(v.expression)
       for (const ref of refs) {
         if (ref.type === "cross") {
-          // Cross-estimator edge
           const sourceNodeId = estNameToNodeId.get(ref.estimatorName)
           if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
             edges.push({
@@ -260,7 +277,6 @@ function buildGraph(
             })
           }
         } else {
-          // Field reference edge
           const info = fieldKeyMap.get(ref.key)
           if (!info) continue
 
@@ -276,12 +292,12 @@ function buildGraph(
             animated: isAgg,
             style: {
               strokeWidth: isAgg ? 2 : 1.5,
-              stroke: ROSE_COLOR,
+              stroke: estColor,
               opacity: 0.7,
               strokeDasharray: isAgg ? "6 3" : undefined,
             },
             label: isAgg ? ref.aggregation : undefined,
-            labelStyle: isAgg ? { fill: ROSE_COLOR, fontSize: 10, fontWeight: 600 } : undefined,
+            labelStyle: isAgg ? { fill: estColor, fontSize: 10, fontWeight: 600 } : undefined,
             labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
             labelBgPadding: isAgg ? [4, 2] as [number, number] : undefined,
           })

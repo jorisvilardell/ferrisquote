@@ -5,35 +5,37 @@ import type { Schemas } from "@/api/api.client"
 export type EstimatorNodeData = {
   name: string
   variables: Schemas.VariableResponse[]
+  color: string
   onEdit: () => void
   onDelete: () => void
 }
 
-const ROSE = "hsl(330, 80%, 60%)"
-const ROSE_LIGHT = "hsl(330, 80%, 95%)"
-const ROSE_RING = "hsl(330, 80%, 60% / 0.2)"
-
 export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeData>>) {
+  const c = data.color
+  const ringColor = `${c.replace(")", " / 0.2)")}` // e.g. hsl(330, 80%, 60% / 0.2)
+
   return (
     <div
       className="group relative min-w-[200px] max-w-[240px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer"
       style={{
-        borderColor: selected ? ROSE : undefined,
-        boxShadow: selected ? `0 0 0 3px ${ROSE_RING}` : undefined,
-        backgroundImage: `linear-gradient(135deg, ${ROSE_LIGHT}, transparent 60%)`,
+        borderColor: selected ? c : undefined,
+        boxShadow: selected ? `0 0 0 3px ${ringColor}` : undefined,
       }}
     >
       <Handle
         type="target"
         position={Position.Left}
         className="!border-2 !border-background !w-2.5 !h-2.5"
-        style={{ backgroundColor: ROSE }}
+        style={{ backgroundColor: c }}
       />
 
       {/* Hover actions */}
       <div className="absolute -top-3 right-2 hidden group-hover:flex items-center gap-1 z-10">
         <button
-          className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm hover:text-pink-500 hover:border-pink-500 transition-colors"
+          className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm transition-colors"
+          style={{ color: undefined }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = c; e.currentTarget.style.borderColor = c }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = ""; e.currentTarget.style.borderColor = "" }}
           onClick={(e) => {
             e.stopPropagation()
             data.onEdit()
@@ -55,11 +57,11 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
       {/* Header */}
       <div
         className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b"
-        style={{ borderBottomColor: `${ROSE}30` }}
+        style={{ borderBottomColor: `color-mix(in srgb, ${c} 20%, transparent)` }}
       >
         <span
           className="flex items-center justify-center w-5 h-5 rounded-full shrink-0"
-          style={{ backgroundColor: ROSE, color: "white" }}
+          style={{ backgroundColor: c, color: "white" }}
         >
           <Calculator className="w-3 h-3" />
         </span>
@@ -73,7 +75,7 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
         type="source"
         position={Position.Right}
         className="!border-2 !border-background !w-2.5 !h-2.5"
-        style={{ backgroundColor: ROSE }}
+        style={{ backgroundColor: c }}
       />
 
       {/* Variables list */}
@@ -85,7 +87,7 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
             <div key={v.id} className="flex items-baseline gap-1.5">
               <span
                 className="text-xs font-mono font-medium shrink-0"
-                style={{ color: ROSE }}
+                style={{ color: c }}
               >
                 {v.name}
               </span>
