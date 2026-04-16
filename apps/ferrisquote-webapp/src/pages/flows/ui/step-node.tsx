@@ -10,6 +10,7 @@ export type StepNodeData = {
   fields: Schemas.FieldResponse[]
   isExpanded?: boolean
   isRepeatable?: boolean
+  linkTarget?: boolean
   onEdit: () => void
   onDelete: () => void
 }
@@ -20,10 +21,12 @@ export function StepNode({ data }: StepNodeProps) {
   return (
     <div
       className={cn(
-        "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer",
-        data.isExpanded
-          ? "border-primary ring-2 ring-primary/20 shadow-md"
-          : "border-border hover:border-primary/50 hover:shadow-md",
+        "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-all cursor-pointer",
+        data.linkTarget
+          ? "border-primary ring-2 ring-primary/40 shadow-md animate-pulse"
+          : data.isExpanded
+            ? "border-primary ring-2 ring-primary/20 shadow-md"
+            : "border-border hover:border-primary/50 hover:shadow-md",
       )}
     >
       <Handle

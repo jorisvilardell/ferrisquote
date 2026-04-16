@@ -35,6 +35,7 @@ export type PanelState =
   | { mode: "step-details"; stepId: string }
   | { mode: "add-field"; stepId: string }
   | { mode: "edit-field"; fieldId: string; stepId: string }
+  | { mode: "estimator-details"; estimatorId: string }
 
 // ─── Field type helpers ───────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ type Props = {
   state: PanelState | null
   step: Schemas.StepResponse | null
   field: Schemas.FieldResponse | null
+  estimator: Schemas.EstimatorResponse | null
   onClose: () => void
   onAddStep: (data: { title: string; description: string }) => void
   onUpdateStep: (stepId: string, data: Schemas.UpdateStepMetadataRequest) => void
@@ -210,6 +212,7 @@ export function FlowEditPanel({
   state,
   step,
   field,
+  estimator,
   onClose,
   onAddStep,
   onUpdateStep,
@@ -254,6 +257,12 @@ export function FlowEditPanel({
             stepId={state.stepId}
             onClose={onClose}
             onSubmit={onEditField}
+          />
+        )}
+        {state?.mode === "estimator-details" && estimator && (
+          <EstimatorDetailsPanel
+            estimator={estimator}
+            onClose={onClose}
           />
         )}
       </div>
@@ -686,6 +695,47 @@ function EditFieldForm({
         >
           Save
         </Button>
+      </div>
+    </>
+  )
+}
+
+// ─── Estimator Details Panel ─────────────────────────────────────────────────
+
+function EstimatorDetailsPanel({
+  estimator,
+  onClose,
+}: {
+  estimator: Schemas.EstimatorResponse
+  onClose: () => void
+}) {
+  return (
+    <>
+      <PanelHeader
+        title={estimator.name}
+        description="Estimator variables and formulas."
+        onClose={onClose}
+      />
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto">
+        {estimator.variables.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">No variables defined yet.</p>
+        ) : (
+          estimator.variables.map((v) => (
+            <div key={v.id} className="rounded-md border border-border/60 p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono font-semibold" style={{ color: "hsl(330, 80%, 60%)" }}>
+                  {v.name}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono bg-muted/50 rounded px-2 py-1">
+                {v.expression}
+              </p>
+              {v.description && (
+                <p className="text-xs text-muted-foreground">{v.description}</p>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </>
   )
