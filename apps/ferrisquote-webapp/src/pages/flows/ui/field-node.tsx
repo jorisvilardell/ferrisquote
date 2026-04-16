@@ -5,18 +5,20 @@ export type FieldNodeData = {
   label: string
   type: string
   color: string
+  index: number
   onDelete: () => void
 }
 
 export function FieldNode({ data, selected }: NodeProps<Node<FieldNodeData>>) {
   return (
     <div
-      className="group relative min-w-[160px] rounded-md border border-border/60 bg-card text-card-foreground shadow-sm px-3 py-2 cursor-pointer transition-shadow"
+      className="group relative min-w-[160px] rounded-md border border-border/60 bg-card text-card-foreground shadow-sm px-3 py-2 cursor-pointer transition-shadow animate-[field-enter_0.25s_ease-out_both]"
       style={{
         borderLeftColor: data.color,
         borderLeftWidth: 3,
         borderColor: selected ? data.color : undefined,
         boxShadow: selected ? `0 0 0 2px color-mix(in srgb, ${data.color} 25%, transparent)` : undefined,
+        animationDelay: `${data.index * 40}ms`,
       }}
     >
       <Handle

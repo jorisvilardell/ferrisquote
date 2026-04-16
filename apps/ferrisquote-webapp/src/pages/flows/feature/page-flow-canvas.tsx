@@ -159,6 +159,7 @@ function buildGraph(
             label: field.label,
             type: field.config.type,
             color,
+            index: j,
             onDelete: () => onDeleteField(field.id, step.id),
           },
         }
@@ -712,15 +713,30 @@ function PageFlowCanvasInner() {
     }
 
     if (node.type !== "stepNode") return
+    // Single click: select + expand (keep others open)
     setExpandedStepIds((prev) => {
-      if (prev.has(node.id)) return new Set()
-      return new Set([node.id])
+      const next = new Set(prev)
+      next.add(node.id)
+      return next
     })
     setPanelState((prev) =>
       prev && "stepId" in prev && prev.stepId === node.id
         ? null
         : { mode: "step-details", stepId: node.id },
     )
+  }
+
+  function handleNodeDoubleClick(_: React.MouseEvent, node: Node) {
+    if (node.type !== "stepNode") return
+    // Double click: toggle exclusive — collapse all others, or collapse this one
+    setExpandedStepIds((prev) => {
+      if (prev.has(node.id) && prev.size === 1) {
+        // Already the only one expanded → collapse it
+        return new Set()
+      }
+      // Expand only this one (collapse all others)
+      return new Set([node.id])
+    })
   }
 
   // ─── Step reorder via node drag ───────────────────────────────────────────
@@ -928,6 +944,7 @@ function PageFlowCanvasInner() {
               nodes={nodes}
               edges={edges}
               onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onPaneClick={handlePaneClick}

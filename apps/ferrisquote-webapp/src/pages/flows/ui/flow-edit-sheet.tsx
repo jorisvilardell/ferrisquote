@@ -400,7 +400,7 @@ function StepDetailsPanel({
           />
         ) : (
           <button
-            className="flex-1 text-left text-base font-semibold truncate hover:opacity-80 transition-opacity"
+            className="flex-1 text-left text-base font-semibold truncate hover:opacity-80 transition-opacity cursor-text"
             style={{ color: STEP_COLOR }}
             onClick={() => setEditingTitle(true)}
           >
@@ -820,7 +820,7 @@ function EstimatorDetailsPanel({
           />
         ) : (
           <button
-            className="flex-1 text-left text-base font-semibold truncate hover:text-primary/80 transition-colors"
+            className="flex-1 text-left text-base font-semibold truncate hover:opacity-80 transition-opacity cursor-text"
             style={{ color: ROSE }}
             onClick={() => setEditingName(true)}
           >
