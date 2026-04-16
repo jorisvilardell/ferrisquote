@@ -17,16 +17,18 @@ export type StepNodeData = {
 
 type StepNodeProps = NodeProps<Node<StepNodeData>>
 
-export function StepNode({ data }: StepNodeProps) {
+export function StepNode({ data, dragging }: StepNodeProps) {
   return (
     <div
       className={cn(
         "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-all cursor-pointer",
-        data.linkTarget
-          ? "border-primary ring-2 ring-primary/40 shadow-md animate-pulse"
-          : data.isExpanded
-            ? "border-primary ring-2 ring-primary/20 shadow-md"
-            : "border-border hover:border-primary/50 hover:shadow-md",
+        dragging
+          ? "border-primary ring-2 ring-primary/30 shadow-lg opacity-80 scale-[1.02] animate-pulse cursor-grabbing"
+          : data.linkTarget
+            ? "border-primary ring-2 ring-primary/40 shadow-md animate-pulse"
+            : data.isExpanded
+              ? "border-primary ring-2 ring-primary/20 shadow-md"
+              : "border-border hover:border-primary/50 hover:shadow-md",
       )}
     >
       <Handle
