@@ -31,6 +31,7 @@ import {
   useAddStep,
   useUpdateStep,
   useRemoveStep,
+  useReorderStep,
   useAddField,
   useUpdateField,
   useRemoveField,
@@ -62,15 +63,17 @@ function buildGraph(
   estimators: Schemas.EstimatorResponse[],
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
+  dropIndicatorIndex: number | null,
   onEditStep: (stepId: string) => void,
   onDeleteStep: (stepId: string) => void,
   onEditField: (fieldId: string, stepId: string) => void,
   onDeleteField: (fieldId: string, stepId: string) => void,
   onEditEstimator: (estimatorId: string) => void,
   onDeleteEstimator: (estimatorId: string) => void,
-): { nodes: Node[]; edges: Edge[] } {
+): { nodes: Node[]; edges: Edge[]; stepPositions: Map<string, number> } {
   const nodes: Node[] = []
   const edges: Edge[] = []
+  const stepPositions = new Map<string, number>()
   let yOffset = 0
 
   const fieldKeyToNodeId = new Map<string, string>()
@@ -80,14 +83,38 @@ function buildGraph(
     const isExpanded = expandedStepIds.has(step.id)
     const stepY = i * (STEP_NODE_HEIGHT + STEP_NODE_GAP) + yOffset
 
+    stepPositions.set(step.id, stepY)
+
     for (const field of step.fields) {
       fieldKeyToNodeId.set(field.key, `field-${field.id}`)
+    }
+
+    // Drop indicator before this step
+    if (dropIndicatorIndex === i) {
+      nodes.push({
+        id: "__drop-indicator__",
+        type: "default",
+        position: { x: 0, y: stepY - STEP_NODE_GAP / 2 - 2 },
+        data: {},
+        selectable: false,
+        draggable: false,
+        style: {
+          width: 200,
+          height: 4,
+          borderRadius: 2,
+          background: "var(--primary)",
+          border: "none",
+          padding: 0,
+          pointerEvents: "none" as const,
+        },
+      })
     }
 
     const stepNode: Node<StepNodeData> = {
       id: step.id,
       type: "stepNode",
       position: { x: 0, y: stepY },
+      draggable: true,
       data: {
         index: i + 1,
         title: step.title,
@@ -152,6 +179,29 @@ function buildGraph(
     }
   }
 
+  // Drop indicator after the last step
+  if (dropIndicatorIndex === flow.steps.length && flow.steps.length > 0) {
+    const lastStepY =
+      (flow.steps.length - 1) * (STEP_NODE_HEIGHT + STEP_NODE_GAP) + yOffset
+    nodes.push({
+      id: "__drop-indicator__",
+      type: "default",
+      position: { x: 0, y: lastStepY + STEP_NODE_HEIGHT + STEP_NODE_GAP / 2 - 2 },
+      data: {},
+      selectable: false,
+      draggable: false,
+      style: {
+        width: 200,
+        height: 4,
+        borderRadius: 2,
+        background: "var(--primary)",
+        border: "none",
+        padding: 0,
+        pointerEvents: "none" as const,
+      },
+    })
+  }
+
   // ─── Estimator nodes (right column) ──────────────────────────────────────
   let estimatorY = 0
 
@@ -193,7 +243,7 @@ function buildGraph(
     estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
   }
 
-  return { nodes, edges }
+  return { nodes, edges, stepPositions }
 }
 
 function extractFieldRefs(expression: string): string[] {
@@ -232,6 +282,8 @@ function PageFlowCanvasInner() {
   const [deletingStep, setDeletingStep] = useState<Schemas.StepResponse | null>(null)
   // "form" = toolbar click → open add-field form; "quick" = drag miss → quick-create
   const [linkingField, setLinkingField] = useState<false | "form" | "quick">(false)
+  const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null)
+  const stepPositionsRef = useRef<Map<string, number>>(new Map())
 
   // ─── Derive live step/field from query data ───────────────────────────────
   const panelStep =
@@ -257,6 +309,7 @@ function PageFlowCanvasInner() {
   const { mutate: updateField } = useUpdateField(flowId ?? "")
   const { mutate: removeField } = useRemoveField(flowId ?? "")
   const { mutate: createEstimator } = useCreateEstimator(flowId ?? "")
+  const { mutate: reorderStep } = useReorderStep(flowId ?? "")
 
   useEffect(() => {
     if (flowId && !is404) setLastFlowId(flowId)
@@ -492,16 +545,91 @@ function PageFlowCanvasInner() {
     )
   }
 
+  // ─── Step reorder via node drag ───────────────────────────────────────────
+  const onNodeDrag = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type !== "stepNode" || !flow) return
+
+      const dragY = node.position.y
+      const steps = flow.steps
+      const draggedIndex = steps.findIndex((s) => s.id === node.id)
+
+      // Find insertion index based on drag Y vs step center positions
+      let insertAt = steps.length
+      for (let i = 0; i < steps.length; i++) {
+        if (i === draggedIndex) continue
+        const posY = stepPositionsRef.current.get(steps[i].id) ?? 0
+        const centerY = posY + STEP_NODE_HEIGHT / 2
+        if (dragY < centerY) {
+          insertAt = i <= draggedIndex ? i : i
+          break
+        }
+      }
+
+      // Don't show indicator if it would result in no move
+      if (insertAt === draggedIndex || insertAt === draggedIndex + 1) {
+        setDropIndicatorIndex(null)
+      } else {
+        setDropIndicatorIndex(insertAt)
+      }
+    },
+    [flow],
+  )
+
+  const onNodeDragStop = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type !== "stepNode" || !flow || dropIndicatorIndex === null) {
+        setDropIndicatorIndex(null)
+        return
+      }
+
+      const steps = flow.steps
+      const draggedIndex = steps.findIndex((s) => s.id === node.id)
+      if (draggedIndex === -1) {
+        setDropIndicatorIndex(null)
+        return
+      }
+
+      // Compute after_id / before_id from the target insertion index
+      // The insertion index refers to the position in the *original* array
+      // after_id = step just before the target slot, before_id = step just after
+      let afterId: string | null = null
+      let beforeId: string | null = null
+
+      if (dropIndicatorIndex === 0) {
+        beforeId = steps[0].id === node.id ? (steps[1]?.id ?? null) : steps[0].id
+      } else if (dropIndicatorIndex >= steps.length) {
+        const last = steps[steps.length - 1]
+        afterId = last.id === node.id ? (steps[steps.length - 2]?.id ?? null) : last.id
+      } else {
+        // Insert between [dropIndicatorIndex - 1] and [dropIndicatorIndex]
+        const prevStep = steps[dropIndicatorIndex - 1]
+        const nextStep = steps[dropIndicatorIndex]
+        afterId = prevStep.id === node.id ? (steps[dropIndicatorIndex - 2]?.id ?? null) : prevStep.id
+        beforeId = nextStep.id === node.id ? (steps[dropIndicatorIndex + 1]?.id ?? null) : nextStep.id
+      }
+
+      setDropIndicatorIndex(null)
+
+      reorderStep({
+        path: { step_id: node.id },
+        body: { after_id: afterId, before_id: beforeId },
+      })
+    },
+    [flow, dropIndicatorIndex, reorderStep],
+  )
+
   function handlePaneClick() {
     if (linkingField) setLinkingField(false)
   }
 
-  const { nodes, edges } = flow
+  const { nodes, edges, stepPositions } = flow
     ? buildGraph(
         flow,
         estimators,
         expandedStepIds,
         linkingField,
+        dropIndicatorIndex,
         handleEditStep,
         handleDeleteStep,
         handleOpenEditField,
@@ -509,7 +637,10 @@ function PageFlowCanvasInner() {
         handleEditEstimator,
         handleDeleteEstimator,
       )
-    : { nodes: [], edges: [] }
+    : { nodes: [], edges: [], stepPositions: new Map<string, number>() }
+
+  // Keep positions ref in sync for drag calculations
+  stepPositionsRef.current = stepPositions
 
   return (
     <>
@@ -595,6 +726,8 @@ function PageFlowCanvasInner() {
               nodes={nodes}
               edges={edges}
               onNodeClick={handleNodeClick}
+              onNodeDrag={onNodeDrag}
+              onNodeDragStop={onNodeDragStop}
               onPaneClick={handlePaneClick}
               onDragOver={onDragOver}
               onDrop={onDrop}
@@ -603,6 +736,7 @@ function PageFlowCanvasInner() {
               edgesReconnectable={false}
               edgesFocusable={false}
               elementsSelectable={true}
+              nodesDraggable={false}
               defaultEdgeOptions={{
                 style: { strokeWidth: 2, stroke: "var(--primary)" },
               }}
