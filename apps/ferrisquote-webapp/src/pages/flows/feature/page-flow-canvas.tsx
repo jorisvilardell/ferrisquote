@@ -54,8 +54,6 @@ const FIELD_NODE_GAP = 16
 const FIELD_X_OFFSET = 280
 const ESTIMATOR_X_OFFSET = 560
 const ESTIMATOR_NODE_GAP = 24
-const ROSE_COLOR = "hsl(330, 80%, 60%)"
-
 const DRAG_DATA_KEY = "application/ferrisquote-node"
 
 function buildGraph(
@@ -64,11 +62,9 @@ function buildGraph(
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
   dropIndicatorIndex: number | null,
-  onEditStep: (stepId: string) => void,
+  selectedNodeId: string | null,
   onDeleteStep: (stepId: string) => void,
-  onEditField: (fieldId: string, stepId: string) => void,
   onDeleteField: (fieldId: string, stepId: string) => void,
-  onEditEstimator: (estimatorId: string) => void,
   onDeleteEstimator: (estimatorId: string) => void,
 ): { nodes: Node[]; edges: Edge[]; stepPositions: Map<string, number> } {
   const nodes: Node[] = []
@@ -120,6 +116,7 @@ function buildGraph(
       type: "stepNode",
       position: { x: 0, y: stepY },
       draggable: true,
+      selected: selectedNodeId === step.id,
       data: {
         index: i + 1,
         title: step.title,
@@ -128,7 +125,6 @@ function buildGraph(
         isExpanded,
         isRepeatable: step.is_repeatable,
         linkTarget: !!linkingField,
-        onEdit: () => onEditStep(step.id),
         onDelete: () => onDeleteStep(step.id),
       },
     }
@@ -158,11 +154,12 @@ function buildGraph(
           id: fieldNodeId,
           type: "fieldNode",
           position: { x: FIELD_X_OFFSET, y: fieldY },
+          selected: selectedNodeId === fieldNodeId,
           data: {
             label: field.label,
             type: field.config.type,
             color,
-            onEdit: () => onEditField(field.id, step.id),
+            index: j,
             onDelete: () => onDeleteField(field.id, step.id),
           },
         }
@@ -208,10 +205,32 @@ function buildGraph(
   }
 
   // ─── Estimator nodes (right column) ──────────────────────────────────────
+  // Color range: rose-violet (hsl 330, 70%, 55%) → rose clair (hsl 340, 80%, 72%)
+  const CROSS_COLOR = "hsl(320, 60%, 55%)"
+  const estNameToNodeId = new Map<string, string>()
+  const estIdToColor = new Map<string, string>()
   let estimatorY = 0
 
-  for (const est of estimators) {
+  // First pass: create nodes and register name→nodeId
+  for (let ei = 0; ei < estimators.length; ei++) {
+    const est = estimators[ei]
     const estimatorNodeId = `estimator-${est.id}`
+    estNameToNodeId.set(est.name, estimatorNodeId)
+
+    // First node is darkest rose, each next one lighter
+    // Fixed step of 4% lightness per node, but if too many nodes
+    // would exceed the pale limit (82%), compress the range to fit
+    const DARK = 55   // darkest (first node)
+    const PALE = 82   // lightest allowed
+    const STEP = 4    // ideal lightness step per node
+    const needed = DARK + (estimators.length - 1) * STEP
+    const actualRange = needed > PALE ? PALE - DARK : (estimators.length - 1) * STEP
+    const lgt = estimators.length > 1
+      ? DARK + (ei / (estimators.length - 1)) * actualRange
+      : DARK
+    const color = `hsl(335, 70%, ${lgt}%)`
+    estIdToColor.set(est.id, color)
+
     const varCount = est.variables.length
     const nodeHeight = 44 + Math.max(varCount, 1) * 22
 
@@ -219,81 +238,117 @@ function buildGraph(
       id: estimatorNodeId,
       type: "estimatorNode",
       position: { x: ESTIMATOR_X_OFFSET, y: estimatorY },
+      selected: selectedNodeId === estimatorNodeId,
       data: {
         name: est.name,
         variables: est.variables,
-        onEdit: () => onEditEstimator(est.id),
+        color,
         onDelete: () => onDeleteEstimator(est.id),
       },
     }
     nodes.push(estNode)
+    estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
+  }
+
+  // Second pass: create edges
+  for (const est of estimators) {
+    const estimatorNodeId = `estimator-${est.id}`
+    const estColor = estIdToColor.get(est.id) ?? "hsl(330, 75%, 58%)"
 
     for (const v of est.variables) {
       const refs = extractExprRefs(v.expression)
       for (const ref of refs) {
-        const info = fieldKeyMap.get(ref.key)
-        if (!info) continue
+        if (ref.type === "cross") {
+          const sourceNodeId = estNameToNodeId.get(ref.estimatorName)
+          if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
+            edges.push({
+              id: `e-cross-${est.id}-${v.id}-${ref.estimatorName}.${ref.variableName}`,
+              source: sourceNodeId,
+              sourceHandle: "right",
+              target: estimatorNodeId,
+              type: "smoothstep",
+              animated: true,
+              style: { strokeWidth: 2, stroke: CROSS_COLOR, opacity: 0.8 },
+              label: `${ref.variableName}`,
+              labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
+              labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+              labelBgPadding: [4, 2] as [number, number],
+            })
+          }
+        } else {
+          const info = fieldKeyMap.get(ref.key)
+          if (!info) continue
 
-        // If the step is expanded, connect from the field node; otherwise from the step node
-        const sourceId = info.expanded ? info.fieldNodeId : info.stepId
-        const sourceHandle = info.expanded ? "right" : "right"
-        const isAgg = ref.aggregation !== false
+          const sourceId = info.expanded ? info.fieldNodeId : info.stepId
+          const isAgg = ref.aggregation !== false
 
-        edges.push({
-          id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
-          source: sourceId,
-          sourceHandle,
-          target: estimatorNodeId,
-          type: "smoothstep",
-          animated: isAgg,
-          style: {
-            strokeWidth: isAgg ? 2 : 1.5,
-            stroke: ROSE_COLOR,
-            opacity: 0.7,
-            strokeDasharray: isAgg ? "6 3" : undefined,
-          },
-          label: isAgg ? ref.aggregation : undefined,
-          labelStyle: isAgg ? { fill: ROSE_COLOR, fontSize: 10, fontWeight: 600 } : undefined,
-          labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
-          labelBgPadding: isAgg ? [4, 2] as [number, number] : undefined,
-        })
+          edges.push({
+            id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
+            source: sourceId,
+            sourceHandle: "right",
+            target: estimatorNodeId,
+            type: "smoothstep",
+            animated: isAgg,
+            style: {
+              strokeWidth: isAgg ? 2 : 1.5,
+              stroke: estColor,
+              opacity: 0.7,
+              strokeDasharray: isAgg ? "6 3" : undefined,
+            },
+            label: isAgg ? ref.aggregation : undefined,
+            labelStyle: isAgg ? { fill: estColor, fontSize: 10, fontWeight: 600 } : undefined,
+            labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
+            labelBgPadding: isAgg ? [4, 2] as [number, number] : undefined,
+          })
+        }
       }
     }
-
-    estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
   }
 
   return { nodes, edges, stepPositions }
 }
 
-type FieldRef = { key: string; aggregation: false }
-type AggregationRef = { key: string; aggregation: "SUM" | "AVG" | "COUNT_ITER" }
-type ExprRef = FieldRef | AggregationRef
+type FieldRef = { type: "field"; key: string; aggregation: false }
+type AggregationRef = { type: "field"; key: string; aggregation: "SUM" | "AVG" | "COUNT_ITER" }
+type CrossRef = { type: "cross"; estimatorName: string; variableName: string }
+type ExprRef = FieldRef | AggregationRef | CrossRef
 
 function extractExprRefs(expression: string): ExprRef[] {
   const refs: ExprRef[] = []
   const seen = new Set<string>()
 
-  // Match aggregation functions: SUM(@key), AVG(@key), COUNT_ITER(@key)
-  const aggRegex = /(SUM|AVG|COUNT_ITER)\(\s*@([a-z][a-z0-9_]*)\s*\)/g
+  // Match cross-estimator references: @EstimatorName.var_name
+  const crossRegex = /@([A-Z][A-Za-z0-9_ ]*)\.([a-z][a-z0-9_]*)/g
   let match: RegExpExecArray | null
-  while ((match = aggRegex.exec(expression)) !== null) {
-    const tag = `${match[1]}:${match[2]}`
+  while ((match = crossRegex.exec(expression)) !== null) {
+    const tag = `cross:${match[1].trim()}.${match[2]}`
     if (!seen.has(tag)) {
       seen.add(tag)
-      refs.push({ key: match[2], aggregation: match[1] as AggregationRef["aggregation"] })
+      refs.push({ type: "cross", estimatorName: match[1].trim(), variableName: match[2] })
     }
   }
 
-  // Match bare @key references (not inside an aggregation function)
-  // Remove aggregation calls first to avoid double-matching
-  const stripped = expression.replace(/(SUM|AVG|COUNT_ITER)\(\s*@[a-z][a-z0-9_]*\s*\)/g, "")
+  // Remove cross-refs before scanning for other patterns
+  const noCross = expression.replace(/@[A-Z][A-Za-z0-9_ ]*\.[a-z][a-z0-9_]*/g, "")
+
+  // Match aggregation functions: SUM(@key), AVG(@key), COUNT_ITER(@key)
+  const aggRegex = /(SUM|AVG|COUNT_ITER)\(\s*@([a-z][a-z0-9_]*)\s*\)/g
+  while ((match = aggRegex.exec(noCross)) !== null) {
+    const tag = `agg:${match[1]}:${match[2]}`
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      refs.push({ type: "field", key: match[2], aggregation: match[1] as AggregationRef["aggregation"] })
+    }
+  }
+
+  // Match bare @key references
+  const stripped = noCross.replace(/(SUM|AVG|COUNT_ITER)\(\s*@[a-z][a-z0-9_]*\s*\)/g, "")
   const bareRegex = /@([a-z][a-z0-9_]*)/g
   while ((match = bareRegex.exec(stripped)) !== null) {
     const tag = `bare:${match[1]}`
     if (!seen.has(tag)) {
       seen.add(tag)
-      refs.push({ key: match[1], aggregation: false })
+      refs.push({ type: "field", key: match[1], aggregation: false })
     }
   }
 
@@ -318,8 +373,19 @@ function PageFlowCanvasInner() {
   const { data: estimatorsData } = useListEstimators(flowId ?? "")
 
   const flow = flowData?.data ?? null
-  const estimators = estimatorsData?.data?.estimators ?? []
   const is404 = !!error
+
+  // Local estimator state (fake edits until backend is wired)
+  const [localEstimators, setLocalEstimators] = useState<Schemas.EstimatorResponse[] | null>(null)
+  const apiEstimators = estimatorsData?.data?.estimators ?? []
+  const estimators = localEstimators ?? apiEstimators
+
+  // Sync from API when data arrives
+  useEffect(() => {
+    if (apiEstimators.length > 0 && localEstimators === null) {
+      setLocalEstimators(apiEstimators)
+    }
+  }, [apiEstimators, localEstimators])
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
   const [panelState, setPanelState] = useState<PanelState | null>(null)
@@ -355,13 +421,68 @@ function PageFlowCanvasInner() {
   const { mutate: createEstimator } = useCreateEstimator(flowId ?? "")
   const { mutate: reorderStep } = useReorderStep(flowId ?? "")
 
+  // Collect all field keys for autocompletion
+  const availableFieldKeys = flow?.steps.flatMap((s) => s.fields.map((f) => f.key)) ?? []
+
+  // ─── Local estimator mutations (fake) ─────────────────────────────────────
+  const handleUpdateEstimatorName = useCallback((estimatorId: string, name: string) => {
+    setLocalEstimators((prev) =>
+      (prev ?? []).map((e) => (e.id === estimatorId ? { ...e, name } : e)),
+    )
+  }, [])
+
+  const handleAddVariable = useCallback((estimatorId: string) => {
+    const id = crypto.randomUUID()
+    const newVar: Schemas.VariableResponse = {
+      id,
+      name: "new_var",
+      expression: "",
+      description: "",
+    }
+    setLocalEstimators((prev) =>
+      (prev ?? []).map((e) =>
+        e.id === estimatorId ? { ...e, variables: [...e.variables, newVar] } : e,
+      ),
+    )
+  }, [])
+
+  const handleUpdateVariable = useCallback(
+    (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => {
+      setLocalEstimators((prev) =>
+        (prev ?? []).map((e) =>
+          e.id === estimatorId
+            ? {
+                ...e,
+                variables: e.variables.map((v) =>
+                  v.id === variableId ? { ...v, ...patch } : v,
+                ),
+              }
+            : e,
+        ),
+      )
+    },
+    [],
+  )
+
+  const handleDeleteVariable = useCallback((estimatorId: string, variableId: string) => {
+    setLocalEstimators((prev) =>
+      (prev ?? []).map((e) =>
+        e.id === estimatorId
+          ? { ...e, variables: e.variables.filter((v) => v.id !== variableId) }
+          : e,
+      ),
+    )
+  }, [])
+
   useEffect(() => {
     if (flowId && !is404) setLastFlowId(flowId)
     setExpandedStepIds(new Set())
     setPanelState(null)
     setDeletingStep(null)
     setDeletingField(null)
+    setDeletingEstimator(null)
     setLinkingField(false)
+    setLocalEstimators(null)
   }, [flowId, is404, setLastFlowId])
 
   // Cancel linking on Escape
@@ -375,10 +496,6 @@ function PageFlowCanvasInner() {
   }, [linkingField])
 
   // ─── Panel callbacks ─────────────────────────────────────────────────────────
-  const handleEditStep = useCallback((stepId: string) => {
-    setPanelState({ mode: "step-details", stepId })
-  }, [])
-
   const handleDeleteStep = useCallback(
     (stepId: string) => {
       const step = flow?.steps.find((s) => s.id === stepId) ?? null
@@ -417,16 +534,24 @@ function PageFlowCanvasInner() {
     setDeletingField(null)
   }, [deletingField, removeField, panelState])
 
-  const handleEditEstimator = useCallback((estimatorId: string) => {
-    setPanelState({ mode: "estimator-details", estimatorId })
-  }, [])
+  const [deletingEstimator, setDeletingEstimator] = useState<{ id: string; name: string } | null>(null)
 
   const handleDeleteEstimator = useCallback(
-    (_estimatorId: string) => {
-      // TODO: implement delete estimator confirmation dialog (issue #65)
+    (estimatorId: string) => {
+      const est = estimators.find((e) => e.id === estimatorId)
+      setDeletingEstimator({ id: estimatorId, name: est?.name ?? "this estimator" })
     },
-    [],
+    [estimators],
   )
+
+  const confirmDeleteEstimator = useCallback(() => {
+    if (!deletingEstimator) return
+    setLocalEstimators((prev) => (prev ?? []).filter((e) => e.id !== deletingEstimator.id))
+    if (panelState?.mode === "estimator-details" && panelState.estimatorId === deletingEstimator.id) {
+      setPanelState(null)
+    }
+    setDeletingEstimator(null)
+  }, [deletingEstimator, panelState])
 
   // ─── Sheet submit handlers ───────────────────────────────────────────────────
   function handleAddStep(data: { title: string; description: string }) {
@@ -533,23 +658,19 @@ function PageFlowCanvasInner() {
           setLinkingField("quick")
         }
       } else if (type === "estimatorNode") {
-        createEstimator(
-          {
-            path: { flow_id: flowId },
-            body: { name: "New Estimator" },
-          },
-          {
-            onSuccess: (data) => {
-              const estId = (data as { data?: { id?: string } })?.data?.id
-              if (estId) {
-                setPanelState({ mode: "estimator-details", estimatorId: estId })
-              }
-            },
-          },
-        )
+        // Local fake create
+        const newId = crypto.randomUUID()
+        const newEst: Schemas.EstimatorResponse = {
+          id: newId,
+          flow_id: flowId,
+          name: "New Estimator",
+          variables: [],
+        }
+        setLocalEstimators((prev) => [...(prev ?? []), newEst])
+        setPanelState({ mode: "estimator-details", estimatorId: newId })
       }
     },
-    [flowId, screenToFlowPosition, getNodes, addStep, createEstimator, quickCreateField],
+    [flowId, screenToFlowPosition, getNodes, addStep, quickCreateField],
   )
 
   // ─── Node click ─────────────────────────────────────────────────────────────
@@ -577,16 +698,45 @@ function PageFlowCanvasInner() {
       return
     }
 
+    if (node.type === "fieldNode") {
+      const fieldId = node.id.replace("field-", "")
+      // Find which step owns this field
+      const stepId = flow?.steps.find((s) => s.fields.some((f) => f.id === fieldId))?.id
+      if (stepId) {
+        setPanelState((prev) =>
+          prev?.mode === "edit-field" && prev.fieldId === fieldId
+            ? { mode: "step-details", stepId }
+            : { mode: "edit-field", fieldId, stepId },
+        )
+      }
+      return
+    }
+
     if (node.type !== "stepNode") return
+    // Single click: select + expand (keep others open)
     setExpandedStepIds((prev) => {
-      if (prev.has(node.id)) return new Set()
-      return new Set([node.id])
+      const next = new Set(prev)
+      next.add(node.id)
+      return next
     })
     setPanelState((prev) =>
       prev && "stepId" in prev && prev.stepId === node.id
         ? null
         : { mode: "step-details", stepId: node.id },
     )
+  }
+
+  function handleNodeDoubleClick(_: React.MouseEvent, node: Node) {
+    if (node.type !== "stepNode") return
+    // Double click: toggle exclusive — collapse all others, or collapse this one
+    setExpandedStepIds((prev) => {
+      if (prev.has(node.id) && prev.size === 1) {
+        // Already the only one expanded → collapse it
+        return new Set()
+      }
+      // Expand only this one (collapse all others)
+      return new Set([node.id])
+    })
   }
 
   // ─── Step reorder via node drag ───────────────────────────────────────────
@@ -674,11 +824,12 @@ function PageFlowCanvasInner() {
         expandedStepIds,
         linkingField,
         dropIndicatorIndex,
-        handleEditStep,
+        panelState?.mode === "estimator-details" ? `estimator-${panelState.estimatorId}`
+          : panelState?.mode === "step-details" ? panelState.stepId
+          : panelState?.mode === "edit-field" ? `field-${panelState.fieldId}`
+          : null,
         handleDeleteStep,
-        handleOpenEditField,
         handleDeleteField,
-        handleEditEstimator,
         handleDeleteEstimator,
       )
     : { nodes: [], edges: [], stepPositions: new Map<string, number>() }
@@ -745,6 +896,29 @@ function PageFlowCanvasInner() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        open={deletingEstimator !== null}
+        onOpenChange={(open) => !open && setDeletingEstimator(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete estimator?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deletingEstimator?.name}" and all its variables will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteEstimator}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Linking mode banner */}
       {linkingField && (
         <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center bg-primary/90 text-primary-foreground py-2 text-sm font-medium gap-3">
@@ -770,6 +944,7 @@ function PageFlowCanvasInner() {
               nodes={nodes}
               edges={edges}
               onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onPaneClick={handlePaneClick}
@@ -799,6 +974,11 @@ function PageFlowCanvasInner() {
             step={panelStep}
             field={panelField}
             estimator={panelEstimator}
+            availableFieldKeys={availableFieldKeys}
+            otherEstimators={estimators
+              .filter((e) => e.id !== panelEstimator?.id)
+              .map((e) => ({ name: e.name, variables: e.variables.map((v) => v.name) }))
+            }
             onClose={() => setPanelState(null)}
             onAddStep={handleAddStep}
             onUpdateStep={(stepId, data) =>
@@ -809,6 +989,10 @@ function PageFlowCanvasInner() {
             onDeleteField={handleDeleteField}
             onOpenAddField={handleOpenAddField}
             onOpenEditField={handleOpenEditField}
+            onUpdateEstimatorName={handleUpdateEstimatorName}
+            onAddVariable={handleAddVariable}
+            onUpdateVariable={handleUpdateVariable}
+            onDeleteVariable={handleDeleteVariable}
           />
         </div>
       </div>

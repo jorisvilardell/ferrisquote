@@ -56,6 +56,17 @@
     }
 }
 
+@keyframes field-enter {
+    from {
+        opacity: 0;
+        transform: translateX(-12px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
 @layer base {
     :root {
         --background: hsl(0 0% 100%);

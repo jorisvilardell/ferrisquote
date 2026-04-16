@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
-import { Pencil, Trash2, Repeat } from "lucide-react"
+import { Trash2, Repeat } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Schemas } from "@/api/api.client"
 
@@ -11,25 +11,33 @@ export type StepNodeData = {
   isExpanded?: boolean
   isRepeatable?: boolean
   linkTarget?: boolean
-  onEdit: () => void
   onDelete: () => void
 }
 
 type StepNodeProps = NodeProps<Node<StepNodeData>>
 
-export function StepNode({ data, dragging }: StepNodeProps) {
+const STEP_COLOR = "hsl(28, 85%, 55%)"
+
+export function StepNode({ data, dragging, selected }: StepNodeProps) {
   return (
     <div
       className={cn(
         "group relative min-w-[200px] rounded-md border bg-card text-card-foreground shadow-sm transition-all cursor-pointer",
         dragging
-          ? "border-primary ring-2 ring-primary/30 shadow-lg opacity-80 scale-[1.02] animate-pulse cursor-grabbing"
+          ? "shadow-lg opacity-80 scale-[1.02] animate-pulse cursor-grabbing"
           : data.linkTarget
             ? "border-primary ring-2 ring-primary/40 shadow-md animate-pulse"
-            : data.isExpanded
-              ? "border-primary ring-2 ring-primary/20 shadow-md"
-              : "border-border hover:border-primary/50 hover:shadow-md",
+            : selected
+              ? "shadow-md"
+              : data.isExpanded
+                ? "border-primary ring-2 ring-primary/20 shadow-md"
+                : "border-border hover:border-primary/50 hover:shadow-md",
       )}
+      style={
+        dragging ? { borderColor: STEP_COLOR, boxShadow: `0 0 0 3px hsl(28 85% 55% / 0.25)` }
+        : selected ? { borderColor: STEP_COLOR, boxShadow: `0 0 0 3px hsl(28 85% 55% / 0.2)` }
+        : undefined
+      }
     >
       <Handle
         type="target"
@@ -39,15 +47,6 @@ export function StepNode({ data, dragging }: StepNodeProps) {
 
       {/* Hover actions */}
       <div className="absolute -top-3 right-2 hidden group-hover:flex items-center gap-1 z-10">
-        <button
-          className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm hover:border-primary hover:text-primary transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            data.onEdit()
-          }}
-        >
-          <Pencil className="w-3 h-3" />
-        </button>
         <button
           className="flex items-center justify-center w-6 h-6 rounded bg-card border border-border shadow-sm hover:border-destructive hover:text-destructive transition-colors"
           onClick={(e) => {

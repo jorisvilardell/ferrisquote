@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Plus, Pencil, Trash2, X, Repeat } from "lucide-react"
 import {
   AlertDialog,
@@ -198,6 +198,8 @@ type Props = {
   step: Schemas.StepResponse | null
   field: Schemas.FieldResponse | null
   estimator: Schemas.EstimatorResponse | null
+  availableFieldKeys: string[]
+  otherEstimators: Array<{ name: string; variables: string[] }>
   onClose: () => void
   onAddStep: (data: { title: string; description: string }) => void
   onUpdateStep: (stepId: string, data: Schemas.UpdateStepMetadataRequest) => void
@@ -206,6 +208,10 @@ type Props = {
   onDeleteField: (fieldId: string, stepId: string) => void
   onOpenAddField: (stepId: string) => void
   onOpenEditField: (fieldId: string, stepId: string) => void
+  onUpdateEstimatorName: (estimatorId: string, name: string) => void
+  onAddVariable: (estimatorId: string) => void
+  onUpdateVariable: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
+  onDeleteVariable: (estimatorId: string, variableId: string) => void
 }
 
 export function FlowEditPanel({
@@ -213,6 +219,8 @@ export function FlowEditPanel({
   step,
   field,
   estimator,
+  availableFieldKeys,
+  otherEstimators,
   onClose,
   onAddStep,
   onUpdateStep,
@@ -221,6 +229,10 @@ export function FlowEditPanel({
   onDeleteField,
   onOpenAddField,
   onOpenEditField,
+  onUpdateEstimatorName,
+  onAddVariable,
+  onUpdateVariable,
+  onDeleteVariable,
 }: Props) {
   return (
     <div
@@ -262,7 +274,13 @@ export function FlowEditPanel({
         {state?.mode === "estimator-details" && estimator && (
           <EstimatorDetailsPanel
             estimator={estimator}
+            availableFieldKeys={availableFieldKeys}
+            otherEstimators={otherEstimators}
             onClose={onClose}
+            onUpdateName={onUpdateEstimatorName}
+            onAddVariable={onAddVariable}
+            onUpdateVariable={onUpdateVariable}
+            onDeleteVariable={onDeleteVariable}
           />
         )}
       </div>
@@ -327,6 +345,8 @@ function AddStepForm({
 
 // ─── Step Details Panel ───────────────────────────────────────────────────────
 
+const STEP_COLOR = "hsl(28, 85%, 55%)"
+
 function StepDetailsPanel({
   step,
   onClose,
@@ -342,13 +362,55 @@ function StepDetailsPanel({
   onEditField: (fieldId: string, stepId: string) => void
   onDeleteField: (fieldId: string, stepId: string) => void
 }) {
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [title, setTitle] = useState(step.title)
+
+  useEffect(() => {
+    setTitle(step.title)
+    setEditingTitle(false)
+  }, [step.id, step.title])
+
   return (
     <>
-      <PanelHeader
-        title={step.title}
-        description={step.description || undefined}
-        onClose={onClose}
-      />
+      <div className="flex items-center gap-2 px-5 pt-4 pb-2 border-b shrink-0">
+        {editingTitle ? (
+          <Input
+            autoFocus
+            className="text-base font-semibold h-8"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => {
+              if (title.trim() && title.trim() !== step.title) {
+                onUpdateStep(step.id, { title: title.trim() })
+              }
+              setEditingTitle(false)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (title.trim() && title.trim() !== step.title) {
+                  onUpdateStep(step.id, { title: title.trim() })
+                }
+                setEditingTitle(false)
+              }
+              if (e.key === "Escape") {
+                setTitle(step.title)
+                setEditingTitle(false)
+              }
+            }}
+          />
+        ) : (
+          <button
+            className="flex-1 text-left text-base font-semibold truncate hover:opacity-80 transition-opacity cursor-text"
+            style={{ color: STEP_COLOR }}
+            onClick={() => setEditingTitle(true)}
+          >
+            {step.title}
+          </button>
+        )}
+        <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
 
       {/* Repeatable configuration */}
       <StepRepeatableConfig step={step} onUpdateStep={onUpdateStep} />
@@ -702,41 +764,299 @@ function EditFieldForm({
 
 // ─── Estimator Details Panel ─────────────────────────────────────────────────
 
+const ROSE = "hsl(330, 80%, 60%)"
+const AGG_FUNCTIONS = ["SUM", "AVG", "COUNT_ITER"] as const
+
 function EstimatorDetailsPanel({
   estimator,
+  availableFieldKeys,
+  otherEstimators,
   onClose,
+  onUpdateName,
+  onAddVariable,
+  onUpdateVariable,
+  onDeleteVariable,
 }: {
   estimator: Schemas.EstimatorResponse
+  availableFieldKeys: string[]
+  otherEstimators: Array<{ name: string; variables: string[] }>
   onClose: () => void
+  onUpdateName: (estimatorId: string, name: string) => void
+  onAddVariable: (estimatorId: string) => void
+  onUpdateVariable: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
+  onDeleteVariable: (estimatorId: string, variableId: string) => void
 }) {
+  const [editingName, setEditingName] = useState(false)
+  const [name, setName] = useState(estimator.name)
+
+  useEffect(() => {
+    setName(estimator.name)
+    setEditingName(false)
+  }, [estimator.id, estimator.name])
+
   return (
     <>
-      <PanelHeader
-        title={estimator.name}
-        description="Estimator variables and formulas."
-        onClose={onClose}
-      />
-      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto">
-        {estimator.variables.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">No variables defined yet.</p>
+      <div className="flex items-center gap-2 px-5 pt-4 pb-2 border-b shrink-0">
+        {editingName ? (
+          <Input
+            autoFocus
+            className="text-base font-semibold h-8"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              if (name.trim()) onUpdateName(estimator.id, name.trim())
+              setEditingName(false)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (name.trim()) onUpdateName(estimator.id, name.trim())
+                setEditingName(false)
+              }
+              if (e.key === "Escape") {
+                setName(estimator.name)
+                setEditingName(false)
+              }
+            }}
+          />
         ) : (
-          estimator.variables.map((v) => (
-            <div key={v.id} className="rounded-md border border-border/60 p-3 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-mono font-semibold" style={{ color: "hsl(330, 80%, 60%)" }}>
-                  {v.name}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground font-mono bg-muted/50 rounded px-2 py-1">
-                {v.expression}
-              </p>
-              {v.description && (
-                <p className="text-xs text-muted-foreground">{v.description}</p>
-              )}
-            </div>
-          ))
+          <button
+            className="flex-1 text-left text-base font-semibold truncate hover:opacity-80 transition-opacity cursor-text"
+            style={{ color: ROSE }}
+            onClick={() => setEditingName(true)}
+          >
+            {estimator.name}
+          </button>
         )}
+        <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto">
+        <p className="text-xs text-muted-foreground">
+          Variables are evaluated in dependency order. Reference fields with <code className="font-mono bg-muted px-1 rounded">@field_key</code>.
+        </p>
+
+        {estimator.variables.map((v) => (
+          <VariableCard
+            key={v.id}
+            variable={v}
+            estimatorId={estimator.id}
+            availableFieldKeys={availableFieldKeys}
+            otherEstimators={otherEstimators}
+            onUpdate={onUpdateVariable}
+            onDelete={onDeleteVariable}
+          />
+        ))}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full border-dashed"
+          onClick={() => onAddVariable(estimator.id)}
+        >
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add variable
+        </Button>
       </div>
     </>
+  )
+}
+
+// ─── Variable Card (inline editing) ──────────────────────────────────────────
+
+function VariableCard({
+  variable,
+  estimatorId,
+  availableFieldKeys,
+  otherEstimators,
+  onUpdate,
+  onDelete,
+}: {
+  variable: Schemas.VariableResponse
+  estimatorId: string
+  availableFieldKeys: string[]
+  otherEstimators: Array<{ name: string; variables: string[] }>
+  onUpdate: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
+  onDelete: (estimatorId: string, variableId: string) => void
+}) {
+  const [expanded, setExpanded] = useState(!variable.expression)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [suggestionFilter, setSuggestionFilter] = useState("")
+  const exprRef = useRef<HTMLTextAreaElement>(null)
+
+  const suggestions = [
+    // Field keys
+    ...availableFieldKeys
+      .filter((k) => k.includes(suggestionFilter))
+      .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "fields" as const })),
+    // Aggregation functions
+    ...AGG_FUNCTIONS.map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "functions" as const })),
+    // Cross-estimator variables
+    ...otherEstimators.flatMap((est) =>
+      est.variables
+        .filter((v) => `${est.name}.${v}`.toLowerCase().includes(suggestionFilter.toLowerCase()))
+        .map((v) => ({
+          label: `@${est.name}.${v}`,
+          insert: `@${est.name}.${v}`,
+          group: "estimators" as const,
+        })),
+    ),
+  ]
+
+  function insertSuggestion(insert: string) {
+    const el = exprRef.current
+    if (!el) return
+    const pos = el.selectionStart ?? el.value.length
+    // If we were typing @xxx, replace from the @ position
+    const before = el.value.substring(0, pos)
+    const atPos = before.lastIndexOf("@")
+    const start = atPos >= 0 ? atPos : pos
+    const after = el.value.substring(pos)
+    const newVal = el.value.substring(0, start) + insert + after
+    onUpdate(estimatorId, variable.id, { expression: newVal })
+    setShowSuggestions(false)
+    // Focus and place cursor after insert
+    requestAnimationFrame(() => {
+      el.focus()
+      const cursorPos = start + insert.length
+      el.setSelectionRange(cursorPos, cursorPos)
+    })
+  }
+
+  function handleExpressionChange(value: string) {
+    onUpdate(estimatorId, variable.id, { expression: value })
+    const el = exprRef.current
+    if (el) {
+      const pos = el.selectionStart ?? value.length
+      const before = value.substring(0, pos)
+      // Match @Name.var or @key patterns
+      const atMatch = before.match(/@([A-Za-z0-9_.]*)$/)
+      if (atMatch) {
+        setSuggestionFilter(atMatch[1])
+        setShowSuggestions(true)
+      } else {
+        setShowSuggestions(false)
+      }
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-border/60 overflow-hidden">
+      {/* Header row */}
+      <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/30">
+        <button
+          className="flex-1 text-left"
+          onClick={() => setExpanded((p) => !p)}
+        >
+          <span className="text-sm font-mono font-semibold" style={{ color: ROSE }}>
+            {variable.name}
+          </span>
+          {!expanded && variable.expression && (
+            <span className="text-xs text-muted-foreground ml-2 font-mono">
+              = {variable.expression.length > 20 ? variable.expression.slice(0, 20) + "..." : variable.expression}
+            </span>
+          )}
+        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive shrink-0">
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete variable?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{variable.name}" will be permanently deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => onDelete(estimatorId, variable.id)}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      {/* Expanded editor */}
+      {expanded && (
+        <div className="px-3 py-2.5 space-y-2.5 border-t border-border/40">
+          {/* Name */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Name</Label>
+            <Input
+              className="h-7 text-sm font-mono"
+              value={variable.name}
+              onChange={(e) => onUpdate(estimatorId, variable.id, { name: e.target.value })}
+            />
+          </div>
+
+          {/* Expression */}
+          <div className="flex flex-col gap-1 relative">
+            <Label className="text-xs">Expression</Label>
+            <Textarea
+              ref={exprRef}
+              className="text-sm font-mono min-h-[60px] resize-none"
+              placeholder="e.g. @surface * @prix_unitaire * 1.2"
+              value={variable.expression}
+              onChange={(e) => handleExpressionChange(e.target.value)}
+              onFocus={() => {
+                if (!variable.expression) setShowSuggestions(true)
+              }}
+              onBlur={() => {
+                // Delay to allow click on suggestion
+                setTimeout(() => setShowSuggestions(false), 200)
+              }}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+                {suggestions.map((s, i) => {
+                  const prevGroup = i > 0 ? suggestions[i - 1].group : null
+                  const showGroupLabel = s.group !== prevGroup
+                  return (
+                    <div key={s.insert}>
+                      {showGroupLabel && (
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          {s.group === "fields" ? "Fields" : s.group === "functions" ? "Functions" : "Other estimators"}
+                        </div>
+                      )}
+                      <button
+                        className={cn(
+                          "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
+                          s.group === "estimators" && "text-purple-500",
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          insertSuggestion(s.insert)
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Description</Label>
+            <Input
+              className="h-7 text-sm"
+              placeholder="Optional"
+              value={variable.description}
+              onChange={(e) => onUpdate(estimatorId, variable.id, { description: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
