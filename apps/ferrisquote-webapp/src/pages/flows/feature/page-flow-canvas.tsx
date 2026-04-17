@@ -753,7 +753,7 @@ function PageFlowCanvasInner() {
       return next
     })
     setPanelState((prev) =>
-      prev && "stepId" in prev && prev.stepId === node.id
+      prev?.mode === "step-details" && prev.stepId === node.id
         ? null
         : { mode: "step-details", stepId: node.id },
     )
