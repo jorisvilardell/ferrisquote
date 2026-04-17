@@ -107,6 +107,7 @@ function buildGraph(
           border: "none",
           padding: 0,
           pointerEvents: "none" as const,
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         },
       })
     }
@@ -117,6 +118,9 @@ function buildGraph(
       position: { x: 0, y: stepY },
       draggable: true,
       selected: selectedNodeId === step.id,
+      style: {
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      },
       data: {
         index: i + 1,
         title: step.title,
@@ -137,24 +141,34 @@ function buildGraph(
         target: flow.steps[i + 1].id,
         type: "smoothstep",
         animated: true,
+        style: { transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)" },
       })
     }
 
-    if (isExpanded && step.fields.length > 0) {
+    if (step.fields.length > 0) {
       const totalFieldsHeight =
         step.fields.length * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP) - FIELD_NODE_GAP
       const hueStep = step.fields.length > 1 ? 200 / (step.fields.length - 1) : 0
 
       step.fields.forEach((field, j) => {
         const fieldNodeId = `field-${field.id}`
-        const fieldY = stepY + j * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP)
+        const targetY = stepY + j * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP)
+        const fieldY = isExpanded ? targetY : stepY
+        const xOffset = isExpanded ? FIELD_X_OFFSET : 0
+        const opacity = isExpanded ? 1 : 0
+        const pointerEvents = isExpanded ? "all" : "none"
         const color = `hsl(${28 + j * hueStep}, 85%, 55%)`
 
         const fieldNode: Node<FieldNodeData> = {
           id: fieldNodeId,
           type: "fieldNode",
-          position: { x: FIELD_X_OFFSET, y: fieldY },
+          position: { x: xOffset, y: fieldY },
           selected: selectedNodeId === fieldNodeId,
+          style: {
+            opacity,
+            pointerEvents: pointerEvents as "all" | "none",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          },
           data: {
             label: field.label,
             type: field.config.type,
@@ -172,12 +186,21 @@ function buildGraph(
           target: fieldNodeId,
           type: "smoothstep",
           animated: false,
-          style: { strokeWidth: 1.5, stroke: color },
+          style: {
+            strokeWidth: 1.5,
+            stroke: color,
+            opacity,
+            transition: isExpanded
+              ? "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.5s"
+              : "opacity 0.1s ease-out 0s",
+          },
         })
       })
 
-      const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
-      yOffset += extraSpace + STEP_NODE_GAP
+      if (isExpanded) {
+        const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
+        yOffset += extraSpace + STEP_NODE_GAP
+      }
     }
   }
 
@@ -200,6 +223,7 @@ function buildGraph(
         border: "none",
         padding: 0,
         pointerEvents: "none" as const,
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       },
     })
   }
@@ -239,6 +263,9 @@ function buildGraph(
       type: "estimatorNode",
       position: { x: ESTIMATOR_X_OFFSET, y: estimatorY },
       selected: selectedNodeId === estimatorNodeId,
+      style: {
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      },
       data: {
         name: est.name,
         variables: est.variables,
@@ -268,7 +295,12 @@ function buildGraph(
               target: estimatorNodeId,
               type: "smoothstep",
               animated: true,
-              style: { strokeWidth: 2, stroke: CROSS_COLOR, opacity: 0.8 },
+              style: {
+                strokeWidth: 2,
+                stroke: CROSS_COLOR,
+                opacity: 0.8,
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+              },
               label: `${ref.variableName}`,
               labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
               labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
@@ -294,6 +326,7 @@ function buildGraph(
               stroke: estColor,
               opacity: 0.7,
               strokeDasharray: isAgg ? "6 3" : undefined,
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             },
             label: isAgg ? ref.aggregation : undefined,
             labelStyle: isAgg ? { fill: estColor, fontSize: 10, fontWeight: 600 } : undefined,
@@ -452,11 +485,11 @@ function PageFlowCanvasInner() {
         (prev ?? []).map((e) =>
           e.id === estimatorId
             ? {
-                ...e,
-                variables: e.variables.map((v) =>
-                  v.id === variableId ? { ...v, ...patch } : v,
-                ),
-              }
+              ...e,
+              variables: e.variables.map((v) =>
+                v.id === variableId ? { ...v, ...patch } : v,
+              ),
+            }
             : e,
         ),
       )
@@ -819,19 +852,19 @@ function PageFlowCanvasInner() {
 
   const { nodes, edges, stepPositions } = flow
     ? buildGraph(
-        flow,
-        estimators,
-        expandedStepIds,
-        linkingField,
-        dropIndicatorIndex,
-        panelState?.mode === "estimator-details" ? `estimator-${panelState.estimatorId}`
-          : panelState?.mode === "step-details" ? panelState.stepId
+      flow,
+      estimators,
+      expandedStepIds,
+      linkingField,
+      dropIndicatorIndex,
+      panelState?.mode === "estimator-details" ? `estimator-${panelState.estimatorId}`
+        : panelState?.mode === "step-details" ? panelState.stepId
           : panelState?.mode === "edit-field" ? `field-${panelState.fieldId}`
-          : null,
-        handleDeleteStep,
-        handleDeleteField,
-        handleDeleteEstimator,
-      )
+            : null,
+      handleDeleteStep,
+      handleDeleteField,
+      handleDeleteEstimator,
+    )
     : { nodes: [], edges: [], stepPositions: new Map<string, number>() }
 
   // Keep positions ref in sync for drag calculations
