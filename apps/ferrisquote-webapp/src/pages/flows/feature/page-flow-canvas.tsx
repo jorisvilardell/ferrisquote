@@ -723,40 +723,27 @@ function PageFlowCanvasInner() {
 
     if (node.type === "estimatorNode") {
       const estimatorId = node.id.replace("estimator-", "")
-      setPanelState((prev) =>
-        prev?.mode === "estimator-details" && prev.estimatorId === estimatorId
-          ? null
-          : { mode: "estimator-details", estimatorId },
-      )
+      setPanelState({ mode: "estimator-details", estimatorId })
       return
     }
 
     if (node.type === "fieldNode") {
       const fieldId = node.id.replace("field-", "")
-      // Find which step owns this field
       const stepId = flow?.steps.find((s) => s.fields.some((f) => f.id === fieldId))?.id
       if (stepId) {
-        setPanelState((prev) =>
-          prev?.mode === "edit-field" && prev.fieldId === fieldId
-            ? { mode: "step-details", stepId }
-            : { mode: "edit-field", fieldId, stepId },
-        )
+        setPanelState({ mode: "edit-field", fieldId, stepId })
       }
       return
     }
 
     if (node.type !== "stepNode") return
-    // Single click: select + expand (keep others open)
+    // Single click: select + expand (keep others open, no toggle-close)
     setExpandedStepIds((prev) => {
       const next = new Set(prev)
       next.add(node.id)
       return next
     })
-    setPanelState((prev) =>
-      prev?.mode === "step-details" && prev.stepId === node.id
-        ? null
-        : { mode: "step-details", stepId: node.id },
-    )
+    setPanelState({ mode: "step-details", stepId: node.id })
   }
 
   function handleNodeDoubleClick(_: React.MouseEvent, node: Node) {
