@@ -400,7 +400,7 @@ function PageFlowCanvasInner() {
   const { flowId } = useParams<{ flowId: string }>()
   const setLastFlowId = useFlowStore((s) => s.setLastFlowId)
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, getNodes } = useReactFlow()
+  const { screenToFlowPosition, getNodes, fitView, setCenter, getZoom } = useReactFlow()
 
   const { data: flowData, error } = useGetFlow(flowId ?? "")
   const { data: estimatorsData } = useListEstimators(flowId ?? "")
@@ -723,53 +723,52 @@ function PageFlowCanvasInner() {
 
     if (node.type === "estimatorNode") {
       const estimatorId = node.id.replace("estimator-", "")
-      setPanelState((prev) =>
-        prev?.mode === "estimator-details" && prev.estimatorId === estimatorId
-          ? null
-          : { mode: "estimator-details", estimatorId },
-      )
+      setPanelState({ mode: "estimator-details", estimatorId })
       return
     }
 
     if (node.type === "fieldNode") {
       const fieldId = node.id.replace("field-", "")
-      // Find which step owns this field
       const stepId = flow?.steps.find((s) => s.fields.some((f) => f.id === fieldId))?.id
       if (stepId) {
-        setPanelState((prev) =>
-          prev?.mode === "edit-field" && prev.fieldId === fieldId
-            ? { mode: "step-details", stepId }
-            : { mode: "edit-field", fieldId, stepId },
-        )
+        setPanelState({ mode: "edit-field", fieldId, stepId })
       }
       return
     }
 
     if (node.type !== "stepNode") return
-    // Single click: select + expand (keep others open)
+    // Single click: select + expand (keep others open, no toggle-close)
     setExpandedStepIds((prev) => {
       const next = new Set(prev)
       next.add(node.id)
       return next
     })
-    setPanelState((prev) =>
-      prev && "stepId" in prev && prev.stepId === node.id
-        ? null
-        : { mode: "step-details", stepId: node.id },
-    )
+    setPanelState({ mode: "step-details", stepId: node.id })
   }
 
   function handleNodeDoubleClick(_: React.MouseEvent, node: Node) {
-    if (node.type !== "stepNode") return
-    // Double click: toggle exclusive — collapse all others, or collapse this one
-    setExpandedStepIds((prev) => {
-      if (prev.has(node.id) && prev.size === 1) {
-        // Already the only one expanded → collapse it
-        return new Set()
-      }
-      // Expand only this one (collapse all others)
-      return new Set([node.id])
-    })
+    if (node.type === "stepNode") {
+      // Exclusive expand: collapse all others, keep only this one expanded
+      setExpandedStepIds(new Set([node.id]))
+
+      const step = flow?.steps.find((s) => s.id === node.id)
+      const fieldIds = step?.fields.map((f) => ({ id: `field-${f.id}` })) ?? []
+      // Wait a frame so the newly-rendered field nodes are registered
+      requestAnimationFrame(() => {
+        fitView({
+          nodes: [{ id: node.id }, ...fieldIds],
+          padding: 0.2,
+          duration: 400,
+        })
+      })
+      return
+    }
+
+    if (node.type === "fieldNode" || node.type === "estimatorNode") {
+      const cx = node.position.x + (node.measured?.width ?? 200) / 2
+      const cy = node.position.y + (node.measured?.height ?? 56) / 2
+      setCenter(cx, cy, { zoom: getZoom(), duration: 400 })
+    }
   }
 
   // ─── Step reorder via node drag ───────────────────────────────────────────
@@ -984,6 +983,7 @@ function PageFlowCanvasInner() {
               onDragOver={onDragOver}
               onDrop={onDrop}
               fitView
+              zoomOnDoubleClick={false}
               nodesConnectable={false}
               edgesReconnectable={false}
               edgesFocusable={false}

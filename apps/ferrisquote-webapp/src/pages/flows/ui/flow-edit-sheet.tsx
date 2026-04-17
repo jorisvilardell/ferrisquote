@@ -376,7 +376,8 @@ function StepDetailsPanel({
         {editingTitle ? (
           <Input
             autoFocus
-            className="text-base font-semibold h-8"
+            className="flex-1 !text-base font-semibold h-7 rounded-sm border border-border/60 bg-transparent px-2 py-0 shadow-none focus-visible:border-border focus-visible:ring-0"
+            style={{ color: STEP_COLOR }}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={() => {
@@ -407,9 +408,11 @@ function StepDetailsPanel({
             {step.title}
           </button>
         )}
-        <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </Button>
+        {!editingTitle && (
+          <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       {/* Repeatable configuration */}
@@ -800,7 +803,8 @@ function EstimatorDetailsPanel({
         {editingName ? (
           <Input
             autoFocus
-            className="text-base font-semibold h-8"
+            className="flex-1 !text-base font-semibold h-7 rounded-sm border border-border/60 bg-transparent px-2 py-0 shadow-none focus-visible:border-border focus-visible:ring-0"
+            style={{ color: ROSE }}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={() => {
@@ -827,9 +831,11 @@ function EstimatorDetailsPanel({
             {estimator.name}
           </button>
         )}
-        <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </Button>
+        {!editingName && (
+          <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto">
