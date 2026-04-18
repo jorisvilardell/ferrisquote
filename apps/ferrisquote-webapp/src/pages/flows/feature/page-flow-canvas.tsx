@@ -36,7 +36,8 @@ import {
   useUpdateField,
   useRemoveField,
 } from "@/api/flows.api"
-import { useEstimators, useCreateEstimator } from "@/api/estimators.api"
+import { useEstimators, useCreateEstimator, useDeleteEstimator } from "@/api/estimators.api"
+import { toast } from "sonner"
 import { useFlowStore } from "@/store/flow.store"
 import { FlowListDrawer } from "../ui/flow-list-drawer"
 import "@xyflow/react/dist/style.css"
@@ -406,19 +407,8 @@ function PageFlowCanvasInner() {
   const { data: estimatorsData } = useEstimators(flowId ?? "")
 
   const flow = flowData?.data ?? null
+  const estimators = estimatorsData?.data?.estimators ?? []
   const is404 = !!error
-
-  // Local estimator state (fake edits until backend is wired)
-  const [localEstimators, setLocalEstimators] = useState<Schemas.EstimatorResponse[] | null>(null)
-  const apiEstimators = estimatorsData?.data?.estimators ?? []
-  const estimators = localEstimators ?? apiEstimators
-
-  // Sync from API when data arrives
-  useEffect(() => {
-    if (apiEstimators.length > 0 && localEstimators === null) {
-      setLocalEstimators(apiEstimators)
-    }
-  }, [apiEstimators, localEstimators])
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
   const [panelState, setPanelState] = useState<PanelState | null>(null)
@@ -452,60 +442,11 @@ function PageFlowCanvasInner() {
   const { mutate: updateField } = useUpdateField(flowId ?? "")
   const { mutate: removeField } = useRemoveField(flowId ?? "")
   const { mutate: createEstimator } = useCreateEstimator(flowId ?? "")
+  const { mutate: deleteEstimator } = useDeleteEstimator(flowId ?? "")
   const { mutate: reorderStep } = useReorderStep(flowId ?? "")
 
   // Collect all field keys for autocompletion
   const availableFieldKeys = flow?.steps.flatMap((s) => s.fields.map((f) => f.key)) ?? []
-
-  // ─── Local estimator mutations (fake) ─────────────────────────────────────
-  const handleUpdateEstimatorName = useCallback((estimatorId: string, name: string) => {
-    setLocalEstimators((prev) =>
-      (prev ?? []).map((e) => (e.id === estimatorId ? { ...e, name } : e)),
-    )
-  }, [])
-
-  const handleAddVariable = useCallback((estimatorId: string) => {
-    const id = crypto.randomUUID()
-    const newVar: Schemas.VariableResponse = {
-      id,
-      name: "new_var",
-      expression: "",
-      description: "",
-    }
-    setLocalEstimators((prev) =>
-      (prev ?? []).map((e) =>
-        e.id === estimatorId ? { ...e, variables: [...e.variables, newVar] } : e,
-      ),
-    )
-  }, [])
-
-  const handleUpdateVariable = useCallback(
-    (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => {
-      setLocalEstimators((prev) =>
-        (prev ?? []).map((e) =>
-          e.id === estimatorId
-            ? {
-              ...e,
-              variables: e.variables.map((v) =>
-                v.id === variableId ? { ...v, ...patch } : v,
-              ),
-            }
-            : e,
-        ),
-      )
-    },
-    [],
-  )
-
-  const handleDeleteVariable = useCallback((estimatorId: string, variableId: string) => {
-    setLocalEstimators((prev) =>
-      (prev ?? []).map((e) =>
-        e.id === estimatorId
-          ? { ...e, variables: e.variables.filter((v) => v.id !== variableId) }
-          : e,
-      ),
-    )
-  }, [])
 
   useEffect(() => {
     if (flowId && !is404) setLastFlowId(flowId)
@@ -515,7 +456,6 @@ function PageFlowCanvasInner() {
     setDeletingField(null)
     setDeletingEstimator(null)
     setLinkingField(false)
-    setLocalEstimators(null)
   }, [flowId, is404, setLastFlowId])
 
   // Cancel linking on Escape
@@ -579,12 +519,17 @@ function PageFlowCanvasInner() {
 
   const confirmDeleteEstimator = useCallback(() => {
     if (!deletingEstimator) return
-    setLocalEstimators((prev) => (prev ?? []).filter((e) => e.id !== deletingEstimator.id))
+    deleteEstimator(
+      { path: { estimator_id: deletingEstimator.id } },
+      {
+        onError: (err) => toast.error(`Failed to delete estimator: ${err.message}`),
+      },
+    )
     if (panelState?.mode === "estimator-details" && panelState.estimatorId === deletingEstimator.id) {
       setPanelState(null)
     }
     setDeletingEstimator(null)
-  }, [deletingEstimator, panelState])
+  }, [deletingEstimator, deleteEstimator, panelState])
 
   // ─── Sheet submit handlers ───────────────────────────────────────────────────
   function handleAddStep(data: { title: string; description: string }) {
@@ -691,19 +636,24 @@ function PageFlowCanvasInner() {
           setLinkingField("quick")
         }
       } else if (type === "estimatorNode") {
-        // Local fake create
-        const newId = crypto.randomUUID()
-        const newEst: Schemas.EstimatorResponse = {
-          id: newId,
-          flow_id: flowId,
-          name: "New Estimator",
-          variables: [],
-        }
-        setLocalEstimators((prev) => [...(prev ?? []), newEst])
-        setPanelState({ mode: "estimator-details", estimatorId: newId })
+        createEstimator(
+          {
+            path: { flow_id: flowId },
+            body: { name: "New Estimator" },
+          },
+          {
+            onSuccess: (data) => {
+              const estId = (data as { data?: { id?: string } })?.data?.id
+              if (estId) {
+                setPanelState({ mode: "estimator-details", estimatorId: estId })
+              }
+            },
+            onError: (err) => toast.error(`Failed to create estimator: ${err.message}`),
+          },
+        )
       }
     },
-    [flowId, screenToFlowPosition, getNodes, addStep, quickCreateField],
+    [flowId, screenToFlowPosition, getNodes, addStep, createEstimator, quickCreateField],
   )
 
   // ─── Node click ─────────────────────────────────────────────────────────────
@@ -1007,6 +957,7 @@ function PageFlowCanvasInner() {
             step={panelStep}
             field={panelField}
             estimator={panelEstimator}
+            flowId={flowId ?? ""}
             availableFieldKeys={availableFieldKeys}
             otherEstimators={estimators
               .filter((e) => e.id !== panelEstimator?.id)
@@ -1022,10 +973,6 @@ function PageFlowCanvasInner() {
             onDeleteField={handleDeleteField}
             onOpenAddField={handleOpenAddField}
             onOpenEditField={handleOpenEditField}
-            onUpdateEstimatorName={handleUpdateEstimatorName}
-            onAddVariable={handleAddVariable}
-            onUpdateVariable={handleUpdateVariable}
-            onDeleteVariable={handleDeleteVariable}
           />
         </div>
       </div>

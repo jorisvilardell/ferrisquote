@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef } from "react"
-import { Plus, Pencil, Trash2, X, Repeat } from "lucide-react"
+import { Plus, Pencil, Trash2, X, Repeat, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+import {
+  useAddVariable,
+  useRemoveVariable,
+  useUpdateEstimator,
+  useUpdateVariable,
+} from "@/api/estimators.api"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -198,6 +205,7 @@ type Props = {
   step: Schemas.StepResponse | null
   field: Schemas.FieldResponse | null
   estimator: Schemas.EstimatorResponse | null
+  flowId: string
   availableFieldKeys: string[]
   otherEstimators: Array<{ name: string; variables: string[] }>
   onClose: () => void
@@ -208,10 +216,6 @@ type Props = {
   onDeleteField: (fieldId: string, stepId: string) => void
   onOpenAddField: (stepId: string) => void
   onOpenEditField: (fieldId: string, stepId: string) => void
-  onUpdateEstimatorName: (estimatorId: string, name: string) => void
-  onAddVariable: (estimatorId: string) => void
-  onUpdateVariable: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
-  onDeleteVariable: (estimatorId: string, variableId: string) => void
 }
 
 export function FlowEditPanel({
@@ -219,6 +223,7 @@ export function FlowEditPanel({
   step,
   field,
   estimator,
+  flowId,
   availableFieldKeys,
   otherEstimators,
   onClose,
@@ -229,10 +234,6 @@ export function FlowEditPanel({
   onDeleteField,
   onOpenAddField,
   onOpenEditField,
-  onUpdateEstimatorName,
-  onAddVariable,
-  onUpdateVariable,
-  onDeleteVariable,
 }: Props) {
   return (
     <div
@@ -273,14 +274,12 @@ export function FlowEditPanel({
         )}
         {state?.mode === "estimator-details" && estimator && (
           <EstimatorDetailsPanel
+            key={estimator.id}
             estimator={estimator}
+            flowId={flowId}
             availableFieldKeys={availableFieldKeys}
             otherEstimators={otherEstimators}
             onClose={onClose}
-            onUpdateName={onUpdateEstimatorName}
-            onAddVariable={onAddVariable}
-            onUpdateVariable={onUpdateVariable}
-            onDeleteVariable={onDeleteVariable}
           />
         )}
       </div>
@@ -772,22 +771,16 @@ const AGG_FUNCTIONS = ["SUM", "AVG", "COUNT_ITER"] as const
 
 function EstimatorDetailsPanel({
   estimator,
+  flowId,
   availableFieldKeys,
   otherEstimators,
   onClose,
-  onUpdateName,
-  onAddVariable,
-  onUpdateVariable,
-  onDeleteVariable,
 }: {
   estimator: Schemas.EstimatorResponse
+  flowId: string
   availableFieldKeys: string[]
   otherEstimators: Array<{ name: string; variables: string[] }>
   onClose: () => void
-  onUpdateName: (estimatorId: string, name: string) => void
-  onAddVariable: (estimatorId: string) => void
-  onUpdateVariable: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
-  onDeleteVariable: (estimatorId: string, variableId: string) => void
 }) {
   const [editingName, setEditingName] = useState(false)
   const [name, setName] = useState(estimator.name)
@@ -796,6 +789,49 @@ function EstimatorDetailsPanel({
     setName(estimator.name)
     setEditingName(false)
   }, [estimator.id, estimator.name])
+
+  const updateEstimator = useUpdateEstimator(flowId, estimator.id)
+  const addVariable = useAddVariable(flowId, estimator.id)
+  const updateVariable = useUpdateVariable(flowId, estimator.id)
+  const removeVariable = useRemoveVariable(flowId, estimator.id)
+
+  const commitName = (next: string) => {
+    const trimmed = next.trim()
+    if (!trimmed || trimmed === estimator.name) return
+    updateEstimator.mutate(
+      { path: { estimator_id: estimator.id }, body: { name: trimmed } },
+      { onError: (err) => toast.error(`Rename failed: ${err.message}`) },
+    )
+  }
+
+  const handleAddVariable = () => {
+    addVariable.mutate(
+      {
+        path: { estimator_id: estimator.id },
+        body: { name: "new_var", expression: "0", description: null },
+      },
+      { onError: (err) => toast.error(`Add variable failed: ${err.message}`) },
+    )
+  }
+
+  const handleUpdateVariable = (variableId: string, patch: Partial<Schemas.VariableResponse>) => {
+    const body: Schemas.UpdateVariableRequest = {
+      name: patch.name,
+      expression: patch.expression,
+      description: patch.description ?? null,
+    }
+    updateVariable.mutate(
+      { path: { variable_id: variableId }, body },
+      { onError: (err) => toast.error(`Update failed: ${err.message}`) },
+    )
+  }
+
+  const handleDeleteVariable = (variableId: string) => {
+    removeVariable.mutate(
+      { path: { variable_id: variableId } },
+      { onError: (err) => toast.error(`Delete failed: ${err.message}`) },
+    )
+  }
 
   return (
     <>
@@ -808,12 +844,12 @@ function EstimatorDetailsPanel({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={() => {
-              if (name.trim()) onUpdateName(estimator.id, name.trim())
+              commitName(name)
               setEditingName(false)
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                if (name.trim()) onUpdateName(estimator.id, name.trim())
+                commitName(name)
                 setEditingName(false)
               }
               if (e.key === "Escape") {
@@ -847,11 +883,10 @@ function EstimatorDetailsPanel({
           <VariableCard
             key={v.id}
             variable={v}
-            estimatorId={estimator.id}
             availableFieldKeys={availableFieldKeys}
             otherEstimators={otherEstimators}
-            onUpdate={onUpdateVariable}
-            onDelete={onDeleteVariable}
+            onUpdate={handleUpdateVariable}
+            onDelete={handleDeleteVariable}
           />
         ))}
 
@@ -859,9 +894,14 @@ function EstimatorDetailsPanel({
           variant="outline"
           size="sm"
           className="w-full border-dashed"
-          onClick={() => onAddVariable(estimator.id)}
+          onClick={handleAddVariable}
+          disabled={addVariable.isPending}
         >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          {addVariable.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+          )}
           Add variable
         </Button>
       </div>
@@ -869,36 +909,42 @@ function EstimatorDetailsPanel({
   )
 }
 
-// ─── Variable Card (inline editing) ──────────────────────────────────────────
+// ─── Variable Card (inline editing with local drafts) ────────────────────────
 
 function VariableCard({
   variable,
-  estimatorId,
   availableFieldKeys,
   otherEstimators,
   onUpdate,
   onDelete,
 }: {
   variable: Schemas.VariableResponse
-  estimatorId: string
   availableFieldKeys: string[]
   otherEstimators: Array<{ name: string; variables: string[] }>
-  onUpdate: (estimatorId: string, variableId: string, patch: Partial<Schemas.VariableResponse>) => void
-  onDelete: (estimatorId: string, variableId: string) => void
+  onUpdate: (variableId: string, patch: Partial<Schemas.VariableResponse>) => void
+  onDelete: (variableId: string) => void
 }) {
   const [expanded, setExpanded] = useState(!variable.expression)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionFilter, setSuggestionFilter] = useState("")
   const exprRef = useRef<HTMLTextAreaElement>(null)
 
+  // Local drafts — sync from prop when it changes (e.g. after server update or switching variable)
+  const [nameDraft, setNameDraft] = useState(variable.name)
+  const [exprDraft, setExprDraft] = useState(variable.expression)
+  const [descDraft, setDescDraft] = useState(variable.description)
+
+  useEffect(() => {
+    setNameDraft(variable.name)
+    setExprDraft(variable.expression)
+    setDescDraft(variable.description)
+  }, [variable.id, variable.name, variable.expression, variable.description])
+
   const suggestions = [
-    // Field keys
     ...availableFieldKeys
       .filter((k) => k.includes(suggestionFilter))
       .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "fields" as const })),
-    // Aggregation functions
     ...AGG_FUNCTIONS.map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "functions" as const })),
-    // Cross-estimator variables
     ...otherEstimators.flatMap((est) =>
       est.variables
         .filter((v) => `${est.name}.${v}`.toLowerCase().includes(suggestionFilter.toLowerCase()))
@@ -914,15 +960,15 @@ function VariableCard({
     const el = exprRef.current
     if (!el) return
     const pos = el.selectionStart ?? el.value.length
-    // If we were typing @xxx, replace from the @ position
     const before = el.value.substring(0, pos)
     const atPos = before.lastIndexOf("@")
     const start = atPos >= 0 ? atPos : pos
     const after = el.value.substring(pos)
     const newVal = el.value.substring(0, start) + insert + after
-    onUpdate(estimatorId, variable.id, { expression: newVal })
+    setExprDraft(newVal)
     setShowSuggestions(false)
-    // Focus and place cursor after insert
+    // Commit the new expression (suggestion picks are always an intent to save)
+    onUpdate(variable.id, { expression: newVal })
     requestAnimationFrame(() => {
       el.focus()
       const cursorPos = start + insert.length
@@ -931,12 +977,11 @@ function VariableCard({
   }
 
   function handleExpressionChange(value: string) {
-    onUpdate(estimatorId, variable.id, { expression: value })
+    setExprDraft(value)
     const el = exprRef.current
     if (el) {
       const pos = el.selectionStart ?? value.length
       const before = value.substring(0, pos)
-      // Match @Name.var or @key patterns
       const atMatch = before.match(/@([A-Za-z0-9_.]*)$/)
       if (atMatch) {
         setSuggestionFilter(atMatch[1])
@@ -945,6 +990,29 @@ function VariableCard({
         setShowSuggestions(false)
       }
     }
+  }
+
+  // Commit helpers — only fire mutation if value actually changed
+  const commitName = () => {
+    const trimmed = nameDraft.trim()
+    if (!trimmed || trimmed === variable.name) {
+      setNameDraft(variable.name)
+      return
+    }
+    onUpdate(variable.id, { name: trimmed })
+  }
+  const commitExpr = () => {
+    if (exprDraft === variable.expression) return
+    // Backend requires non-empty expression
+    if (!exprDraft.trim()) {
+      setExprDraft(variable.expression)
+      return
+    }
+    onUpdate(variable.id, { expression: exprDraft })
+  }
+  const commitDesc = () => {
+    if (descDraft === variable.description) return
+    onUpdate(variable.id, { description: descDraft })
   }
 
   return (
@@ -981,7 +1049,7 @@ function VariableCard({
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => onDelete(estimatorId, variable.id)}
+                onClick={() => onDelete(variable.id)}
               >
                 Delete
               </AlertDialogAction>
@@ -998,8 +1066,16 @@ function VariableCard({
             <Label className="text-xs">Name</Label>
             <Input
               className="h-7 text-sm font-mono"
-              value={variable.name}
-              onChange={(e) => onUpdate(estimatorId, variable.id, { name: e.target.value })}
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                if (e.key === "Escape") {
+                  setNameDraft(variable.name)
+                  ;(e.target as HTMLInputElement).blur()
+                }
+              }}
             />
           </div>
 
@@ -1010,14 +1086,17 @@ function VariableCard({
               ref={exprRef}
               className="text-sm font-mono min-h-[60px] resize-none"
               placeholder="e.g. @surface * @prix_unitaire * 1.2"
-              value={variable.expression}
+              value={exprDraft}
               onChange={(e) => handleExpressionChange(e.target.value)}
               onFocus={() => {
-                if (!variable.expression) setShowSuggestions(true)
+                if (!exprDraft) setShowSuggestions(true)
               }}
               onBlur={() => {
                 // Delay to allow click on suggestion
-                setTimeout(() => setShowSuggestions(false), 200)
+                setTimeout(() => {
+                  setShowSuggestions(false)
+                  commitExpr()
+                }, 200)
               }}
             />
             {showSuggestions && suggestions.length > 0 && (
@@ -1057,8 +1136,9 @@ function VariableCard({
             <Input
               className="h-7 text-sm"
               placeholder="Optional"
-              value={variable.description}
-              onChange={(e) => onUpdate(estimatorId, variable.id, { description: e.target.value })}
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onBlur={commitDesc}
             />
           </div>
         </div>
