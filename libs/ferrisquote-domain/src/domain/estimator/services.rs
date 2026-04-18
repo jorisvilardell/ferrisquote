@@ -822,6 +822,7 @@ mod tests {
             field_values: HashMap::new(),
             iteration_values: HashMap::new(),
             iteration_counts: HashMap::from([("rooms".to_string(), 5)]),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["count"], 5.0);
