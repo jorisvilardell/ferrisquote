@@ -101,6 +101,15 @@ where
         let estimator = self.repo.get_estimator(estimator_id).await?;
         evaluate_estimator_with_submission(&estimator, &data)
     }
+
+    async fn evaluate_flow(
+        &self,
+        flow_id: FlowId,
+        data: SubmissionData,
+    ) -> Result<HashMap<String, HashMap<String, f64>>, DomainError> {
+        let estimators = self.repo.list_estimators_for_flow(flow_id).await?;
+        evaluate_flow_estimators(&estimators, &data)
+    }
 }
 
 // ============================================================================
@@ -108,10 +117,24 @@ where
 // ============================================================================
 
 /// Evaluate all variables of an estimator in dependency order.
+///
+/// Fails if any variable contains a cross-estimator reference
+/// (`@EstimatorName.var`) — those can only be resolved by
+/// [`evaluate_flow_estimators`] which has access to all estimators.
 pub fn evaluate_estimator(
     estimator: &Estimator,
     field_values: &HashMap<String, f64>,
 ) -> Result<HashMap<String, f64>, DomainError> {
+    for var in &estimator.variables {
+        if has_cross_refs(&var.expression) {
+            return Err(DomainError::validation(format!(
+                "Variable '{}' uses a cross-estimator reference; \
+                 use evaluate_flow_estimators to evaluate estimators with cross-references",
+                var.name
+            )));
+        }
+    }
+
     let order = topological_sort(&estimator.variables)?;
 
     // Seed the evalexpr context with field values
@@ -152,6 +175,16 @@ pub fn evaluate_estimator_with_submission(
     estimator: &Estimator,
     data: &SubmissionData,
 ) -> Result<HashMap<String, f64>, DomainError> {
+    for var in &estimator.variables {
+        if has_cross_refs(&var.expression) {
+            return Err(DomainError::validation(format!(
+                "Variable '{}' uses a cross-estimator reference; \
+                 use evaluate_flow_estimators to evaluate estimators with cross-references",
+                var.name
+            )));
+        }
+    }
+
     let order = topological_sort(&estimator.variables)?;
 
     use evalexpr::ContextWithMutableVariables;
@@ -266,6 +299,9 @@ fn find_aggregation(expr: &str) -> Option<(String, String, usize, usize)> {
 
 /// Strip `@` prefixes so `@surface * @prix` becomes `surface * prix`,
 /// which is the syntax evalexpr expects.
+///
+/// Cross-estimator refs (`@Name.var`) should already have been resolved to
+/// numeric literals by `resolve_cross_refs` before this is called.
 fn prepare_expression(expr: &str) -> String {
     let chars: Vec<char> = expr.chars().collect();
     let mut result = String::with_capacity(expr.len());
@@ -282,26 +318,72 @@ fn prepare_expression(expr: &str) -> String {
     result
 }
 
-/// Extract all `@name` references from an expression.
-fn extract_references(expr: &str) -> Vec<String> {
+/// A parsed reference found in an expression.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExprRef {
+    /// Bare identifier: `@field_key` or `@variable_name`.
+    /// Used for field lookups and intra-estimator variable dependencies.
+    Bare(String),
+    /// Cross-estimator reference: `@EstimatorName.variable_name`.
+    Cross {
+        estimator: String,
+        variable: String,
+    },
+}
+
+/// Extract all `@...` references from an expression, distinguishing bare
+/// references from cross-estimator ones (`@Name.var`).
+pub fn extract_expr_refs(expr: &str) -> Vec<ExprRef> {
     let chars: Vec<char> = expr.chars().collect();
     let mut refs = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == '@' {
             i += 1;
-            let start = i;
+            let name_start = i;
             while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
                 i += 1;
             }
-            if i > start {
-                refs.push(chars[start..i].iter().collect());
+            if i == name_start {
+                continue;
             }
+            let first_part: String = chars[name_start..i].iter().collect();
+
+            // Check for dot → cross-estimator ref
+            if i < chars.len() && chars[i] == '.' {
+                i += 1;
+                let var_start = i;
+                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                    i += 1;
+                }
+                if i > var_start {
+                    let variable: String = chars[var_start..i].iter().collect();
+                    refs.push(ExprRef::Cross {
+                        estimator: first_part,
+                        variable,
+                    });
+                    continue;
+                }
+            }
+
+            refs.push(ExprRef::Bare(first_part));
         } else {
             i += 1;
         }
     }
     refs
+}
+
+/// Legacy helper used by the intra-estimator topological sort: returns only
+/// bare `@name` references (ignores cross-estimator refs).
+fn extract_bare_references(expr: &str) -> Vec<String> {
+    extract_expr_refs(expr)
+        .into_iter()
+        .filter_map(|r| match r {
+            ExprRef::Bare(name) => Some(name),
+            ExprRef::Cross { .. } => None,
+        })
+        .collect()
 }
 
 /// Topological sort of variables using Kahn's algorithm.
@@ -323,7 +405,7 @@ fn topological_sort(
         variables.iter().map(|v| (v.id, Vec::new())).collect();
 
     for var in variables {
-        let refs = extract_references(&var.expression);
+        let refs = extract_bare_references(&var.expression);
         // Deduplicate references to the same variable
         let unique_deps: HashSet<EstimatorVariableId> = refs
             .iter()
@@ -365,6 +447,236 @@ fn topological_sort(
     }
 
     Ok(order)
+}
+
+// ============================================================================
+// Cross-estimator evaluation
+// ============================================================================
+
+/// Topological sort of estimators based on their cross-estimator references.
+///
+/// Each estimator's expressions are scanned for `@EstimatorName.var` patterns.
+/// If any such reference points to another estimator in `estimators`, that
+/// creates a dependency edge.
+///
+/// Returns estimator IDs in evaluation order (dependencies first).
+/// Returns `DomainError::ValidationError` on circular dependency.
+fn topological_sort_estimators(
+    estimators: &[Estimator],
+) -> Result<Vec<EstimatorId>, DomainError> {
+    let name_to_id: HashMap<&str, EstimatorId> = estimators
+        .iter()
+        .map(|e| (e.name.as_str(), e.id))
+        .collect();
+
+    let mut in_degree: HashMap<EstimatorId, usize> =
+        estimators.iter().map(|e| (e.id, 0)).collect();
+    let mut adj: HashMap<EstimatorId, Vec<EstimatorId>> =
+        estimators.iter().map(|e| (e.id, Vec::new())).collect();
+
+    for est in estimators {
+        let mut referenced: HashSet<EstimatorId> = HashSet::new();
+        for var in &est.variables {
+            for r in extract_expr_refs(&var.expression) {
+                if let ExprRef::Cross { estimator: name, .. } = r {
+                    if let Some(&dep_id) = name_to_id.get(name.as_str()) {
+                        if dep_id != est.id {
+                            referenced.insert(dep_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for dep_id in referenced {
+            adj.entry(dep_id).or_default().push(est.id);
+            *in_degree.entry(est.id).or_insert(0) += 1;
+        }
+    }
+
+    let mut queue: VecDeque<EstimatorId> = in_degree
+        .iter()
+        .filter(|&(_, &deg)| deg == 0)
+        .map(|(&id, _)| id)
+        .collect();
+
+    let mut order = Vec::with_capacity(estimators.len());
+
+    while let Some(id) = queue.pop_front() {
+        order.push(id);
+        if let Some(dependents) = adj.get(&id) {
+            for &dep in dependents {
+                let deg = in_degree.entry(dep).or_insert(1);
+                *deg -= 1;
+                if *deg == 0 {
+                    queue.push_back(dep);
+                }
+            }
+        }
+    }
+
+    if order.len() != estimators.len() {
+        return Err(DomainError::validation(
+            "Circular dependency detected across estimators",
+        ));
+    }
+
+    Ok(order)
+}
+
+/// Replace every `@EstimatorName.variable_name` in `expr` with the numeric
+/// value from `resolved` (keyed by `(estimator_name, variable_name)`).
+///
+/// Returns a `DomainError::ValidationError` if a reference cannot be resolved.
+fn resolve_cross_refs(
+    expr: &str,
+    resolved: &HashMap<(String, String), f64>,
+) -> Result<String, DomainError> {
+    // Walk the expression, replacing each cross-ref with its literal value.
+    // We rebuild the string in one pass rather than repeated find/replace.
+    let chars: Vec<char> = expr.chars().collect();
+    let mut out = String::with_capacity(expr.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] == '@' {
+            let at_pos = i;
+            i += 1;
+            let name_start = i;
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            if i == name_start {
+                out.push('@');
+                continue;
+            }
+            let first_part: String = chars[name_start..i].iter().collect();
+
+            if i < chars.len() && chars[i] == '.' {
+                let dot_pos = i;
+                i += 1;
+                let var_start = i;
+                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                    i += 1;
+                }
+                if i > var_start {
+                    let variable: String = chars[var_start..i].iter().collect();
+                    let key = (first_part, variable);
+                    let value = resolved.get(&key).copied().ok_or_else(|| {
+                        DomainError::validation(format!(
+                            "Unresolved cross-estimator reference '@{}.{}'",
+                            key.0, key.1
+                        ))
+                    })?;
+                    out.push_str(&format_float(value));
+                    continue;
+                } else {
+                    // Malformed — put back the chunk as-is
+                    out.push_str(&chars[at_pos..=dot_pos].iter().collect::<String>());
+                    continue;
+                }
+            }
+
+            // Bare ref: keep as @name for later prepare_expression to strip
+            out.push('@');
+            out.push_str(&first_part);
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    Ok(out)
+}
+
+/// Return true if `expr` contains any `@EstimatorName.var` cross-reference.
+fn has_cross_refs(expr: &str) -> bool {
+    extract_expr_refs(expr)
+        .iter()
+        .any(|r| matches!(r, ExprRef::Cross { .. }))
+}
+
+/// Evaluate every estimator of a flow in cross-dependency order, resolving
+/// `@EstimatorName.var` references between them.
+///
+/// Returns a nested map: estimator_name → variable_name → value.
+///
+/// Fails with `DomainError::ValidationError` if:
+/// - Circular dependency across estimators
+/// - Circular dependency within any estimator
+/// - A `@Name.var` reference points to a missing estimator or variable
+pub fn evaluate_flow_estimators(
+    estimators: &[Estimator],
+    data: &SubmissionData,
+) -> Result<HashMap<String, HashMap<String, f64>>, DomainError> {
+    let order = topological_sort_estimators(estimators)?;
+    let est_by_id: HashMap<EstimatorId, &Estimator> =
+        estimators.iter().map(|e| (e.id, e)).collect();
+
+    // Flat context of all resolved cross-refs so far: (est_name, var_name) → value
+    let mut cross_ctx: HashMap<(String, String), f64> = HashMap::new();
+    let mut all_results: HashMap<String, HashMap<String, f64>> = HashMap::new();
+
+    for est_id in order {
+        let est = est_by_id[&est_id];
+        let results = evaluate_single_estimator_in_context(est, data, &cross_ctx)?;
+
+        // Publish this estimator's results into the cross-context
+        for (var_name, value) in &results {
+            cross_ctx.insert((est.name.clone(), var_name.clone()), *value);
+        }
+
+        all_results.insert(est.name.clone(), results);
+    }
+
+    Ok(all_results)
+}
+
+/// Evaluate a single estimator using its own variables + a context of
+/// already-resolved cross-estimator values.
+fn evaluate_single_estimator_in_context(
+    estimator: &Estimator,
+    data: &SubmissionData,
+    cross_ctx: &HashMap<(String, String), f64>,
+) -> Result<HashMap<String, f64>, DomainError> {
+    let order = topological_sort(&estimator.variables)?;
+
+    use evalexpr::ContextWithMutableVariables;
+    let mut ctx = evalexpr::HashMapContext::<evalexpr::DefaultNumericTypes>::new();
+
+    for (key, &value) in &data.field_values {
+        ctx.set_value(key.clone(), evalexpr::Value::Float(value))
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+    }
+
+    let var_by_id: HashMap<EstimatorVariableId, &EstimatorVariable> =
+        estimator.variables.iter().map(|v| (v.id, v)).collect();
+
+    let mut results = HashMap::new();
+
+    for id in order {
+        let var = var_by_id[&id];
+        // 1. Resolve cross-estimator refs to literals
+        let expr = resolve_cross_refs(&var.expression, cross_ctx)?;
+        // 2. Resolve aggregation functions to literals
+        let expr = resolve_aggregations(&expr, data)?;
+        // 3. Strip @ prefixes
+        let expr = prepare_expression(&expr);
+
+        let value = evalexpr::eval_float_with_context(&expr, &ctx).map_err(|e| {
+            DomainError::validation(format!(
+                "Failed to evaluate variable '{}' of estimator '{}': {}",
+                var.name, estimator.name, e
+            ))
+        })?;
+
+        ctx.set_value(var.name.clone(), evalexpr::Value::Float(value))
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+
+        results.insert(var.name.clone(), value);
+    }
+
+    Ok(results)
 }
 
 // ============================================================================
@@ -542,5 +854,204 @@ mod tests {
         let data = SubmissionData::default();
         let result = evaluate_estimator_with_submission(&estimator, &data);
         assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+    }
+
+    // ========================================================================
+    // Cross-estimator tests
+    // ========================================================================
+
+    fn make_named_estimator(name: &str, vars: Vec<EstimatorVariable>) -> Estimator {
+        Estimator::with_variables(EstimatorId::new(), FlowId::new(), name.to_string(), vars)
+    }
+
+    #[test]
+    fn test_parser_bare_refs() {
+        let refs = extract_expr_refs("@surface * @prix");
+        assert_eq!(
+            refs,
+            vec![
+                ExprRef::Bare("surface".to_string()),
+                ExprRef::Bare("prix".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parser_cross_ref() {
+        let refs = extract_expr_refs("@Materials.total + @Labor.total");
+        assert_eq!(
+            refs,
+            vec![
+                ExprRef::Cross {
+                    estimator: "Materials".to_string(),
+                    variable: "total".to_string()
+                },
+                ExprRef::Cross {
+                    estimator: "Labor".to_string(),
+                    variable: "total".to_string()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parser_mixed_refs() {
+        let refs = extract_expr_refs("@Materials.total * @tva_rate + @surface");
+        assert_eq!(
+            refs,
+            vec![
+                ExprRef::Cross {
+                    estimator: "Materials".to_string(),
+                    variable: "total".to_string()
+                },
+                ExprRef::Bare("tva_rate".to_string()),
+                ExprRef::Bare("surface".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_evaluate_single_estimator_rejects_cross_refs() {
+        let est = make_named_estimator(
+            "Final",
+            vec![make_var("total", "@Other.total + 10.0")],
+        );
+        let result = evaluate_estimator(&est, &HashMap::new());
+        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+
+        let result2 = evaluate_estimator_with_submission(&est, &SubmissionData::default());
+        assert!(matches!(result2, Err(DomainError::ValidationError { .. })));
+    }
+
+    #[test]
+    fn test_evaluate_flow_no_cross_refs() {
+        let a = make_named_estimator("A", vec![make_var("x", "@surface * 2.0")]);
+        let b = make_named_estimator("B", vec![make_var("y", "@prix + 1.0")]);
+        let data = SubmissionData {
+            field_values: HashMap::from([
+                ("surface".to_string(), 5.0),
+                ("prix".to_string(), 9.0),
+            ]),
+            iteration_values: HashMap::new(),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_flow_estimators(&[a, b], &data).unwrap();
+        assert_eq!(result["A"]["x"], 10.0);
+        assert_eq!(result["B"]["y"], 10.0);
+    }
+
+    #[test]
+    fn test_evaluate_flow_with_cross_refs() {
+        // Materials.total = @surface * @prix_m2
+        // Labor.total     = @hours * @rate
+        // Final.ttc       = (@Materials.total + @Labor.total) * 1.2
+        let materials = make_named_estimator(
+            "Materials",
+            vec![make_var("total", "@surface * @prix_m2")],
+        );
+        let labor = make_named_estimator(
+            "Labor",
+            vec![make_var("total", "@hours * @rate")],
+        );
+        let final_est = make_named_estimator(
+            "Final",
+            vec![make_var("ttc", "(@Materials.total + @Labor.total) * 1.2")],
+        );
+
+        let data = SubmissionData {
+            field_values: HashMap::from([
+                ("surface".to_string(), 100.0),
+                ("prix_m2".to_string(), 10.0), // Materials.total = 1000
+                ("hours".to_string(), 20.0),
+                ("rate".to_string(), 50.0),    // Labor.total = 1000
+            ]),
+            iteration_values: HashMap::new(),
+            iteration_counts: HashMap::new(),
+        };
+
+        let result = evaluate_flow_estimators(&[materials, labor, final_est], &data).unwrap();
+        assert_eq!(result["Materials"]["total"], 1000.0);
+        assert_eq!(result["Labor"]["total"], 1000.0);
+        assert!((result["Final"]["ttc"] - 2400.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_evaluate_flow_circular_across_estimators() {
+        // A.x depends on B.y, B.y depends on A.x → cycle
+        let a = make_named_estimator("A", vec![make_var("x", "@B.y + 1.0")]);
+        let b = make_named_estimator("B", vec![make_var("y", "@A.x + 1.0")]);
+        let result = evaluate_flow_estimators(&[a, b], &SubmissionData::default());
+        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+    }
+
+    #[test]
+    fn test_evaluate_flow_unresolved_cross_ref() {
+        // Final.total references @Unknown.x which doesn't exist
+        let final_est = make_named_estimator(
+            "Final",
+            vec![make_var("total", "@Unknown.x + 1.0")],
+        );
+        let result = evaluate_flow_estimators(&[final_est], &SubmissionData::default());
+        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+    }
+
+    #[test]
+    fn test_evaluate_flow_missing_cross_variable() {
+        // Final references @Other.missing, but Other only has `present`
+        let other = make_named_estimator("Other", vec![make_var("present", "1.0")]);
+        let final_est = make_named_estimator(
+            "Final",
+            vec![make_var("total", "@Other.missing + 1.0")],
+        );
+        let result = evaluate_flow_estimators(&[other, final_est], &SubmissionData::default());
+        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+    }
+
+    #[test]
+    fn test_evaluate_flow_empty() {
+        let result = evaluate_flow_estimators(&[], &SubmissionData::default()).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_evaluate_flow_with_aggregations_and_cross_refs() {
+        // Rooms.total = SUM(@room_surface)
+        // Devis.ttc   = @Rooms.total * @prix_unitaire
+        let rooms = make_named_estimator(
+            "Rooms",
+            vec![make_var("total", "SUM(@room_surface)")],
+        );
+        let devis = make_named_estimator(
+            "Devis",
+            vec![make_var("ttc", "@Rooms.total * @prix_unitaire")],
+        );
+
+        let data = SubmissionData {
+            field_values: HashMap::from([("prix_unitaire".to_string(), 10.0)]),
+            iteration_values: HashMap::from([(
+                "room_surface".to_string(),
+                vec![15.0, 20.0, 25.0], // sum = 60
+            )]),
+            iteration_counts: HashMap::new(),
+        };
+        let result = evaluate_flow_estimators(&[rooms, devis], &data).unwrap();
+        assert_eq!(result["Rooms"]["total"], 60.0);
+        assert_eq!(result["Devis"]["ttc"], 600.0);
+    }
+
+    #[test]
+    fn test_evaluate_flow_diamond_dependency() {
+        // A → B, A → C, B → D, C → D
+        let a = make_named_estimator("A", vec![make_var("x", "10.0")]);
+        let b = make_named_estimator("B", vec![make_var("y", "@A.x * 2.0")]);
+        let c = make_named_estimator("C", vec![make_var("z", "@A.x * 3.0")]);
+        let d = make_named_estimator("D", vec![make_var("w", "@B.y + @C.z")]);
+
+        let result =
+            evaluate_flow_estimators(&[d, c, b, a], &SubmissionData::default()).unwrap();
+        assert_eq!(result["A"]["x"], 10.0);
+        assert_eq!(result["B"]["y"], 20.0);
+        assert_eq!(result["C"]["z"], 30.0);
+        assert_eq!(result["D"]["w"], 50.0);
     }
 }

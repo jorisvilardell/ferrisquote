@@ -124,4 +124,13 @@ pub trait EstimatorService: Send + Sync {
         estimator_id: EstimatorId,
         data: SubmissionData,
     ) -> impl Future<Output = Result<HashMap<String, f64>, DomainError>> + Send;
+
+    /// Evaluate every estimator of a flow, resolving cross-estimator refs.
+    ///
+    /// Returns a nested map `estimator_name → variable_name → value`.
+    fn evaluate_flow(
+        &self,
+        flow_id: FlowId,
+        data: SubmissionData,
+    ) -> impl Future<Output = Result<HashMap<String, HashMap<String, f64>>, DomainError>> + Send;
 }
