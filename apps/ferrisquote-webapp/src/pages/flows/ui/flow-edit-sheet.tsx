@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import { Plus, Pencil, Trash2, X, Repeat, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -891,7 +892,7 @@ function EstimatorDetailsPanel({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto pb-48">
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto pb-72">
         <p className="text-xs text-muted-foreground">
           Variables are evaluated in dependency order. Reference fields with <code className="font-mono bg-muted px-1 rounded">@field_key</code>.
         </p>
@@ -971,6 +972,50 @@ function VariableCard({
     setDescDraft(variable.description)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variable.id, variable.name, variable.expression, variable.description])
+
+  // Dropdown positioning: track the textarea's viewport position so the
+  // dropdown can be rendered via portal (escaping all overflow clips).
+  const [dropdownPos, setDropdownPos] = useState<{
+    top: number
+    left: number
+    width: number
+    placement: "below" | "above"
+  } | null>(null)
+
+  useEffect(() => {
+    if (!showSuggestions) {
+      setDropdownPos(null)
+      return
+    }
+    const el = exprRef.current
+    if (!el) return
+
+    function updatePos() {
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      const maxHeight = 240
+      const placement: "below" | "above" =
+        spaceBelow >= Math.min(maxHeight, 150) || spaceBelow >= spaceAbove
+          ? "below"
+          : "above"
+      setDropdownPos({
+        top: placement === "below" ? rect.bottom + 4 : rect.top - 4,
+        left: rect.left,
+        width: rect.width,
+        placement,
+      })
+    }
+
+    updatePos()
+    window.addEventListener("scroll", updatePos, true)
+    window.addEventListener("resize", updatePos)
+    return () => {
+      window.removeEventListener("scroll", updatePos, true)
+      window.removeEventListener("resize", updatePos)
+    }
+  }, [showSuggestions])
 
   const filterLower = suggestionFilter.toLowerCase()
   type Suggestion = { label: string; insert: string; group: string; isEstimator?: boolean }
@@ -1158,35 +1203,50 @@ function VariableCard({
                 }, 200)
               }}
             />
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-60 overflow-y-auto rounded-md border bg-popover shadow-md">
-                {suggestions.map((s, i) => {
-                  const prevGroup = i > 0 ? suggestions[i - 1].group : null
-                  const showGroupLabel = s.group !== prevGroup
-                  return (
-                    <div key={`${s.group}-${s.insert}`}>
-                      {showGroupLabel && (
-                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          {s.group}
-                        </div>
-                      )}
-                      <button
-                        className={cn(
-                          "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
-                          s.isEstimator && "text-[hsl(330,70%,60%)]",
+            {showSuggestions && suggestions.length > 0 && dropdownPos &&
+              createPortal(
+                <div
+                  style={{
+                    position: "fixed",
+                    top: dropdownPos.placement === "below" ? dropdownPos.top : undefined,
+                    bottom:
+                      dropdownPos.placement === "above"
+                        ? window.innerHeight - dropdownPos.top
+                        : undefined,
+                    left: dropdownPos.left,
+                    width: dropdownPos.width,
+                    zIndex: 9999,
+                  }}
+                  className="max-h-60 overflow-y-auto rounded-md border bg-popover shadow-md"
+                >
+                  {suggestions.map((s, i) => {
+                    const prevGroup = i > 0 ? suggestions[i - 1].group : null
+                    const showGroupLabel = s.group !== prevGroup
+                    return (
+                      <div key={`${s.group}-${s.insert}`}>
+                        {showGroupLabel && (
+                          <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            {s.group}
+                          </div>
                         )}
-                        onMouseDown={(e) => {
-                          e.preventDefault()
-                          insertSuggestion(s.insert)
-                        }}
-                      >
-                        {s.label}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
+                            s.isEstimator && "text-[hsl(330,70%,60%)]",
+                          )}
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            insertSuggestion(s.insert)
+                          }}
+                        >
+                          {s.label}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>,
+                document.body,
+              )}
           </div>
 
           {/* Description */}
