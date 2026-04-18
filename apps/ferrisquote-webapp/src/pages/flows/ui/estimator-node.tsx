@@ -53,7 +53,7 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
           <Calculator className="w-3 h-3" />
         </span>
         <p className="text-sm font-semibold leading-tight flex-1 truncate">
-          {data.name}
+          {data.name.replace(/_/g, " ")}
         </p>
       </div>
 

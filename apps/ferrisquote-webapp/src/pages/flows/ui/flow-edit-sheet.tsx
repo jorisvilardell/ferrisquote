@@ -789,10 +789,11 @@ function EstimatorDetailsPanel({
   onClose: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
-  const [name, setName] = useState(estimator.name)
+  // Display form uses spaces in place of underscores; commit replaces them back.
+  const [name, setName] = useState(estimator.name.replace(/_/g, " "))
 
   useEffect(() => {
-    setName(estimator.name)
+    setName(estimator.name.replace(/_/g, " "))
     setEditingName(false)
   }, [estimator.id, estimator.name])
 
@@ -802,13 +803,12 @@ function EstimatorDetailsPanel({
   const removeVariable = useRemoveVariable(flowId, estimator.id)
 
   const commitName = (next: string) => {
-    const trimmed = next.trim()
+    const trimmed = next.trim().replace(/\s+/g, "_")
     if (!trimmed) return
     if (trimmed === estimator.name) return
-    // Only alphanumeric + underscore allowed (matches backend validation)
     if (!/^[A-Za-z0-9_]+$/.test(trimmed)) {
-      toast.error("Estimator name can only contain letters, digits and underscores")
-      setName(estimator.name)
+      toast.error("Estimator name can only contain letters, digits, spaces and underscores")
+      setName(estimator.name.replace(/_/g, " "))
       return
     }
     updateEstimator.mutate(
@@ -856,11 +856,9 @@ function EstimatorDetailsPanel({
             style={{ color: ROSE }}
             value={name}
             onChange={(e) => {
-              // Live-sanitize: replace whitespace with underscores, drop anything non-alphanumeric
-              const sanitized = e.target.value
-                .replace(/\s+/g, "_")
-                .replace(/[^A-Za-z0-9_]/g, "")
-              setName(sanitized)
+              // Allow letters, digits, spaces and underscores; strip everything else.
+              const allowed = e.target.value.replace(/[^A-Za-z0-9_ ]/g, "")
+              setName(allowed)
             }}
             onBlur={() => {
               commitName(name)
@@ -872,7 +870,7 @@ function EstimatorDetailsPanel({
                 setEditingName(false)
               }
               if (e.key === "Escape") {
-                setName(estimator.name)
+                setName(estimator.name.replace(/_/g, " "))
                 setEditingName(false)
               }
             }}
@@ -883,7 +881,7 @@ function EstimatorDetailsPanel({
             style={{ color: ROSE }}
             onClick={() => setEditingName(true)}
           >
-            {estimator.name}
+            {estimator.name.replace(/_/g, " ")}
           </button>
         )}
         {!editingName && (
@@ -991,23 +989,27 @@ function VariableCard({
       .map((v) => ({
         label: `@${v}`,
         insert: `@${v}`,
-        group: ownEstimatorName,
+        group: ownEstimatorName.replace(/_/g, " "),
         isEstimator: true,
       })),
     // Variables of other estimators (cross-references)
-    ...otherEstimators.flatMap((est) =>
-      est.variables
+    ...otherEstimators.flatMap((est) => {
+      // Allow matching against both storage form (underscores) and display form (spaces)
+      const displayName = est.name.replace(/_/g, " ")
+      return est.variables
         .filter((v) =>
           v.toLowerCase().includes(filterLower) ||
-          `${est.name}.${v}`.toLowerCase().includes(filterLower),
+          `${est.name}.${v}`.toLowerCase().includes(filterLower) ||
+          `${displayName}.${v}`.toLowerCase().includes(filterLower),
         )
         .map((v) => ({
-          label: `@${est.name}.${v}`,
+          label: `@${displayName}.${v}`,
+          // Insert keeps underscores — the expression textarea shows underscores too
           insert: `@${est.name}.${v}`,
-          group: est.name,
+          group: displayName,
           isEstimator: true,
-        })),
-    ),
+        }))
+    }),
   ]
 
   function insertSuggestion(insert: string) {
