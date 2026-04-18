@@ -37,6 +37,7 @@ import {
   useRemoveField,
 } from "@/api/flows.api"
 import { useEstimators, useCreateEstimator, useDeleteEstimator } from "@/api/estimators.api"
+import { idsToNames } from "@/pages/flows/lib/expression-refs"
 import { toast } from "sonner"
 import { useFlowStore } from "@/store/flow.store"
 import { FlowListDrawer } from "../ui/flow-list-drawer"
@@ -54,6 +55,7 @@ const FIELD_NODE_HEIGHT = 56
 const FIELD_NODE_GAP = 16
 const FIELD_X_OFFSET = 280
 const ESTIMATOR_X_OFFSET = 560
+const ESTIMATOR_X_STEP = 320 // horizontal spacing between estimator columns by depth
 const ESTIMATOR_NODE_GAP = 24
 const DRAG_DATA_KEY = "application/ferrisquote-node"
 
@@ -229,25 +231,60 @@ function buildGraph(
     })
   }
 
-  // ─── Estimator nodes (right column) ──────────────────────────────────────
+  // ─── Estimator nodes (right columns, laid out by dep depth) ──────────────
   // Color range: rose-violet (hsl 330, 70%, 55%) → rose clair (hsl 340, 80%, 72%)
   const CROSS_COLOR = "hsl(320, 60%, 55%)"
   const estIdToNodeId = new Map<string, string>()
   const estIdToColor = new Map<string, string>()
-  let estimatorY = 0
 
-  // First pass: create nodes and register name→nodeId
+  // Compute cross-estimator dependency depth so dependent estimators can be
+  // placed in a column further right, avoiding edges hidden behind nodes.
+  const estCrossDeps = new Map<string, Set<string>>()
+  for (const est of estimators) {
+    const deps = new Set<string>()
+    for (const v of est.variables) {
+      for (const ref of extractExprRefs(v.expression)) {
+        if (ref.type === "cross" && ref.estimatorId !== est.id) {
+          deps.add(ref.estimatorId)
+        }
+      }
+    }
+    estCrossDeps.set(est.id, deps)
+  }
+
+  const depthMemo = new Map<string, number>()
+  function computeDepth(estId: string, visiting: Set<string>): number {
+    if (depthMemo.has(estId)) return depthMemo.get(estId)!
+    if (visiting.has(estId)) return 0 // cycle fallback
+    visiting.add(estId)
+    let maxDepth = 0
+    for (const depId of estCrossDeps.get(estId) ?? []) {
+      if (estCrossDeps.has(depId)) {
+        maxDepth = Math.max(maxDepth, computeDepth(depId, visiting) + 1)
+      }
+    }
+    visiting.delete(estId)
+    depthMemo.set(estId, maxDepth)
+    return maxDepth
+  }
+
+  // Group estimators by depth, preserving input order within each depth
+  const estByDepth = new Map<number, Schemas.EstimatorResponse[]>()
+  for (const est of estimators) {
+    const d = computeDepth(est.id, new Set())
+    if (!estByDepth.has(d)) estByDepth.set(d, [])
+    estByDepth.get(d)!.push(est)
+  }
+
+  // First pass: create nodes and register id→nodeId
   for (let ei = 0; ei < estimators.length; ei++) {
     const est = estimators[ei]
     const estimatorNodeId = `estimator-${est.id}`
     estIdToNodeId.set(est.id, estimatorNodeId)
 
-    // First node is darkest rose, each next one lighter
-    // Fixed step of 4% lightness per node, but if too many nodes
-    // would exceed the pale limit (82%), compress the range to fit
-    const DARK = 55   // darkest (first node)
-    const PALE = 82   // lightest allowed
-    const STEP = 4    // ideal lightness step per node
+    const DARK = 55
+    const PALE = 82
+    const STEP = 4
     const needed = DARK + (estimators.length - 1) * STEP
     const actualRange = needed > PALE ? PALE - DARK : (estimators.length - 1) * STEP
     const lgt = estimators.length > 1
@@ -255,27 +292,53 @@ function buildGraph(
       : DARK
     const color = `hsl(335, 70%, ${lgt}%)`
     estIdToColor.set(est.id, color)
+  }
 
-    const varCount = est.variables.length
-    const nodeHeight = 44 + Math.max(varCount, 1) * 22
+  // Build an estimator index for translating @#<uuid>.var → @Name.var in displayed expressions
+  const estimatorsIndex = estimators.map((e) => ({ id: e.id, name: e.name }))
 
-    const estNode: Node<EstimatorNodeData> = {
-      id: estimatorNodeId,
-      type: "estimatorNode",
-      position: { x: ESTIMATOR_X_OFFSET, y: estimatorY },
-      selected: selectedNodeId === estimatorNodeId,
-      style: {
-        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-      },
-      data: {
-        name: est.name,
-        variables: est.variables,
-        color,
-        onDelete: () => onDeleteEstimator(est.id),
-      },
+  // Position estimators: one column per depth, stacked vertically within a column
+  for (const [d, estsAtDepth] of estByDepth) {
+    const x = ESTIMATOR_X_OFFSET + d * ESTIMATOR_X_STEP
+    let y = 0
+    for (const est of estsAtDepth) {
+      const varCount = est.variables.length
+      const nodeHeight = 54 + Math.max(varCount, 1) * 24
+      const estimatorNodeId = `estimator-${est.id}`
+      const color = estIdToColor.get(est.id) ?? "hsl(335, 70%, 55%)"
+
+      // Transform each variable's expression from storage form (@#<uuid>.var) to display form (@Name.var)
+      const displayVariables = est.variables.map((v) => ({
+        ...v,
+        expression: idsToNames(v.expression, estimatorsIndex),
+      }))
+
+      const estNode: Node<EstimatorNodeData> = {
+        id: estimatorNodeId,
+        type: "estimatorNode",
+        position: { x, y },
+        selected: selectedNodeId === estimatorNodeId,
+        style: {
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        },
+        data: {
+          name: est.name,
+          variables: displayVariables,
+          color,
+          onDelete: () => onDeleteEstimator(est.id),
+        },
+      }
+      nodes.push(estNode)
+      y += nodeHeight + ESTIMATOR_NODE_GAP
     }
-    nodes.push(estNode)
-    estimatorY += nodeHeight + ESTIMATOR_NODE_GAP
+  }
+
+  // Lookup: estimator id → { variable name → variable id }
+  const estVariableNameToId = new Map<string, Map<string, string>>()
+  for (const est of estimators) {
+    const m = new Map<string, string>()
+    for (const v of est.variables) m.set(v.name, v.id)
+    estVariableNameToId.set(est.id, m)
   }
 
   // Second pass: create edges
@@ -289,11 +352,17 @@ function buildGraph(
         if (ref.type === "cross") {
           const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
           if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
+            // Resolve the source variable id inside the source estimator
+            const sourceVarId = estVariableNameToId
+              .get(ref.estimatorId)
+              ?.get(ref.variableName)
+            const sourceHandle = sourceVarId ? `source-${sourceVarId}` : "default-source"
             edges.push({
               id: `e-cross-${est.id}-${v.id}-${ref.estimatorId}.${ref.variableName}`,
               source: sourceNodeId,
-              sourceHandle: "right",
+              sourceHandle,
               target: estimatorNodeId,
+              targetHandle: `target-${v.id}`,
               type: "smoothstep",
               animated: true,
               style: {
@@ -302,7 +371,7 @@ function buildGraph(
                 opacity: 0.8,
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               },
-              label: `${ref.variableName}`,
+              label: ref.variableName.replace(/_/g, " "),
               labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
               labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
               labelBgPadding: [4, 2] as [number, number],
@@ -320,6 +389,7 @@ function buildGraph(
             source: sourceId,
             sourceHandle: "right",
             target: estimatorNodeId,
+            targetHandle: `target-${v.id}`,
             type: "smoothstep",
             animated: isAgg,
             style: {
