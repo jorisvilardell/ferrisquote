@@ -10,12 +10,13 @@ use ferrisquote_domain::domain::{
 
 use crate::{handlers, state::AppState};
 
-/// Estimator routes nested under /flows (create + list by flow)
+/// Estimator routes nested under /flows (create + list by flow, flow-wide evaluation)
 pub fn estimator_flow_routes<FS: FlowService + StepService + FieldService + Clone + 'static, ES: EstimatorService + Clone + 'static>(
 ) -> Router<AppState<FS, ES>> {
     Router::new()
         .route("/{flow_id}/estimators", post(handlers::create_estimator))
         .route("/{flow_id}/estimators", get(handlers::list_estimators))
+        .route("/{flow_id}/evaluate-all", post(handlers::evaluate_flow))
 }
 
 /// Standalone estimator routes under /estimators

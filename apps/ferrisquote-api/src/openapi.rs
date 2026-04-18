@@ -3,10 +3,11 @@ use utoipa::OpenApi;
 use crate::dto::{
     ApiResponse, CreateEstimatorRequest, CreateFieldRequest, CreateFlowRequest,
     CreateStepRequest, CreateVariableRequest, EstimatorListResponse, EstimatorResponse,
-    EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest, FieldConfigDto, FieldResponse,
-    FlowListResponse, FlowResponse, FlowSummaryResponse, MessageResponse, MoveFieldRequest,
-    ReorderStepRequest, StepResponse, UpdateEstimatorRequest, UpdateFieldConfigRequest,
-    UpdateFlowMetadataRequest, UpdateStepMetadataRequest, UpdateVariableRequest, VariableResponse,
+    EvaluateFlowResponse, EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest,
+    FieldConfigDto, FieldResponse, FlowListResponse, FlowResponse, FlowSummaryResponse,
+    MessageResponse, MoveFieldRequest, ReorderStepRequest, StepResponse, UpdateEstimatorRequest,
+    UpdateFieldConfigRequest, UpdateFlowMetadataRequest, UpdateStepMetadataRequest,
+    UpdateVariableRequest, VariableResponse,
 };
 
 #[derive(OpenApi)]
@@ -40,6 +41,7 @@ use crate::dto::{
         crate::handlers::estimator_handlers::remove_variable,
         crate::handlers::estimator_handlers::evaluate,
         crate::handlers::estimator_handlers::evaluate_submission,
+        crate::handlers::estimator_handlers::evaluate_flow,
     ),
     components(schemas(
         CreateFlowRequest,
@@ -66,6 +68,7 @@ use crate::dto::{
         EvaluateRequest,
         EvaluateSubmissionRequest,
         EvaluateResponse,
+        EvaluateFlowResponse,
         MessageResponse,
         ApiResponse<FlowResponse>,
         ApiResponse<FlowListResponse>,
@@ -75,6 +78,7 @@ use crate::dto::{
         ApiResponse<EstimatorListResponse>,
         ApiResponse<VariableResponse>,
         ApiResponse<EvaluateResponse>,
+        ApiResponse<EvaluateFlowResponse>,
         ApiResponse<MessageResponse>,
     )),
     tags(

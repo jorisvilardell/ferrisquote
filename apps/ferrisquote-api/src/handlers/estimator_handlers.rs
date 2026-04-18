@@ -16,8 +16,9 @@ use validator::Validate;
 use crate::{
     dto::{
         ApiResponse, CreateEstimatorRequest, CreateVariableRequest, EstimatorListResponse,
-        EstimatorResponse, EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest,
-        MessageResponse, UpdateEstimatorRequest, UpdateVariableRequest, VariableResponse,
+        EstimatorResponse, EvaluateFlowResponse, EvaluateRequest, EvaluateResponse,
+        EvaluateSubmissionRequest, MessageResponse, UpdateEstimatorRequest,
+        UpdateVariableRequest, VariableResponse,
     },
     error::ApiResult,
     state::AppState,
@@ -319,6 +320,7 @@ pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, E
         field_values: request.field_values,
         iteration_values: request.iteration_values,
         iteration_counts: request.iteration_counts,
+        cross_values: request.cross_values,
     };
     let results = state
         .estimator_service
@@ -326,4 +328,45 @@ pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, E
         .await?;
 
     Ok(Json(ApiResponse::success(EvaluateResponse { results })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/flows/{flow_id}/evaluate-all",
+    params(("flow_id" = String, Path, description = "Flow UUID")),
+    request_body = EvaluateSubmissionRequest,
+    responses(
+        (status = 200, description = "Flow-wide evaluation result", body = EvaluateFlowResponse),
+        (status = 400, description = "Evaluation error (cycle, missing ref, etc.)"),
+        (status = 404, description = "Flow not found"),
+    ),
+    tag = "estimators"
+)]
+pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService>(
+    State(state): State<AppState<FS, ES>>,
+    Path(flow_id): Path<String>,
+    Json(request): Json<EvaluateSubmissionRequest>,
+) -> ApiResult<Json<ApiResponse<EvaluateFlowResponse>>> {
+    let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
+    let data = SubmissionData {
+        field_values: request.field_values,
+        iteration_values: request.iteration_values,
+        iteration_counts: request.iteration_counts,
+        cross_values: request.cross_values,
+    };
+
+    let nested = state.estimator_service.evaluate_flow(flow_id, data).await?;
+
+    // Flatten to "EstName.varName" → value for convenience
+    let mut flat = std::collections::HashMap::new();
+    for (est_name, vars) in &nested {
+        for (var_name, value) in vars {
+            flat.insert(format!("{est_name}.{var_name}"), *value);
+        }
+    }
+
+    Ok(Json(ApiResponse::success(EvaluateFlowResponse {
+        results: nested,
+        flat_results: flat,
+    })))
 }
