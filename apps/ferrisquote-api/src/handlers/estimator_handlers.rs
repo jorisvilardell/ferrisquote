@@ -320,6 +320,7 @@ pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, E
         field_values: request.field_values,
         iteration_values: request.iteration_values,
         iteration_counts: request.iteration_counts,
+        cross_values: request.cross_values,
     };
     let results = state
         .estimator_service
@@ -351,6 +352,7 @@ pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: Est
         field_values: request.field_values,
         iteration_values: request.iteration_values,
         iteration_counts: request.iteration_counts,
+        cross_values: request.cross_values,
     };
 
     let nested = state.estimator_service.evaluate_flow(flow_id, data).await?;

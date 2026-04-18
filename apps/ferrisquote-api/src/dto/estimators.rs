@@ -51,6 +51,12 @@ pub struct EvaluateSubmissionRequest {
     pub field_values: HashMap<String, f64>,
     pub iteration_values: HashMap<String, Vec<f64>>,
     pub iteration_counts: HashMap<String, usize>,
+    /// Optional stub values for cross-estimator references used in preview
+    /// mode. Nested as `estimator_name → variable_name → value`. When evaluating
+    /// a single estimator, any `@EstimatorName.var` not present here silently
+    /// defaults to `0.0`.
+    #[serde(default)]
+    pub cross_values: HashMap<String, HashMap<String, f64>>,
 }
 
 // ============================================================================
