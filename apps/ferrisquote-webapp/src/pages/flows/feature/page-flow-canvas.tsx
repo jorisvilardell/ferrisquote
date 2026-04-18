@@ -232,7 +232,7 @@ function buildGraph(
   // ─── Estimator nodes (right column) ──────────────────────────────────────
   // Color range: rose-violet (hsl 330, 70%, 55%) → rose clair (hsl 340, 80%, 72%)
   const CROSS_COLOR = "hsl(320, 60%, 55%)"
-  const estNameToNodeId = new Map<string, string>()
+  const estIdToNodeId = new Map<string, string>()
   const estIdToColor = new Map<string, string>()
   let estimatorY = 0
 
@@ -240,7 +240,7 @@ function buildGraph(
   for (let ei = 0; ei < estimators.length; ei++) {
     const est = estimators[ei]
     const estimatorNodeId = `estimator-${est.id}`
-    estNameToNodeId.set(est.name, estimatorNodeId)
+    estIdToNodeId.set(est.id, estimatorNodeId)
 
     // First node is darkest rose, each next one lighter
     // Fixed step of 4% lightness per node, but if too many nodes
@@ -287,10 +287,10 @@ function buildGraph(
       const refs = extractExprRefs(v.expression)
       for (const ref of refs) {
         if (ref.type === "cross") {
-          const sourceNodeId = estNameToNodeId.get(ref.estimatorName)
+          const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
           if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
             edges.push({
-              id: `e-cross-${est.id}-${v.id}-${ref.estimatorName}.${ref.variableName}`,
+              id: `e-cross-${est.id}-${v.id}-${ref.estimatorId}.${ref.variableName}`,
               source: sourceNodeId,
               sourceHandle: "right",
               target: estimatorNodeId,
@@ -344,26 +344,26 @@ function buildGraph(
 
 type FieldRef = { type: "field"; key: string; aggregation: false }
 type AggregationRef = { type: "field"; key: string; aggregation: "SUM" | "AVG" | "COUNT_ITER" }
-type CrossRef = { type: "cross"; estimatorName: string; variableName: string }
+type CrossRef = { type: "cross"; estimatorId: string; variableName: string }
 type ExprRef = FieldRef | AggregationRef | CrossRef
 
 function extractExprRefs(expression: string): ExprRef[] {
   const refs: ExprRef[] = []
   const seen = new Set<string>()
 
-  // Match cross-estimator references: @EstimatorName.var_name
-  const crossRegex = /@([A-Z][A-Za-z0-9_ ]*)\.([a-z][a-z0-9_]*)/g
+  // Match ID-based cross-estimator references: @#<uuid>.var_name
+  const crossRegex = /@#([A-Za-z0-9-]+)\.([a-z][a-z0-9_]*)/g
   let match: RegExpExecArray | null
   while ((match = crossRegex.exec(expression)) !== null) {
-    const tag = `cross:${match[1].trim()}.${match[2]}`
+    const tag = `cross:${match[1]}.${match[2]}`
     if (!seen.has(tag)) {
       seen.add(tag)
-      refs.push({ type: "cross", estimatorName: match[1].trim(), variableName: match[2] })
+      refs.push({ type: "cross", estimatorId: match[1], variableName: match[2] })
     }
   }
 
   // Remove cross-refs before scanning for other patterns
-  const noCross = expression.replace(/@[A-Z][A-Za-z0-9_ ]*\.[a-z][a-z0-9_]*/g, "")
+  const noCross = expression.replace(/@#[A-Za-z0-9-]+\.[a-z][a-z0-9_]*/g, "")
 
   // Match aggregation functions: SUM(@key), AVG(@key), COUNT_ITER(@key)
   const aggRegex = /(SUM|AVG|COUNT_ITER)\(\s*@([a-z][a-z0-9_]*)\s*\)/g
@@ -639,7 +639,7 @@ function PageFlowCanvasInner() {
         createEstimator(
           {
             path: { flow_id: flowId },
-            body: { name: "New Estimator" },
+            body: { name: "New_Estimator" },
           },
           {
             onSuccess: (data) => {
@@ -963,6 +963,7 @@ function PageFlowCanvasInner() {
               .filter((e) => e.id !== panelEstimator?.id)
               .map((e) => ({ name: e.name, variables: e.variables.map((v) => v.name) }))
             }
+            estimatorsIndex={estimators.map((e) => ({ id: e.id, name: e.name }))}
             onClose={() => setPanelState(null)}
             onAddStep={handleAddStep}
             onUpdateStep={(stepId, data) =>

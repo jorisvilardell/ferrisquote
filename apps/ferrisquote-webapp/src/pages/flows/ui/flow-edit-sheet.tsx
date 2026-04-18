@@ -7,6 +7,7 @@ import {
   useUpdateEstimator,
   useUpdateVariable,
 } from "@/api/estimators.api"
+import { idsToNames, namesToIds, type EstimatorIndex } from "@/pages/flows/lib/expression-refs"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -208,6 +209,7 @@ type Props = {
   flowId: string
   availableFieldKeys: string[]
   otherEstimators: Array<{ name: string; variables: string[] }>
+  estimatorsIndex: EstimatorIndex
   onClose: () => void
   onAddStep: (data: { title: string; description: string }) => void
   onUpdateStep: (stepId: string, data: Schemas.UpdateStepMetadataRequest) => void
@@ -226,6 +228,7 @@ export function FlowEditPanel({
   flowId,
   availableFieldKeys,
   otherEstimators,
+  estimatorsIndex,
   onClose,
   onAddStep,
   onUpdateStep,
@@ -279,6 +282,7 @@ export function FlowEditPanel({
             flowId={flowId}
             availableFieldKeys={availableFieldKeys}
             otherEstimators={otherEstimators}
+            estimatorsIndex={estimatorsIndex}
             onClose={onClose}
           />
         )}
@@ -774,12 +778,14 @@ function EstimatorDetailsPanel({
   flowId,
   availableFieldKeys,
   otherEstimators,
+  estimatorsIndex,
   onClose,
 }: {
   estimator: Schemas.EstimatorResponse
   flowId: string
   availableFieldKeys: string[]
   otherEstimators: Array<{ name: string; variables: string[] }>
+  estimatorsIndex: EstimatorIndex
   onClose: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
@@ -797,7 +803,14 @@ function EstimatorDetailsPanel({
 
   const commitName = (next: string) => {
     const trimmed = next.trim()
-    if (!trimmed || trimmed === estimator.name) return
+    if (!trimmed) return
+    if (trimmed === estimator.name) return
+    // Only alphanumeric + underscore allowed (matches backend validation)
+    if (!/^[A-Za-z0-9_]+$/.test(trimmed)) {
+      toast.error("Estimator name can only contain letters, digits and underscores")
+      setName(estimator.name)
+      return
+    }
     updateEstimator.mutate(
       { path: { estimator_id: estimator.id }, body: { name: trimmed } },
       { onError: (err) => toast.error(`Rename failed: ${err.message}`) },
@@ -842,7 +855,13 @@ function EstimatorDetailsPanel({
             className="flex-1 !text-base font-semibold h-7 rounded-sm border border-border/60 bg-transparent px-2 py-0 shadow-none focus-visible:border-border focus-visible:ring-0"
             style={{ color: ROSE }}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              // Live-sanitize: replace whitespace with underscores, drop anything non-alphanumeric
+              const sanitized = e.target.value
+                .replace(/\s+/g, "_")
+                .replace(/[^A-Za-z0-9_]/g, "")
+              setName(sanitized)
+            }}
             onBlur={() => {
               commitName(name)
               setEditingName(false)
@@ -874,7 +893,7 @@ function EstimatorDetailsPanel({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto">
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto pb-48">
         <p className="text-xs text-muted-foreground">
           Variables are evaluated in dependency order. Reference fields with <code className="font-mono bg-muted px-1 rounded">@field_key</code>.
         </p>
@@ -883,8 +902,13 @@ function EstimatorDetailsPanel({
           <VariableCard
             key={v.id}
             variable={v}
+            ownEstimatorName={estimator.name}
+            ownEstimatorVariables={estimator.variables
+              .filter((ov) => ov.id !== v.id)
+              .map((ov) => ov.name)}
             availableFieldKeys={availableFieldKeys}
             otherEstimators={otherEstimators}
+            estimatorsIndex={estimatorsIndex}
             onUpdate={handleUpdateVariable}
             onDelete={handleDeleteVariable}
           />
@@ -913,14 +937,20 @@ function EstimatorDetailsPanel({
 
 function VariableCard({
   variable,
+  ownEstimatorName,
+  ownEstimatorVariables,
   availableFieldKeys,
   otherEstimators,
+  estimatorsIndex,
   onUpdate,
   onDelete,
 }: {
   variable: Schemas.VariableResponse
+  ownEstimatorName: string
+  ownEstimatorVariables: string[]
   availableFieldKeys: string[]
   otherEstimators: Array<{ name: string; variables: string[] }>
+  estimatorsIndex: EstimatorIndex
   onUpdate: (variableId: string, patch: Partial<Schemas.VariableResponse>) => void
   onDelete: (variableId: string) => void
 }) {
@@ -929,29 +959,53 @@ function VariableCard({
   const [suggestionFilter, setSuggestionFilter] = useState("")
   const exprRef = useRef<HTMLTextAreaElement>(null)
 
+  // Expression is stored with `@#<uuid>.var`; display with `@Name.var`
+  const displayExpression = idsToNames(variable.expression, estimatorsIndex)
+
   // Local drafts — sync from prop when it changes (e.g. after server update or switching variable)
   const [nameDraft, setNameDraft] = useState(variable.name)
-  const [exprDraft, setExprDraft] = useState(variable.expression)
+  const [exprDraft, setExprDraft] = useState(displayExpression)
   const [descDraft, setDescDraft] = useState(variable.description)
 
   useEffect(() => {
     setNameDraft(variable.name)
-    setExprDraft(variable.expression)
+    setExprDraft(idsToNames(variable.expression, estimatorsIndex))
     setDescDraft(variable.description)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variable.id, variable.name, variable.expression, variable.description])
 
-  const suggestions = [
+  const filterLower = suggestionFilter.toLowerCase()
+  type Suggestion = { label: string; insert: string; group: string; isEstimator?: boolean }
+  const suggestions: Suggestion[] = [
+    // Fields
     ...availableFieldKeys
-      .filter((k) => k.includes(suggestionFilter))
-      .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "fields" as const })),
-    ...AGG_FUNCTIONS.map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "functions" as const })),
+      .filter((k) => k.toLowerCase().includes(filterLower))
+      .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "Fields" })),
+    // Functions
+    ...AGG_FUNCTIONS
+      .filter((fn) => fn.toLowerCase().includes(filterLower))
+      .map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "Functions" })),
+    // Variables of the current estimator (bare references)
+    ...ownEstimatorVariables
+      .filter((v) => v.toLowerCase().includes(filterLower))
+      .map((v) => ({
+        label: `@${v}`,
+        insert: `@${v}`,
+        group: ownEstimatorName,
+        isEstimator: true,
+      })),
+    // Variables of other estimators (cross-references)
     ...otherEstimators.flatMap((est) =>
       est.variables
-        .filter((v) => `${est.name}.${v}`.toLowerCase().includes(suggestionFilter.toLowerCase()))
+        .filter((v) =>
+          v.toLowerCase().includes(filterLower) ||
+          `${est.name}.${v}`.toLowerCase().includes(filterLower),
+        )
         .map((v) => ({
           label: `@${est.name}.${v}`,
           insert: `@${est.name}.${v}`,
-          group: "estimators" as const,
+          group: est.name,
+          isEstimator: true,
         })),
     ),
   ]
@@ -967,8 +1021,9 @@ function VariableCard({
     const newVal = el.value.substring(0, start) + insert + after
     setExprDraft(newVal)
     setShowSuggestions(false)
-    // Commit the new expression (suggestion picks are always an intent to save)
-    onUpdate(variable.id, { expression: newVal })
+    // Translate name-based refs to ID-based before sending to server
+    const stored = namesToIds(newVal, estimatorsIndex)
+    onUpdate(variable.id, { expression: stored })
     requestAnimationFrame(() => {
       el.focus()
       const cursorPos = start + insert.length
@@ -1002,13 +1057,15 @@ function VariableCard({
     onUpdate(variable.id, { name: trimmed })
   }
   const commitExpr = () => {
-    if (exprDraft === variable.expression) return
     // Backend requires non-empty expression
     if (!exprDraft.trim()) {
-      setExprDraft(variable.expression)
+      setExprDraft(idsToNames(variable.expression, estimatorsIndex))
       return
     }
-    onUpdate(variable.id, { expression: exprDraft })
+    // Translate name-based refs to ID-based before sending
+    const stored = namesToIds(exprDraft, estimatorsIndex)
+    if (stored === variable.expression) return
+    onUpdate(variable.id, { expression: stored })
   }
   const commitDesc = () => {
     if (descDraft === variable.description) return
@@ -1100,21 +1157,21 @@ function VariableCard({
               }}
             />
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+              <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-60 overflow-y-auto rounded-md border bg-popover shadow-md">
                 {suggestions.map((s, i) => {
                   const prevGroup = i > 0 ? suggestions[i - 1].group : null
                   const showGroupLabel = s.group !== prevGroup
                   return (
-                    <div key={s.insert}>
+                    <div key={`${s.group}-${s.insert}`}>
                       {showGroupLabel && (
                         <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          {s.group === "fields" ? "Fields" : s.group === "functions" ? "Functions" : "Other estimators"}
+                          {s.group}
                         </div>
                       )}
                       <button
                         className={cn(
                           "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
-                          s.group === "estimators" && "text-purple-500",
+                          s.isEstimator && "text-[hsl(330,70%,60%)]",
                         )}
                         onMouseDown={(e) => {
                           e.preventDefault()
