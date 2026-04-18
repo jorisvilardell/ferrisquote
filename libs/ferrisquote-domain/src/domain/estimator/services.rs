@@ -116,28 +116,17 @@ where
 // Expression evaluation (pure, no I/O)
 // ============================================================================
 
-/// Evaluate all variables of an estimator in dependency order.
-///
-/// Fails if any variable contains a cross-estimator reference
-/// (`@EstimatorName.var`) — those can only be resolved by
-/// [`evaluate_flow_estimators`] which has access to all estimators.
+/// Evaluate all variables of an estimator in dependency order, in
+/// **preview mode**. Cross-estimator references silently default to `0.0`
+/// since this entry point has no way to provide stubs — use
+/// [`evaluate_estimator_with_submission`] if you need to inject
+/// `cross_values` stubs.
 pub fn evaluate_estimator(
     estimator: &Estimator,
     field_values: &HashMap<String, f64>,
 ) -> Result<HashMap<String, f64>, DomainError> {
-    for var in &estimator.variables {
-        if has_cross_refs(&var.expression) {
-            return Err(DomainError::validation(format!(
-                "Variable '{}' uses a cross-estimator reference; \
-                 use evaluate_flow_estimators to evaluate estimators with cross-references",
-                var.name
-            )));
-        }
-    }
-
     let order = topological_sort(&estimator.variables)?;
 
-    // Seed the evalexpr context with field values
     use evalexpr::ContextWithMutableVariables;
     let mut ctx = evalexpr::HashMapContext::<evalexpr::DefaultNumericTypes>::new();
     for (key, &value) in field_values {
@@ -148,61 +137,13 @@ pub fn evaluate_estimator(
     let var_by_id: HashMap<EstimatorVariableId, &EstimatorVariable> =
         estimator.variables.iter().map(|v| (v.id, v)).collect();
 
+    let empty_cross: HashMap<(String, String), f64> = HashMap::new();
     let mut results = HashMap::new();
 
     for id in order {
         let var = var_by_id[&id];
-        let expr = prepare_expression(&var.expression);
-
-        let value = evalexpr::eval_float_with_context(&expr, &ctx).map_err(|e| {
-            DomainError::validation(format!(
-                "Failed to evaluate variable '{}': {}",
-                var.name, e
-            ))
-        })?;
-
-        use evalexpr::ContextWithMutableVariables;
-        ctx.set_value(var.name.clone(), evalexpr::Value::Float(value))
-            .map_err(|e| DomainError::internal(e.to_string()))?;
-
-        results.insert(var.name.clone(), value);
-    }
-
-    Ok(results)
-}
-
-pub fn evaluate_estimator_with_submission(
-    estimator: &Estimator,
-    data: &SubmissionData,
-) -> Result<HashMap<String, f64>, DomainError> {
-    for var in &estimator.variables {
-        if has_cross_refs(&var.expression) {
-            return Err(DomainError::validation(format!(
-                "Variable '{}' uses a cross-estimator reference; \
-                 use evaluate_flow_estimators to evaluate estimators with cross-references",
-                var.name
-            )));
-        }
-    }
-
-    let order = topological_sort(&estimator.variables)?;
-
-    use evalexpr::ContextWithMutableVariables;
-    let mut ctx = evalexpr::HashMapContext::<evalexpr::DefaultNumericTypes>::new();
-
-    for (key, &value) in &data.field_values {
-        ctx.set_value(key.clone(), evalexpr::Value::Float(value))
-            .map_err(|e| DomainError::internal(e.to_string()))?;
-    }
-
-    let var_by_id: HashMap<EstimatorVariableId, &EstimatorVariable> =
-        estimator.variables.iter().map(|v| (v.id, v)).collect();
-
-    let mut results = HashMap::new();
-
-    for id in order {
-        let var = var_by_id[&id];
-        let expr = resolve_aggregations(&var.expression, data)?;
+        // Preview mode: missing cross-refs default to 0.0
+        let expr = resolve_cross_refs(&var.expression, &empty_cross, false)?;
         let expr = prepare_expression(&expr);
 
         let value = evalexpr::eval_float_with_context(&expr, &ctx).map_err(|e| {
@@ -219,6 +160,69 @@ pub fn evaluate_estimator_with_submission(
     }
 
     Ok(results)
+}
+
+/// Evaluate an estimator with full submission data, in **preview mode**:
+/// cross-estimator references are resolved from `data.cross_values` when
+/// present, and silently default to `0.0` otherwise. Useful for evaluating
+/// a single estimator during editing without loading the whole flow.
+pub fn evaluate_estimator_with_submission(
+    estimator: &Estimator,
+    data: &SubmissionData,
+) -> Result<HashMap<String, f64>, DomainError> {
+    let order = topological_sort(&estimator.variables)?;
+
+    use evalexpr::ContextWithMutableVariables;
+    let mut ctx = evalexpr::HashMapContext::<evalexpr::DefaultNumericTypes>::new();
+
+    for (key, &value) in &data.field_values {
+        ctx.set_value(key.clone(), evalexpr::Value::Float(value))
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+    }
+
+    // Build the cross-ref resolver map from SubmissionData.cross_values
+    let cross_resolved = flatten_cross_values(&data.cross_values);
+
+    let var_by_id: HashMap<EstimatorVariableId, &EstimatorVariable> =
+        estimator.variables.iter().map(|v| (v.id, v)).collect();
+
+    let mut results = HashMap::new();
+
+    for id in order {
+        let var = var_by_id[&id];
+        // Preview mode: lenient cross-ref resolution (missing refs → 0.0)
+        let expr = resolve_cross_refs(&var.expression, &cross_resolved, false)?;
+        let expr = resolve_aggregations(&expr, data)?;
+        let expr = prepare_expression(&expr);
+
+        let value = evalexpr::eval_float_with_context(&expr, &ctx).map_err(|e| {
+            DomainError::validation(format!(
+                "Failed to evaluate variable '{}': {}",
+                var.name, e
+            ))
+        })?;
+
+        ctx.set_value(var.name.clone(), evalexpr::Value::Float(value))
+            .map_err(|e| DomainError::internal(e.to_string()))?;
+
+        results.insert(var.name.clone(), value);
+    }
+
+    Ok(results)
+}
+
+/// Flatten a `HashMap<String, HashMap<String, f64>>` into a
+/// `HashMap<(String, String), f64>` for quick lookup.
+fn flatten_cross_values(
+    nested: &HashMap<String, HashMap<String, f64>>,
+) -> HashMap<(String, String), f64> {
+    let mut out = HashMap::new();
+    for (est_name, vars) in nested {
+        for (var_name, &value) in vars {
+            out.insert((est_name.clone(), var_name.clone()), value);
+        }
+    }
+    out
 }
 
 fn resolve_aggregations(expr: &str, data: &SubmissionData) -> Result<String, DomainError> {
@@ -527,10 +531,13 @@ fn topological_sort_estimators(
 /// Replace every `@EstimatorName.variable_name` in `expr` with the numeric
 /// value from `resolved` (keyed by `(estimator_name, variable_name)`).
 ///
-/// Returns a `DomainError::ValidationError` if a reference cannot be resolved.
+/// If `strict` is true, returns `DomainError::ValidationError` for any
+/// reference that cannot be resolved. If `strict` is false, missing
+/// references are silently substituted with `0.0` (preview mode).
 fn resolve_cross_refs(
     expr: &str,
     resolved: &HashMap<(String, String), f64>,
+    strict: bool,
 ) -> Result<String, DomainError> {
     // Walk the expression, replacing each cross-ref with its literal value.
     // We rebuild the string in one pass rather than repeated find/replace.
@@ -562,12 +569,16 @@ fn resolve_cross_refs(
                 if i > var_start {
                     let variable: String = chars[var_start..i].iter().collect();
                     let key = (first_part, variable);
-                    let value = resolved.get(&key).copied().ok_or_else(|| {
-                        DomainError::validation(format!(
-                            "Unresolved cross-estimator reference '@{}.{}'",
-                            key.0, key.1
-                        ))
-                    })?;
+                    let value = match resolved.get(&key).copied() {
+                        Some(v) => v,
+                        None if strict => {
+                            return Err(DomainError::validation(format!(
+                                "Unresolved cross-estimator reference '@{}.{}'",
+                                key.0, key.1
+                            )));
+                        }
+                        None => 0.0,
+                    };
                     out.push_str(&format_float(value));
                     continue;
                 } else {
@@ -587,13 +598,6 @@ fn resolve_cross_refs(
     }
 
     Ok(out)
-}
-
-/// Return true if `expr` contains any `@EstimatorName.var` cross-reference.
-fn has_cross_refs(expr: &str) -> bool {
-    extract_expr_refs(expr)
-        .iter()
-        .any(|r| matches!(r, ExprRef::Cross { .. }))
 }
 
 /// Evaluate every estimator of a flow in cross-dependency order, resolving
@@ -656,8 +660,8 @@ fn evaluate_single_estimator_in_context(
 
     for id in order {
         let var = var_by_id[&id];
-        // 1. Resolve cross-estimator refs to literals
-        let expr = resolve_cross_refs(&var.expression, cross_ctx)?;
+        // 1. Resolve cross-estimator refs to literals (strict in full-flow eval)
+        let expr = resolve_cross_refs(&var.expression, cross_ctx, true)?;
         // 2. Resolve aggregation functions to literals
         let expr = resolve_aggregations(&expr, data)?;
         // 3. Strip @ prefixes
@@ -747,6 +751,7 @@ mod tests {
                 vec![5.0, 10.0, 15.0],
             )]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["total"], 300.0);
@@ -759,6 +764,7 @@ mod tests {
             field_values: HashMap::new(),
             iteration_values: HashMap::from([("surface".to_string(), vec![])]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["total"], 0.0);
@@ -771,6 +777,7 @@ mod tests {
             field_values: HashMap::new(),
             iteration_values: HashMap::from([("surface".to_string(), vec![42.0])]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["total"], 42.0);
@@ -786,6 +793,7 @@ mod tests {
                 vec![10.0, 20.0, 30.0],
             )]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["avg_surface"], 20.0);
@@ -798,6 +806,7 @@ mod tests {
             field_values: HashMap::new(),
             iteration_values: HashMap::from([("surface".to_string(), vec![])]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["avg_surface"], 0.0);
@@ -833,6 +842,7 @@ mod tests {
                 vec![10.0, 20.0, 30.0],
             )]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_estimator_with_submission(&estimator, &data).unwrap();
         assert_eq!(result["total_surface"], 60.0);
@@ -911,16 +921,38 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_single_estimator_rejects_cross_refs() {
+    fn test_evaluate_single_estimator_preview_defaults_cross_refs_to_zero() {
+        // In preview mode, unknown cross-refs default to 0
         let est = make_named_estimator(
             "Final",
             vec![make_var("total", "@Other.total + 10.0")],
         );
-        let result = evaluate_estimator(&est, &HashMap::new());
-        assert!(matches!(result, Err(DomainError::ValidationError { .. })));
+        let result = evaluate_estimator(&est, &HashMap::new()).unwrap();
+        assert_eq!(result["total"], 10.0); // 0 + 10
 
-        let result2 = evaluate_estimator_with_submission(&est, &SubmissionData::default());
-        assert!(matches!(result2, Err(DomainError::ValidationError { .. })));
+        let result2 =
+            evaluate_estimator_with_submission(&est, &SubmissionData::default()).unwrap();
+        assert_eq!(result2["total"], 10.0);
+    }
+
+    #[test]
+    fn test_evaluate_single_estimator_preview_uses_cross_values_stubs() {
+        // User provides stub values for cross-refs
+        let est = make_named_estimator(
+            "Final",
+            vec![make_var("total", "@Other.total * 2.0")],
+        );
+        let mut cross_values = HashMap::new();
+        cross_values.insert(
+            "Other".to_string(),
+            HashMap::from([("total".to_string(), 50.0)]),
+        );
+        let data = SubmissionData {
+            cross_values,
+            ..Default::default()
+        };
+        let result = evaluate_estimator_with_submission(&est, &data).unwrap();
+        assert_eq!(result["total"], 100.0); // 50 * 2
     }
 
     #[test]
@@ -934,6 +966,7 @@ mod tests {
             ]),
             iteration_values: HashMap::new(),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_flow_estimators(&[a, b], &data).unwrap();
         assert_eq!(result["A"]["x"], 10.0);
@@ -967,6 +1000,7 @@ mod tests {
             ]),
             iteration_values: HashMap::new(),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
 
         let result = evaluate_flow_estimators(&[materials, labor, final_est], &data).unwrap();
@@ -1033,6 +1067,7 @@ mod tests {
                 vec![15.0, 20.0, 25.0], // sum = 60
             )]),
             iteration_counts: HashMap::new(),
+            cross_values: HashMap::new(),
         };
         let result = evaluate_flow_estimators(&[rooms, devis], &data).unwrap();
         assert_eq!(result["Rooms"]["total"], 60.0);
