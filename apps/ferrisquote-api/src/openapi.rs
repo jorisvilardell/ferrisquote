@@ -78,6 +78,7 @@ use crate::dto::{
         ApiResponse<EstimatorListResponse>,
         ApiResponse<VariableResponse>,
         ApiResponse<EvaluateResponse>,
+        ApiResponse<EvaluateFlowResponse>,
         ApiResponse<MessageResponse>,
     )),
     tags(
