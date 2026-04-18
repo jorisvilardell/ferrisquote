@@ -36,7 +36,7 @@ import {
   useUpdateField,
   useRemoveField,
 } from "@/api/flows.api"
-import { useListEstimators, useCreateEstimator } from "@/api/estimators.api"
+import { useEstimators, useCreateEstimator } from "@/api/estimators.api"
 import { useFlowStore } from "@/store/flow.store"
 import { FlowListDrawer } from "../ui/flow-list-drawer"
 import "@xyflow/react/dist/style.css"
@@ -403,7 +403,7 @@ function PageFlowCanvasInner() {
   const { screenToFlowPosition, getNodes, fitView, setCenter, getZoom } = useReactFlow()
 
   const { data: flowData, error } = useGetFlow(flowId ?? "")
-  const { data: estimatorsData } = useListEstimators(flowId ?? "")
+  const { data: estimatorsData } = useEstimators(flowId ?? "")
 
   const flow = flowData?.data ?? null
   const is404 = !!error

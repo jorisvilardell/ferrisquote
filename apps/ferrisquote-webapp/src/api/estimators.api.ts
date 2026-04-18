@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Schemas } from "@/api/api.client"
 
-// ─── Estimators ──────────────────────────────────────────────────────────────
+// ─── Estimators ───────────────────────────────────────────────────────────────
 
-export const useListEstimators = (flowId: string) =>
+export const useEstimators = (flowId: string) =>
   useQuery({
     ...window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
       path: { flow_id: flowId },
@@ -11,7 +11,7 @@ export const useListEstimators = (flowId: string) =>
     enabled: !!flowId,
   })
 
-export const useGetEstimator = (estimatorId: string) =>
+export const useEstimator = (estimatorId: string) =>
   useQuery({
     ...window.tanstackApi.get("/api/v1/estimators/{estimator_id}", {
       path: { estimator_id: estimatorId },
@@ -32,16 +32,23 @@ export const useCreateEstimator = (flowId: string) => {
   })
 }
 
-export const useUpdateEstimator = (flowId: string) => {
+export const useUpdateEstimator = (flowId: string, estimatorId: string) => {
   const qc = useQueryClient()
   return useMutation({
     ...window.tanstackApi.mutation("put", "/api/v1/estimators/{estimator_id}").mutationOptions,
     onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
-          path: { flow_id: flowId },
-        }).queryKey,
-      }),
+      Promise.all([
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
+            path: { flow_id: flowId },
+          }).queryKey,
+        }),
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/estimators/{estimator_id}", {
+            path: { estimator_id: estimatorId },
+          }).queryKey,
+        }),
+      ]),
   })
 }
 
@@ -58,45 +65,75 @@ export const useDeleteEstimator = (flowId: string) => {
   })
 }
 
-// ─── Variables ───────────────────────────────────────────────────────────────
+// ─── Variables ────────────────────────────────────────────────────────────────
 
-export const useAddVariable = (flowId: string) => {
+export const useAddVariable = (flowId: string, estimatorId: string) => {
   const qc = useQueryClient()
   return useMutation({
     ...window.tanstackApi.mutation("post", "/api/v1/estimators/{estimator_id}/variables").mutationOptions,
     onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
-          path: { flow_id: flowId },
-        }).queryKey,
-      }),
+      Promise.all([
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
+            path: { flow_id: flowId },
+          }).queryKey,
+        }),
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/estimators/{estimator_id}", {
+            path: { estimator_id: estimatorId },
+          }).queryKey,
+        }),
+      ]),
   })
 }
 
-export const useUpdateVariable = (flowId: string) => {
+export const useUpdateVariable = (flowId: string, estimatorId: string) => {
   const qc = useQueryClient()
   return useMutation({
     ...window.tanstackApi.mutation("put", "/api/v1/variables/{variable_id}").mutationOptions,
     onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
-          path: { flow_id: flowId },
-        }).queryKey,
-      }),
+      Promise.all([
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
+            path: { flow_id: flowId },
+          }).queryKey,
+        }),
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/estimators/{estimator_id}", {
+            path: { estimator_id: estimatorId },
+          }).queryKey,
+        }),
+      ]),
   })
 }
 
-export const useRemoveVariable = (flowId: string) => {
+export const useRemoveVariable = (flowId: string, estimatorId: string) => {
   const qc = useQueryClient()
   return useMutation({
     ...window.tanstackApi.mutation("delete", "/api/v1/variables/{variable_id}").mutationOptions,
     onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
-          path: { flow_id: flowId },
-        }).queryKey,
-      }),
+      Promise.all([
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/flows/{flow_id}/estimators", {
+            path: { flow_id: flowId },
+          }).queryKey,
+        }),
+        qc.invalidateQueries({
+          queryKey: window.tanstackApi.get("/api/v1/estimators/{estimator_id}", {
+            path: { estimator_id: estimatorId },
+          }).queryKey,
+        }),
+      ]),
   })
 }
+
+// ─── Evaluation ───────────────────────────────────────────────────────────────
+
+export const useEvaluateEstimator = () =>
+  useMutation({
+    ...window.tanstackApi.mutation("post", "/api/v1/estimators/{estimator_id}/evaluate").mutationOptions,
+  })
+
+// ─── Re-export types ──────────────────────────────────────────────────────────
 
 export type { Schemas }
