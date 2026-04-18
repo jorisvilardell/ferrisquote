@@ -82,3 +82,14 @@ pub struct EstimatorListResponse {
 pub struct EvaluateResponse {
     pub results: HashMap<String, f64>,
 }
+
+/// Response for the flow-level evaluation endpoint.
+///
+/// `results` is a nested map: estimator_name → variable_name → value.
+/// `flat_results` provides the same data flattened with `"EstName.varName"` keys,
+/// for convenience when variable names may clash across estimators.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EvaluateFlowResponse {
+    pub results: HashMap<String, HashMap<String, f64>>,
+    pub flat_results: HashMap<String, f64>,
+}

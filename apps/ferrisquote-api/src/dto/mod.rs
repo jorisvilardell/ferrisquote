@@ -4,8 +4,8 @@ pub mod flows;
 // Re-export commonly used DTOs
 pub use estimators::{
     CreateEstimatorRequest, CreateVariableRequest, EstimatorListResponse, EstimatorResponse,
-    EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest, UpdateEstimatorRequest,
-    UpdateVariableRequest, VariableResponse,
+    EvaluateFlowResponse, EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest,
+    UpdateEstimatorRequest, UpdateVariableRequest, VariableResponse,
 };
 pub use flows::{
     ApiResponse, CreateFieldRequest, CreateFlowRequest, CreateStepRequest, FieldConfigDto,
