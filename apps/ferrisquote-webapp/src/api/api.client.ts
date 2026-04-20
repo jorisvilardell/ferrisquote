@@ -1,8 +1,26 @@
 export namespace Schemas {
   // <Schemas>
+  export type VariableResponse = { description: string; expression: string; id: string; name: string };
+  export type EstimatorResponse = {
+    description: string;
+    flow_id: string;
+    id: string;
+    name: string;
+    variables: Array<VariableResponse>;
+  };
+  export type ApiResponse_EstimatorListResponse = { data: { estimators: Array<EstimatorResponse> }; success: boolean };
+  export type ApiResponse_EstimatorResponse = {
+    data: { description: string; flow_id: string; id: string; name: string; variables: Array<VariableResponse> };
+    success: boolean;
+  };
+  export type ApiResponse_EvaluateFlowResponse = {
+    data: { flat_results: Record<string, number>; results: Record<string, Record<string, number>> };
+    success: boolean;
+  };
+  export type ApiResponse_EvaluateResponse = { data: { results: Record<string, number> }; success: boolean };
   export type FieldConfigDto =
     | { max_length: number; type: "text" }
-    | { max?: number | null; min?: number | null; type: "number" }
+    | { max?: (number | null) | undefined; min?: (number | null) | undefined; type: "number" }
     | { max: string; min: string; type: "date" }
     | { default: boolean; type: "boolean" }
     | { options: Array<string>; type: "select" };
@@ -25,10 +43,10 @@ export namespace Schemas {
     fields: Array<FieldResponse>;
     id: string;
     is_repeatable: boolean;
-    max_repeats?: number | null;
+    max_repeats?: (number | null) | undefined;
     min_repeats: number;
     rank: string;
-    repeat_label?: string | null;
+    repeat_label?: (string | null) | undefined;
     title: string;
   };
   export type ApiResponse_FlowResponse = {
@@ -37,26 +55,47 @@ export namespace Schemas {
   };
   export type ApiResponse_MessageResponse = { data: { message: string }; success: boolean };
   export type ApiResponse_StepResponse = {
-    data: { description: string; fields: Array<FieldResponse>; id: string; is_repeatable: boolean; max_repeats?: number | null; min_repeats: number; rank: string; repeat_label?: string | null; title: string };
+    data: {
+      description: string;
+      fields: Array<FieldResponse>;
+      id: string;
+      is_repeatable: boolean;
+      max_repeats?: (number | null) | undefined;
+      min_repeats: number;
+      rank: string;
+      repeat_label?: (string | null) | undefined;
+      title: string;
+    };
     success: boolean;
   };
+  export type ApiResponse_VariableResponse = {
+    data: { description: string; expression: string; id: string; name: string };
+    success: boolean;
+  };
+  export type CreateEstimatorRequest = { name: string };
   export type CreateFieldRequest = { config: FieldConfigDto; key: string; label: string };
   export type CreateFlowRequest = { description?: (string | null) | undefined; name: string };
   export type CreateStepRequest = {
     description?: (string | null) | undefined;
-    is_repeatable?: boolean | undefined;
-    max_repeats?: number | undefined;
-    min_repeats?: number | undefined;
+    is_repeatable?: (boolean | null) | undefined;
+    max_repeats?: (number | null) | undefined;
+    min_repeats?: (number | null) | undefined;
     repeat_label?: (string | null) | undefined;
     title: string;
   };
-  export type UpdateStepMetadataRequest = {
-    description?: (string | null) | undefined;
-    is_repeatable?: boolean | undefined;
-    max_repeats?: (number | null) | undefined;
-    min_repeats?: number | undefined;
-    repeat_label?: (string | null) | undefined;
-    title?: (string | null) | undefined;
+  export type CreateVariableRequest = { description?: (string | null) | undefined; expression: string; name: string };
+  export type EstimatorListResponse = { estimators: Array<EstimatorResponse> };
+  export type EvaluateFlowResponse = {
+    flat_results: Record<string, number>;
+    results: Record<string, Record<string, number>>;
+  };
+  export type EvaluateRequest = { field_values: Record<string, number> };
+  export type EvaluateResponse = { results: Record<string, number> };
+  export type EvaluateSubmissionRequest = {
+    cross_values?: Record<string, Record<string, number>> | undefined;
+    field_values: Record<string, number>;
+    iteration_counts: Record<string, number>;
+    iteration_values: Record<string, Array<number>>;
   };
   export type FlowListResponse = { flows: Array<FlowSummaryResponse> };
   export type FlowResponse = { description: string; id: string; name: string; steps: Array<StepResponse> };
@@ -67,21 +106,27 @@ export namespace Schemas {
     target_step_id: string | null;
   }>;
   export type ReorderStepRequest = Partial<{ after_id: string | null; before_id: string | null }>;
-  export type UpdateFieldConfigRequest = { config: FieldConfigDto; label: string };
+  export type UpdateEstimatorRequest = Partial<{ description: string | null; name: string | null }>;
+  export type UpdateFieldConfigRequest = Partial<{
+    config: null | FieldConfigDto;
+    description: string | null;
+    key: string | null;
+    label: string | null;
+  }>;
   export type UpdateFlowMetadataRequest = { description?: (string | null) | undefined; name: string };
-  export type VariableResponse = { id: string; name: string; expression: string; description: string };
-  export type EstimatorResponse = { id: string; flow_id: string; name: string; variables: Array<VariableResponse> };
-  export type EstimatorListResponse = { estimators: Array<EstimatorResponse> };
-  export type ApiResponse_EstimatorListResponse = { data: EstimatorListResponse; success: boolean };
-  export type ApiResponse_EstimatorResponse = { data: EstimatorResponse; success: boolean };
-  export type ApiResponse_VariableResponse = { data: VariableResponse; success: boolean };
-  export type CreateEstimatorRequest = { name: string };
-  export type UpdateEstimatorRequest = { name?: (string | null) | undefined };
-  export type CreateVariableRequest = { name: string; expression: string; description?: (string | null) | undefined };
-  export type UpdateVariableRequest = { name?: (string | null) | undefined; expression?: (string | null) | undefined; description?: (string | null) | undefined };
-  export type EvaluateRequest = { field_values: Record<string, number> };
-  export type EvaluateResponse = { results: Record<string, number> };
-  export type ApiResponse_EvaluateResponse = { data: EvaluateResponse; success: boolean };
+  export type UpdateStepMetadataRequest = Partial<{
+    description: string | null;
+    is_repeatable: boolean | null;
+    max_repeats: number | null;
+    min_repeats: number | null;
+    repeat_label: string | null;
+    title: string | null;
+  }>;
+  export type UpdateVariableRequest = Partial<{
+    description: string | null;
+    expression: string | null;
+    name: string | null;
+  }>;
 
   // </Schemas>
 }
@@ -89,6 +134,68 @@ export namespace Schemas {
 export namespace Endpoints {
   // <Endpoints>
 
+  export type get_Get_estimator = {
+    method: "GET";
+    path: "/api/v1/estimators/{estimator_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+    };
+    responses: { 200: Schemas.EstimatorResponse; 404: unknown };
+  };
+  export type put_Update_estimator = {
+    method: "PUT";
+    path: "/api/v1/estimators/{estimator_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+
+      body: Schemas.UpdateEstimatorRequest;
+    };
+    responses: { 200: Schemas.EstimatorResponse; 400: unknown; 404: unknown };
+  };
+  export type delete_Delete_estimator = {
+    method: "DELETE";
+    path: "/api/v1/estimators/{estimator_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+    };
+    responses: { 200: Schemas.MessageResponse; 404: unknown };
+  };
+  export type post_Evaluate = {
+    method: "POST";
+    path: "/api/v1/estimators/{estimator_id}/evaluate";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+
+      body: Schemas.EvaluateRequest;
+    };
+    responses: { 200: Schemas.EvaluateResponse; 400: unknown; 404: unknown };
+  };
+  export type post_Evaluate_submission = {
+    method: "POST";
+    path: "/api/v1/estimators/{estimator_id}/evaluate-submission";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+
+      body: Schemas.EvaluateSubmissionRequest;
+    };
+    responses: { 200: Schemas.EvaluateResponse; 400: unknown; 404: unknown };
+  };
+  export type post_Add_variable = {
+    method: "POST";
+    path: "/api/v1/estimators/{estimator_id}/variables";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+
+      body: Schemas.CreateVariableRequest;
+    };
+    responses: { 201: Schemas.VariableResponse; 400: unknown; 404: unknown };
+  };
   export type get_List_flows = {
     method: "GET";
     path: "/api/v1/flows";
@@ -207,18 +314,6 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.MessageResponse; 404: unknown };
   };
-  export type post_Add_step = {
-    method: "POST";
-    path: "/api/v1/flows/{flow_id}/steps";
-    requestFormat: "json";
-    parameters: {
-      path: { flow_id: string };
-
-      body: Schemas.CreateStepRequest;
-    };
-    responses: { 201: Schemas.StepResponse; 400: unknown; 404: unknown };
-  };
-
   export type get_List_estimators = {
     method: "GET";
     path: "/api/v1/flows/{flow_id}/estimators";
@@ -234,47 +329,32 @@ export namespace Endpoints {
     requestFormat: "json";
     parameters: {
       path: { flow_id: string };
+
       body: Schemas.CreateEstimatorRequest;
     };
     responses: { 201: Schemas.EstimatorResponse; 400: unknown };
   };
-  export type get_Get_estimator = {
-    method: "GET";
-    path: "/api/v1/estimators/{estimator_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { estimator_id: string };
-    };
-    responses: { 200: Schemas.EstimatorResponse; 404: unknown };
-  };
-  export type put_Update_estimator = {
-    method: "PUT";
-    path: "/api/v1/estimators/{estimator_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { estimator_id: string };
-      body: Schemas.UpdateEstimatorRequest;
-    };
-    responses: { 200: Schemas.EstimatorResponse; 400: unknown; 404: unknown };
-  };
-  export type delete_Delete_estimator = {
-    method: "DELETE";
-    path: "/api/v1/estimators/{estimator_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { estimator_id: string };
-    };
-    responses: { 200: Schemas.MessageResponse; 404: unknown };
-  };
-  export type post_Add_variable = {
+  export type post_Evaluate_flow = {
     method: "POST";
-    path: "/api/v1/estimators/{estimator_id}/variables";
+    path: "/api/v1/flows/{flow_id}/evaluate-all";
     requestFormat: "json";
     parameters: {
-      path: { estimator_id: string };
-      body: Schemas.CreateVariableRequest;
+      path: { flow_id: string };
+
+      body: Schemas.EvaluateSubmissionRequest;
     };
-    responses: { 201: Schemas.VariableResponse; 400: unknown; 404: unknown };
+    responses: { 200: Schemas.EvaluateFlowResponse; 400: unknown; 404: unknown };
+  };
+  export type post_Add_step = {
+    method: "POST";
+    path: "/api/v1/flows/{flow_id}/steps";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+
+      body: Schemas.CreateStepRequest;
+    };
+    responses: { 201: Schemas.StepResponse; 400: unknown; 404: unknown };
   };
   export type put_Update_variable = {
     method: "PUT";
@@ -282,6 +362,7 @@ export namespace Endpoints {
     requestFormat: "json";
     parameters: {
       path: { variable_id: string };
+
       body: Schemas.UpdateVariableRequest;
     };
     responses: { 200: Schemas.VariableResponse; 400: unknown; 404: unknown };
@@ -295,16 +376,6 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.MessageResponse; 404: unknown };
   };
-  export type post_Evaluate = {
-    method: "POST";
-    path: "/api/v1/estimators/{estimator_id}/evaluate";
-    requestFormat: "json";
-    parameters: {
-      path: { estimator_id: string };
-      body: Schemas.EvaluateRequest;
-    };
-    responses: { 200: Schemas.EvaluateResponse; 400: unknown; 404: unknown };
-  };
 
   // </Endpoints>
 }
@@ -312,34 +383,36 @@ export namespace Endpoints {
 // <EndpointByMethod>
 export type EndpointByMethod = {
   get: {
+    "/api/v1/estimators/{estimator_id}": Endpoints.get_Get_estimator;
     "/api/v1/flows": Endpoints.get_List_flows;
     "/api/v1/flows/{flow_id}": Endpoints.get_Get_flow;
     "/api/v1/flows/{flow_id}/estimators": Endpoints.get_List_estimators;
-    "/api/v1/estimators/{estimator_id}": Endpoints.get_Get_estimator;
-  };
-  post: {
-    "/api/v1/flows": Endpoints.post_Create_flow;
-    "/api/v1/flows/steps/{step_id}/fields": Endpoints.post_Add_field;
-    "/api/v1/flows/{flow_id}/steps": Endpoints.post_Add_step;
-    "/api/v1/flows/{flow_id}/estimators": Endpoints.post_Create_estimator;
-    "/api/v1/estimators/{estimator_id}/variables": Endpoints.post_Add_variable;
-    "/api/v1/estimators/{estimator_id}/evaluate": Endpoints.post_Evaluate;
   };
   put: {
+    "/api/v1/estimators/{estimator_id}": Endpoints.put_Update_estimator;
     "/api/v1/flows/fields/{field_id}": Endpoints.put_Update_field_config;
     "/api/v1/flows/fields/{field_id}/move": Endpoints.put_Move_field;
     "/api/v1/flows/steps/{step_id}": Endpoints.put_Update_step_metadata;
     "/api/v1/flows/steps/{step_id}/reorder": Endpoints.put_Reorder_step;
     "/api/v1/flows/{flow_id}": Endpoints.put_Update_flow_metadata;
-    "/api/v1/estimators/{estimator_id}": Endpoints.put_Update_estimator;
     "/api/v1/variables/{variable_id}": Endpoints.put_Update_variable;
   };
   delete: {
+    "/api/v1/estimators/{estimator_id}": Endpoints.delete_Delete_estimator;
     "/api/v1/flows/fields/{field_id}": Endpoints.delete_Remove_field;
     "/api/v1/flows/steps/{step_id}": Endpoints.delete_Remove_step;
     "/api/v1/flows/{flow_id}": Endpoints.delete_Delete_flow;
-    "/api/v1/estimators/{estimator_id}": Endpoints.delete_Delete_estimator;
     "/api/v1/variables/{variable_id}": Endpoints.delete_Remove_variable;
+  };
+  post: {
+    "/api/v1/estimators/{estimator_id}/evaluate": Endpoints.post_Evaluate;
+    "/api/v1/estimators/{estimator_id}/evaluate-submission": Endpoints.post_Evaluate_submission;
+    "/api/v1/estimators/{estimator_id}/variables": Endpoints.post_Add_variable;
+    "/api/v1/flows": Endpoints.post_Create_flow;
+    "/api/v1/flows/steps/{step_id}/fields": Endpoints.post_Add_field;
+    "/api/v1/flows/{flow_id}/estimators": Endpoints.post_Create_estimator;
+    "/api/v1/flows/{flow_id}/evaluate-all": Endpoints.post_Evaluate_flow;
+    "/api/v1/flows/{flow_id}/steps": Endpoints.post_Add_step;
   };
 };
 
@@ -347,9 +420,9 @@ export type EndpointByMethod = {
 
 // <EndpointByMethod.Shorthands>
 export type GetEndpoints = EndpointByMethod["get"];
-export type PostEndpoints = EndpointByMethod["post"];
 export type PutEndpoints = EndpointByMethod["put"];
 export type DeleteEndpoints = EndpointByMethod["delete"];
+export type PostEndpoints = EndpointByMethod["post"];
 // </EndpointByMethod.Shorthands>
 
 // <ApiClientTypes>
@@ -613,37 +686,6 @@ export class ApiClient {
   }
   // </ApiClient.get>
 
-  // <ApiClient.post>
-  post<Path extends keyof PostEndpoints, TEndpoint extends PostEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-    >
-  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
-
-  post<Path extends keyof PostEndpoints, TEndpoint extends PostEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-    >
-  ): Promise<SafeApiResponse<TEndpoint>>;
-
-  post<Path extends keyof PostEndpoints, _TEndpoint extends PostEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<any>
-  ): Promise<any> {
-    return this.request("post", path, ...params);
-  }
-  // </ApiClient.post>
-
   // <ApiClient.put>
   put<Path extends keyof PutEndpoints, TEndpoint extends PutEndpoints[Path]>(
     path: Path,
@@ -705,6 +747,37 @@ export class ApiClient {
     return this.request("delete", path, ...params);
   }
   // </ApiClient.delete>
+
+  // <ApiClient.post>
+  post<Path extends keyof PostEndpoints, TEndpoint extends PostEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  post<Path extends keyof PostEndpoints, TEndpoint extends PostEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  post<Path extends keyof PostEndpoints, _TEndpoint extends PostEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("post", path, ...params);
+  }
+  // </ApiClient.post>
 
   // <ApiClient.request>
   /**
