@@ -209,7 +209,7 @@ type Props = {
   estimator: Schemas.EstimatorResponse | null
   flowId: string
   availableFieldKeys: string[]
-  otherEstimators: Array<{ name: string; variables: string[] }>
+  otherEstimators: Array<{ id: string; name: string; variables: string[] }>
   estimatorsIndex: EstimatorIndex
   onClose: () => void
   onAddStep: (data: { title: string; description: string }) => void
@@ -785,7 +785,7 @@ function EstimatorDetailsPanel({
   estimator: Schemas.EstimatorResponse
   flowId: string
   availableFieldKeys: string[]
-  otherEstimators: Array<{ name: string; variables: string[] }>
+  otherEstimators: Array<{ id: string; name: string; variables: string[] }>
   estimatorsIndex: EstimatorIndex
   onClose: () => void
 }) {
@@ -809,6 +809,12 @@ function EstimatorDetailsPanel({
     if (trimmed === estimator.name) return
     if (!/^[A-Za-z0-9_]+$/.test(trimmed)) {
       toast.error("Estimator name can only contain letters, digits, spaces and underscores")
+      setName(estimator.name.replace(/_/g, " "))
+      return
+    }
+    // Prevent duplicate names: would break cross-ref name→id lookup
+    if (otherEstimators.some((e) => e.name === trimmed)) {
+      toast.error(`An estimator named "${trimmed.replace(/_/g, " ")}" already exists`)
       setName(estimator.name.replace(/_/g, " "))
       return
     }
@@ -948,7 +954,7 @@ function VariableCard({
   ownEstimatorName: string
   ownEstimatorVariables: string[]
   availableFieldKeys: string[]
-  otherEstimators: Array<{ name: string; variables: string[] }>
+  otherEstimators: Array<{ id: string; name: string; variables: string[] }>
   estimatorsIndex: EstimatorIndex
   onUpdate: (variableId: string, patch: Partial<Schemas.VariableResponse>) => void
   onDelete: (variableId: string) => void
@@ -1018,7 +1024,14 @@ function VariableCard({
   }, [showSuggestions])
 
   const filterLower = suggestionFilter.toLowerCase()
-  type Suggestion = { label: string; insert: string; group: string; isEstimator?: boolean }
+  type Suggestion = {
+    label: string
+    insert: string
+    group: string
+    groupLabel?: string
+    isEstimator?: boolean
+    estimatorId?: string
+  }
   const suggestions: Suggestion[] = [
     // Fields
     ...availableFieldKeys
@@ -1037,9 +1050,9 @@ function VariableCard({
         group: ownEstimatorName.replace(/_/g, " "),
         isEstimator: true,
       })),
-    // Variables of other estimators (cross-references)
+    // Variables of other estimators (cross-references).
+    // Group key uses estimator id so duplicates stay separate.
     ...otherEstimators.flatMap((est) => {
-      // Allow matching against both storage form (underscores) and display form (spaces)
       const displayName = est.name.replace(/_/g, " ")
       return est.variables
         .filter((v) =>
@@ -1049,15 +1062,17 @@ function VariableCard({
         )
         .map((v) => ({
           label: `@${displayName}.${v}`,
-          // Insert keeps underscores — the expression textarea shows underscores too
           insert: `@${est.name}.${v}`,
-          group: displayName,
+          // Unique key per estimator instance (id embedded, hidden at render)
+          group: `${displayName}\u0000${est.id}`,
+          groupLabel: displayName,
           isEstimator: true,
+          estimatorId: est.id,
         }))
     }),
   ]
 
-  function insertSuggestion(insert: string) {
+  function insertSuggestion(s: Suggestion) {
     const el = exprRef.current
     if (!el) return
     const pos = el.selectionStart ?? el.value.length
@@ -1065,15 +1080,27 @@ function VariableCard({
     const atPos = before.lastIndexOf("@")
     const start = atPos >= 0 ? atPos : pos
     const after = el.value.substring(pos)
-    const newVal = el.value.substring(0, start) + insert + after
+    const newVal = el.value.substring(0, start) + s.insert + after
     setExprDraft(newVal)
     setShowSuggestions(false)
-    // Translate name-based refs to ID-based before sending to server
-    const stored = namesToIds(newVal, estimatorsIndex)
+
+    // Build stored form. For cross-estimator picks we know the exact
+    // estimator id — use it directly to avoid name-lookup ambiguity when
+    // two estimators share a name.
+    let stored: string
+    if (s.estimatorId) {
+      const varName = s.insert.replace(/^@[^.]+\./, "")
+      const beforeStored = namesToIds(el.value.substring(0, start), estimatorsIndex)
+      const afterStored = namesToIds(after, estimatorsIndex)
+      stored = `${beforeStored}@#${s.estimatorId}.${varName}${afterStored}`
+    } else {
+      stored = namesToIds(newVal, estimatorsIndex)
+    }
     onUpdate(variable.id, { expression: stored })
+
     requestAnimationFrame(() => {
       el.focus()
-      const cursorPos = start + insert.length
+      const cursorPos = start + s.insert.length
       el.setSelectionRange(cursorPos, cursorPos)
     })
   }
@@ -1226,7 +1253,7 @@ function VariableCard({
                       <div key={`${s.group}-${s.insert}`}>
                         {showGroupLabel && (
                           <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            {s.group}
+                            {s.groupLabel ?? s.group}
                           </div>
                         )}
                         <button
@@ -1236,7 +1263,7 @@ function VariableCard({
                           )}
                           onMouseDown={(e) => {
                             e.preventDefault()
-                            insertSuggestion(s.insert)
+                            insertSuggestion(s)
                           }}
                         >
                           {s.label}
