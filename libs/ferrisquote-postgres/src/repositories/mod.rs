@@ -1,7 +1,9 @@
 pub mod estimator_repository;
 pub mod flow_repository;
+pub mod submission_repository;
 pub mod user_repository;
 
 pub use estimator_repository::PostgresEstimatorRepository;
 pub use flow_repository::PostgresFlowRepository;
+pub use submission_repository::PostgresSubmissionRepository;
 pub use user_repository::PostgresUserRepository;
