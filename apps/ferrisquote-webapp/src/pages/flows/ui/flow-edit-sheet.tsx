@@ -8,7 +8,12 @@ import {
   useUpdateEstimator,
   useUpdateVariable,
 } from "@/api/estimators.api"
-import { idsToNames, namesToIds, type EstimatorIndex } from "@/pages/flows/lib/expression-refs"
+import {
+  idsToNames,
+  namesToIds,
+  namesToIdsPreservingIds,
+  type EstimatorIndex,
+} from "@/pages/flows/lib/expression-refs"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -971,11 +976,15 @@ function VariableCard({
   const [nameDraft, setNameDraft] = useState(variable.name)
   const [exprDraft, setExprDraft] = useState(displayExpression)
   const [descDraft, setDescDraft] = useState(variable.description)
+  // Remember which estimator id was chosen for each `name.var` via autocomplete,
+  // so free-form editing doesn't silently reroute to the first same-named estimator.
+  const pickedIdsRef = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
     setNameDraft(variable.name)
     setExprDraft(idsToNames(variable.expression, estimatorsIndex))
     setDescDraft(variable.description)
+    pickedIdsRef.current = new Map()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variable.id, variable.name, variable.expression, variable.description])
 
@@ -1084,18 +1093,24 @@ function VariableCard({
     setExprDraft(newVal)
     setShowSuggestions(false)
 
-    // Build stored form. For cross-estimator picks we know the exact
-    // estimator id — use it directly to avoid name-lookup ambiguity when
-    // two estimators share a name.
-    let stored: string
+    // Remember the estimator id picked for this name.var pair so subsequent
+    // commits (blur / typing changes) resolve to the correct estimator
+    // even when two share a name.
     if (s.estimatorId) {
+      const est = estimatorsIndex.find((e) => e.id === s.estimatorId)
       const varName = s.insert.replace(/^@[^.]+\./, "")
-      const beforeStored = namesToIds(el.value.substring(0, start), estimatorsIndex)
-      const afterStored = namesToIds(after, estimatorsIndex)
-      stored = `${beforeStored}@#${s.estimatorId}.${varName}${afterStored}`
-    } else {
-      stored = namesToIds(newVal, estimatorsIndex)
+      if (est) {
+        pickedIdsRef.current.set(`${est.name}.${varName}`, s.estimatorId)
+      }
     }
+
+    // Build stored form using the preserving translator + recent picks.
+    const stored = namesToIdsPreservingIds(
+      newVal,
+      estimatorsIndex,
+      variable.expression,
+      pickedIdsRef.current,
+    )
     onUpdate(variable.id, { expression: stored })
 
     requestAnimationFrame(() => {
@@ -1136,8 +1151,15 @@ function VariableCard({
       setExprDraft(idsToNames(variable.expression, estimatorsIndex))
       return
     }
-    // Translate name-based refs to ID-based before sending
-    const stored = namesToIds(exprDraft, estimatorsIndex)
+    // Translate name-based refs to ID-based, preferring the ids already
+    // present in the current storage expression so we don't reroute an
+    // edge to a different same-named estimator.
+    const stored = namesToIdsPreservingIds(
+      exprDraft,
+      estimatorsIndex,
+      variable.expression,
+      pickedIdsRef.current,
+    )
     if (stored === variable.expression) return
     onUpdate(variable.id, { expression: stored })
   }

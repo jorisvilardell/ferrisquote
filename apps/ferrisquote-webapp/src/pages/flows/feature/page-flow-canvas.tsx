@@ -732,10 +732,18 @@ function PageFlowCanvasInner() {
           setLinkingField("quick")
         }
       } else if (type === "estimatorNode") {
+        // Pick a default name that doesn't collide with existing estimators
+        const existingNames = new Set(estimators.map((e) => e.name))
+        let defaultName = "New_Estimator"
+        if (existingNames.has(defaultName)) {
+          let n = 2
+          while (existingNames.has(`New_Estimator_${n}`)) n++
+          defaultName = `New_Estimator_${n}`
+        }
         createEstimator(
           {
             path: { flow_id: flowId },
-            body: { name: "New_Estimator" },
+            body: { name: defaultName },
           },
           {
             onSuccess: (data) => {
@@ -750,7 +758,7 @@ function PageFlowCanvasInner() {
         )
       }
     },
-    [flowId, screenToFlowPosition, getNodes, addStep, createEstimator, quickCreateField],
+    [flowId, screenToFlowPosition, getNodes, addStep, createEstimator, estimators, quickCreateField],
   )
 
   // ─── Node click ─────────────────────────────────────────────────────────────
@@ -1058,7 +1066,7 @@ function PageFlowCanvasInner() {
             availableFieldKeys={availableFieldKeys}
             otherEstimators={estimators
               .filter((e) => e.id !== panelEstimator?.id)
-              .map((e) => ({ name: e.name, variables: e.variables.map((v) => v.name) }))
+              .map((e) => ({ id: e.id, name: e.name, variables: e.variables.map((v) => v.name) }))
             }
             estimatorsIndex={estimators.map((e) => ({ id: e.id, name: e.name }))}
             onClose={() => setPanelState(null)}

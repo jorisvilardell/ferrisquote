@@ -37,13 +37,15 @@ export function namesToIds(expr: string, estimators: EstimatorIndex): string {
 
 /**
  * Like `namesToIds`, but when a `@Name.var` pair already appeared in `previousStorage`
- * as `@#<id>.var`, reuse that specific id instead of falling back to first-by-name
- * lookup. Prevents edge rerouting when two estimators share a name.
+ * as `@#<id>.var`, or was explicitly remembered in `overrides`, reuse that specific
+ * id instead of falling back to first-by-name lookup. Prevents edge rerouting when
+ * two estimators share a name.
  */
 export function namesToIdsPreservingIds(
   expr: string,
   estimators: EstimatorIndex,
   previousStorage: string,
+  overrides?: Map<string, string>,
 ): string {
   // Build preferred map: "name.var" → id (from previous storage)
   const preferred = new Map<string, string>()
@@ -52,6 +54,10 @@ export function namesToIdsPreservingIds(
   while ((m = prevRe.exec(previousStorage)) !== null) {
     const est = estimators.find((e) => e.id === m![1])
     if (est) preferred.set(`${est.name}.${m![2]}`, m![1])
+  }
+  // Overrides take precedence (recent autocomplete picks)
+  if (overrides) {
+    for (const [k, v] of overrides) preferred.set(k, v)
   }
 
   return expr.replace(
