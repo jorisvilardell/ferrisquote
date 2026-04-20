@@ -487,6 +487,7 @@ function PageFlowCanvasInner() {
   const [linkingField, setLinkingField] = useState<false | "form" | "quick">(false)
   const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null)
   const stepPositionsRef = useRef<Map<string, number>>(new Map())
+  const [pendingFocusNodeId, setPendingFocusNodeId] = useState<string | null>(null)
 
   // ─── Derive live step/field from query data ───────────────────────────────
   const panelStep =
@@ -537,6 +538,29 @@ function PageFlowCanvasInner() {
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [linkingField])
+
+  // When linking mode starts, fit view to all step nodes so the user can
+  // pick one without scanning the canvas.
+  useEffect(() => {
+    if (!linkingField) return
+    const stepIds = flow?.steps.map((s) => ({ id: s.id })) ?? []
+    if (stepIds.length === 0) return
+    requestAnimationFrame(() => {
+      fitView({ nodes: stepIds, padding: 0.2, duration: 400 })
+    })
+  }, [linkingField, flow, fitView])
+
+  // Auto-focus newly created nodes: wait for them to appear in the graph,
+  // then center the viewport on them.
+  useEffect(() => {
+    if (!pendingFocusNodeId) return
+    const node = getNodes().find((n) => n.id === pendingFocusNodeId)
+    if (!node) return
+    const cx = node.position.x + (node.measured?.width ?? 200) / 2
+    const cy = node.position.y + (node.measured?.height ?? 80) / 2
+    setCenter(cx, cy, { zoom: getZoom(), duration: 400 })
+    setPendingFocusNodeId(null)
+  }, [pendingFocusNodeId, getNodes, setCenter, getZoom, flow, estimators])
 
   // ─── Panel callbacks ─────────────────────────────────────────────────────────
   const handleDeleteStep = useCallback(
@@ -652,6 +676,7 @@ function PageFlowCanvasInner() {
             if (fieldId) {
               setExpandedStepIds(new Set([stepId]))
               setPanelState({ mode: "edit-field", fieldId, stepId })
+              setPendingFocusNodeId(`field-${fieldId}`)
             }
           },
         },
@@ -686,6 +711,7 @@ function PageFlowCanvasInner() {
               if (stepId) {
                 setExpandedStepIds(new Set([stepId]))
                 setPanelState({ mode: "step-details", stepId })
+                setPendingFocusNodeId(stepId)
               }
             },
           },
@@ -716,6 +742,7 @@ function PageFlowCanvasInner() {
               const estId = (data as { data?: { id?: string } })?.data?.id
               if (estId) {
                 setPanelState({ mode: "estimator-details", estimatorId: estId })
+                setPendingFocusNodeId(`estimator-${estId}`)
               }
             },
             onError: (err) => toast.error(`Failed to create estimator: ${err.message}`),
