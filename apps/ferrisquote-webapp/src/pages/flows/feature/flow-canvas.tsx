@@ -211,6 +211,7 @@ function buildGraph(
           data: {
             label: field.label,
             type: field.config.type,
+            description: field.description,
             color,
             index: j,
             onDelete: () => onDeleteField(field.id, step.id),
