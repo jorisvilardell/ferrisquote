@@ -34,3 +34,33 @@ export function namesToIds(expr: string, estimators: EstimatorIndex): string {
     },
   )
 }
+
+/**
+ * Like `namesToIds`, but when a `@Name.var` pair already appeared in `previousStorage`
+ * as `@#<id>.var`, reuse that specific id instead of falling back to first-by-name
+ * lookup. Prevents edge rerouting when two estimators share a name.
+ */
+export function namesToIdsPreservingIds(
+  expr: string,
+  estimators: EstimatorIndex,
+  previousStorage: string,
+): string {
+  // Build preferred map: "name.var" → id (from previous storage)
+  const preferred = new Map<string, string>()
+  const prevRe = /@#([A-Za-z0-9-]+)\.([a-z][a-z0-9_]*)/g
+  let m: RegExpExecArray | null
+  while ((m = prevRe.exec(previousStorage)) !== null) {
+    const est = estimators.find((e) => e.id === m![1])
+    if (est) preferred.set(`${est.name}.${m![2]}`, m![1])
+  }
+
+  return expr.replace(
+    /@([A-Za-z_][A-Za-z0-9_]*)\.([a-z][a-z0-9_]*)/g,
+    (match, name, variable) => {
+      const pref = preferred.get(`${name}.${variable}`)
+      if (pref) return `@#${pref}.${variable}`
+      const est = estimators.find((e) => e.name === name)
+      return est ? `@#${est.id}.${variable}` : match
+    },
+  )
+}
