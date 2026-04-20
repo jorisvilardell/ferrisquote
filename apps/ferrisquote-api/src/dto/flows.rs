@@ -86,8 +86,13 @@ lazy_static::lazy_static! {
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct UpdateFieldConfigRequest {
     #[validate(length(min = 1, max = 255))]
-    pub label: String,
-    pub config: FieldConfigDto,
+    pub label: Option<String>,
+    #[validate(length(min = 1, max = 100))]
+    #[validate(regex(path = *FIELD_KEY_REGEX))]
+    pub key: Option<String>,
+    #[validate(length(max = 1000))]
+    pub description: Option<String>,
+    pub config: Option<FieldConfigDto>,
 }
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]

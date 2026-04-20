@@ -157,7 +157,7 @@ pub trait FieldService: Send + Sync {
         key: String,
         config: FieldConfig,
     ) -> impl Future<Output = Result<Field, DomainError>> + Send;
-    /// Update a field's configuration and/or label.
+    /// Update a field's configuration, label, key and/or description.
     ///
     /// This is a partial-update API: only the provided fields (`Some(...)`) are
     /// changed by the repository. Fields set to `None` are left untouched.
@@ -165,6 +165,8 @@ pub trait FieldService: Send + Sync {
         &self,
         field_id: FieldId,
         label: Option<String>,
+        key: Option<String>,
+        description: Option<String>,
         config: Option<FieldConfig>,
     ) -> impl Future<Output = Result<Field, DomainError>> + Send;
     /// Remove a field by id.

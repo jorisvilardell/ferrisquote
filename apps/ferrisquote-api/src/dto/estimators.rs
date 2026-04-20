@@ -19,6 +19,8 @@ pub struct CreateEstimatorRequest {
 pub struct UpdateEstimatorRequest {
     #[validate(length(min = 1, max = 255))]
     pub name: Option<String>,
+    #[validate(length(max = 1000))]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
@@ -68,6 +70,7 @@ pub struct EstimatorResponse {
     pub id: Uuid,
     pub flow_id: Uuid,
     pub name: String,
+    pub description: String,
     pub variables: Vec<VariableResponse>,
 }
 
