@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate:api": "typed-openapi http://localhost:3000/api-docs/openapi.json -o src/api/api.client.ts --tanstack src/api/api.tanstack.ts"
+    "generate:api": "typed-openapi http://localhost:3000/api-docs/openapi.json -o src/api/api.client.ts --tanstack api.tanstack.ts"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
