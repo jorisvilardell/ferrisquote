@@ -29,6 +29,7 @@ fn map_estimator(e: ferrisquote_domain::Estimator) -> EstimatorResponse {
         id: e.id.into_uuid(),
         flow_id: e.flow_id.into_uuid(),
         name: e.name,
+        description: e.description,
         variables: e.variables.into_iter().map(map_variable).collect(),
     }
 }
@@ -144,7 +145,7 @@ pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: 
     let id = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
     let estimator = state
         .estimator_service
-        .update_estimator(id, request.name)
+        .update_estimator(id, request.name, request.description)
         .await?;
 
     Ok(Json(ApiResponse::success(map_estimator(estimator))))

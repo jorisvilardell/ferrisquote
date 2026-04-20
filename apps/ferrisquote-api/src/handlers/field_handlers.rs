@@ -71,11 +71,17 @@ pub async fn update_field_config<FS: FlowService + StepService + FieldService, E
     request.validate()?;
 
     let field_id = FieldId::from_uuid(uuid::Uuid::parse_str(&field_id)?);
-    let config = map_field_config_from_dto(request.config)?;
+    let config = request.config.map(map_field_config_from_dto).transpose()?;
 
     let field = state
         .flow_service
-        .update_field_config(field_id, Some(request.label), Some(config))
+        .update_field_config(
+            field_id,
+            request.label,
+            request.key,
+            request.description,
+            config,
+        )
         .await?;
 
     let response = map_field_to_response(field);
