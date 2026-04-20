@@ -346,6 +346,7 @@ function buildGraph(
         },
         data: {
           name: est.name,
+          description: est.description,
           variables: displayVariables,
           color,
           onDelete: () => onDeleteEstimator(est.id),
