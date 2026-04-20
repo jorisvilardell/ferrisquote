@@ -8,7 +8,6 @@ use ferrisquote_domain::domain::{
     },
 };
 use sqlx::{PgPool, Row};
-use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct PostgresUserRepository {
@@ -130,7 +129,3 @@ impl UserRepository for PostgresUserRepository {
         Ok(())
     }
 }
-
-// Silence unused imports when the types are only used through traits
-#[allow(dead_code)]
-fn _assert_uuid_used(_: Uuid) {}
