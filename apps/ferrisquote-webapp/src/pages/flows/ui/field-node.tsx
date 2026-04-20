@@ -1,11 +1,6 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2 } from "lucide-react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { NodeDescriptionTooltip } from "./node-description-tooltip"
 
 export type FieldNodeData = {
   label: string
@@ -59,16 +54,9 @@ export function FieldNode({ data, selected }: NodeProps<Node<FieldNodeData>>) {
     </div>
   )
 
-  if (!data.description) return nodeInner
-
   return (
-    <TooltipProvider delayDuration={400}>
-      <Tooltip>
-        <TooltipTrigger asChild>{nodeInner}</TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-          <p className="text-xs">{data.description}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <NodeDescriptionTooltip description={data.description}>
+      {nodeInner}
+    </NodeDescriptionTooltip>
   )
 }

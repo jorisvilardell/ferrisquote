@@ -1,12 +1,7 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2, Calculator } from "lucide-react"
 import type { Schemas } from "@/api/api.client"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { NodeDescriptionTooltip } from "./node-description-tooltip"
 
 export type EstimatorNodeData = {
   name: string
@@ -134,16 +129,9 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
     </div>
   )
 
-  if (!data.description) return nodeInner
-
   return (
-    <TooltipProvider delayDuration={400}>
-      <Tooltip>
-        <TooltipTrigger asChild>{nodeInner}</TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-          <p className="text-xs">{data.description}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <NodeDescriptionTooltip description={data.description}>
+      {nodeInner}
+    </NodeDescriptionTooltip>
   )
 }
