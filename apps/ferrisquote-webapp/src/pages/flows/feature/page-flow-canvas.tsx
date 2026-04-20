@@ -8,12 +8,12 @@ import {
   type Node,
   type Edge,
 } from "@xyflow/react"
-import { useCallback, useEffect, useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 import { StepNode, type StepNodeData } from "../ui/step-node"
 import { FieldNode, type FieldNodeData } from "../ui/field-node"
 import { EstimatorNode, type EstimatorNodeData } from "../ui/estimator-node"
-import { CanvasToolbar, type DragNodeType } from "../ui/canvas-toolbar"
+import { CanvasToolbar } from "../ui/canvas-toolbar"
 import { FlowEditPanel, type PanelState } from "./flow-edit-panel"
 import {
   AlertDialog,
@@ -30,15 +30,19 @@ import {
   useGetFlow,
   useAddStep,
   useUpdateStep,
-  useRemoveStep,
   useReorderStep,
   useAddField,
   useUpdateField,
   useRemoveField,
+  useRemoveStep,
 } from "@/api/flows.api"
 import { useEstimators, useCreateEstimator, useDeleteEstimator } from "@/api/estimators.api"
 import { idsToNames } from "@/pages/flows/lib/expression-refs"
-import { toast } from "sonner"
+import { useCanvasDragDrop } from "@/pages/flows/hooks/use-canvas-drag-drop"
+import { useDeleteDialogs } from "@/pages/flows/hooks/use-delete-dialogs"
+import { useLinkingMode } from "@/pages/flows/hooks/use-linking-mode"
+import { usePendingFocus } from "@/pages/flows/hooks/use-pending-focus"
+import { useStepReorder } from "@/pages/flows/hooks/use-step-reorder"
 import { useFlowStore } from "@/store/flow.store"
 import { FlowListDrawer } from "../ui/flow-list-drawer"
 import "@xyflow/react/dist/style.css"
@@ -57,7 +61,6 @@ const FIELD_X_OFFSET = 280
 const ESTIMATOR_X_OFFSET = 560
 const ESTIMATOR_X_STEP = 320 // horizontal spacing between estimator columns by depth
 const ESTIMATOR_NODE_GAP = 24
-const DRAG_DATA_KEY = "application/ferrisquote-node"
 
 function buildGraph(
   flow: Schemas.FlowResponse,
@@ -471,7 +474,7 @@ function PageFlowCanvasInner() {
   const { flowId } = useParams<{ flowId: string }>()
   const setLastFlowId = useFlowStore((s) => s.setLastFlowId)
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, getNodes, fitView, setCenter, getZoom } = useReactFlow()
+  const { getNodes, fitView, setCenter, getZoom, screenToFlowPosition } = useReactFlow()
 
   const { data: flowData, error } = useGetFlow(flowId ?? "")
   const { data: estimatorsData } = useEstimators(flowId ?? "")
@@ -482,14 +485,9 @@ function PageFlowCanvasInner() {
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
   const [panelState, setPanelState] = useState<PanelState | null>(null)
-  const [deletingStep, setDeletingStep] = useState<Schemas.StepResponse | null>(null)
-  // "form" = toolbar click → open add-field form; "quick" = drag miss → quick-create
-  const [linkingField, setLinkingField] = useState<false | "form" | "quick">(false)
-  const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null)
   const stepPositionsRef = useRef<Map<string, number>>(new Map())
-  const [pendingFocusNodeId, setPendingFocusNodeId] = useState<string | null>(null)
 
-  // ─── Derive live step/field from query data ───────────────────────────────
+  // ─── Derive live step/field/estimator from query data ─────────────────────
   const panelStep =
     panelState && "stepId" in panelState
       ? flow?.steps.find((s) => s.id === panelState.stepId) ?? null
@@ -505,7 +503,7 @@ function PageFlowCanvasInner() {
       ? estimators.find((e) => e.id === panelState.estimatorId) ?? null
       : null
 
-  // ─── Mutations ───────────────────────────────────────────────────────────────
+  // ─── Mutations ────────────────────────────────────────────────────────────
   const { mutate: addStep } = useAddStep(flowId ?? "")
   const { mutate: updateStep } = useUpdateStep(flowId ?? "")
   const { mutate: removeStep } = useRemoveStep(flowId ?? "")
@@ -519,113 +517,59 @@ function PageFlowCanvasInner() {
   // Collect all field keys for autocompletion
   const availableFieldKeys = flow?.steps.flatMap((s) => s.fields.map((f) => f.key)) ?? []
 
+  // ─── Feature hooks ────────────────────────────────────────────────────────
+  const { linkingField, setLinkingField } = useLinkingMode(flow, fitView)
+  const { setPendingFocusNodeId } = usePendingFocus(
+    getNodes,
+    setCenter,
+    getZoom,
+    [flow, estimators],
+  )
+  const deleteDialogs = useDeleteDialogs({
+    flow,
+    estimators,
+    panelState,
+    setPanelState,
+    removeStep,
+    removeField,
+    deleteEstimator,
+  })
+  const { onDragOver, onDrop, quickCreateField } = useCanvasDragDrop({
+    flowId: flowId ?? "",
+    estimators,
+    screenToFlowPosition,
+    getNodes,
+    setPanelState,
+    setExpandedStepIds,
+    setLinkingField,
+    setPendingFocusNodeId,
+    addStep,
+    addField,
+    createEstimator,
+  })
+  const { dropIndicatorIndex, onNodeDrag, onNodeDragStop } = useStepReorder(
+    flow,
+    stepPositionsRef,
+    reorderStep,
+  )
+
+  // ─── Flow switch reset ────────────────────────────────────────────────────
   useEffect(() => {
     if (flowId && !is404) setLastFlowId(flowId)
     setExpandedStepIds(new Set())
     setPanelState(null)
-    setDeletingStep(null)
-    setDeletingField(null)
-    setDeletingEstimator(null)
+    deleteDialogs.reset()
     setLinkingField(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flowId, is404, setLastFlowId])
 
-  // Cancel linking on Escape
-  useEffect(() => {
-    if (!linkingField) return
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setLinkingField(false)
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [linkingField])
-
-  // When linking mode starts, fit view to all step nodes so the user can
-  // pick one without scanning the canvas.
-  useEffect(() => {
-    if (!linkingField) return
-    const stepIds = flow?.steps.map((s) => ({ id: s.id })) ?? []
-    if (stepIds.length === 0) return
-    requestAnimationFrame(() => {
-      fitView({ nodes: stepIds, padding: 0.2, duration: 400 })
-    })
-  }, [linkingField, flow, fitView])
-
-  // Auto-focus newly created nodes: wait for them to appear in the graph,
-  // then center the viewport on them.
-  useEffect(() => {
-    if (!pendingFocusNodeId) return
-    const node = getNodes().find((n) => n.id === pendingFocusNodeId)
-    if (!node) return
-    const cx = node.position.x + (node.measured?.width ?? 200) / 2
-    const cy = node.position.y + (node.measured?.height ?? 80) / 2
-    setCenter(cx, cy, { zoom: getZoom(), duration: 400 })
-    setPendingFocusNodeId(null)
-  }, [pendingFocusNodeId, getNodes, setCenter, getZoom, flow, estimators])
-
-  // ─── Panel callbacks ─────────────────────────────────────────────────────────
-  const handleDeleteStep = useCallback(
-    (stepId: string) => {
-      const step = flow?.steps.find((s) => s.id === stepId) ?? null
-      setDeletingStep(step)
-    },
-    [flow],
-  )
-
-  const handleOpenAddField = useCallback((stepId: string) => {
+  // ─── Sidenav open/close helpers ───────────────────────────────────────────
+  const handleOpenAddField = (stepId: string) =>
     setPanelState({ mode: "add-field", stepId })
-  }, [])
-
-  const handleOpenEditField = useCallback((fieldId: string, stepId: string) => {
+  const handleOpenEditField = (fieldId: string, stepId: string) =>
     setPanelState({ mode: "edit-field", fieldId, stepId })
-  }, [])
 
-  const [deletingField, setDeletingField] = useState<{ id: string; label: string; stepId: string } | null>(null)
-
-  const handleDeleteField = useCallback(
-    (fieldId: string, stepId: string) => {
-      // Find the field label for the confirmation dialog
-      const step = flow?.steps.find((s) => s.id === stepId)
-      const field = step?.fields.find((f) => f.id === fieldId)
-      setDeletingField({ id: fieldId, label: field?.label ?? "this field", stepId })
-    },
-    [flow],
-  )
-
-  const confirmDeleteField = useCallback(() => {
-    if (!deletingField) return
-    removeField({ path: { field_id: deletingField.id } })
-    // Close panel if it was showing the deleted field
-    if (panelState?.mode === "edit-field" && panelState.fieldId === deletingField.id) {
-      setPanelState({ mode: "step-details", stepId: deletingField.stepId })
-    }
-    setDeletingField(null)
-  }, [deletingField, removeField, panelState])
-
-  const [deletingEstimator, setDeletingEstimator] = useState<{ id: string; name: string } | null>(null)
-
-  const handleDeleteEstimator = useCallback(
-    (estimatorId: string) => {
-      const est = estimators.find((e) => e.id === estimatorId)
-      setDeletingEstimator({ id: estimatorId, name: est?.name ?? "this estimator" })
-    },
-    [estimators],
-  )
-
-  const confirmDeleteEstimator = useCallback(() => {
-    if (!deletingEstimator) return
-    deleteEstimator(
-      { path: { estimator_id: deletingEstimator.id } },
-      {
-        onError: (err) => toast.error(`Failed to delete estimator: ${err.message}`),
-      },
-    )
-    if (panelState?.mode === "estimator-details" && panelState.estimatorId === deletingEstimator.id) {
-      setPanelState(null)
-    }
-    setDeletingEstimator(null)
-  }, [deletingEstimator, deleteEstimator, panelState])
-
-  // ─── Sheet submit handlers ───────────────────────────────────────────────────
+  // ─── Sheet submit handlers ────────────────────────────────────────────────
   function handleAddStep(data: { title: string; description: string }) {
     addStep({
       path: { flow_id: flowId ?? "" },
@@ -664,114 +608,7 @@ function PageFlowCanvasInner() {
     })
   }
 
-  // ─── Quick-create helpers ─────────────────────────────────────────────────
-  const fieldCounter = useRef(0)
-
-  const quickCreateField = useCallback(
-    (stepId: string) => {
-      fieldCounter.current += 1
-      const n = fieldCounter.current
-      addField(
-        {
-          path: { step_id: stepId },
-          body: {
-            label: `New Field ${n}`,
-            key: `new_field_${n}_${Date.now()}`,
-            config: { type: "text", max_length: 255 },
-          },
-        },
-        {
-          onSuccess: (data) => {
-            const fieldId = (data as { data?: { id?: string } })?.data?.id
-            if (fieldId) {
-              setExpandedStepIds(new Set([stepId]))
-              setPanelState({ mode: "edit-field", fieldId, stepId })
-              setPendingFocusNodeId(`field-${fieldId}`)
-            }
-          },
-        },
-      )
-    },
-    [addField],
-  )
-
-  // ─── Drag and drop ──────────────────────────────────────────────────────────
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes(DRAG_DATA_KEY)) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = "move"
-    }
-  }, [])
-
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      const type = e.dataTransfer.getData(DRAG_DATA_KEY) as DragNodeType | ""
-      if (!type || !flowId) return
-      e.preventDefault()
-
-      if (type === "stepNode") {
-        addStep(
-          {
-            path: { flow_id: flowId },
-            body: { title: "New Step" },
-          },
-          {
-            onSuccess: (data) => {
-              const stepId = (data as { data?: { id?: string } })?.data?.id
-              if (stepId) {
-                setExpandedStepIds(new Set([stepId]))
-                setPanelState({ mode: "step-details", stepId })
-                setPendingFocusNodeId(stepId)
-              }
-            },
-          },
-        )
-      } else if (type === "fieldNode") {
-        const dropPos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-        const stepUnder = getNodes().find(
-          (n) =>
-            n.type === "stepNode" &&
-            dropPos.x >= n.position.x &&
-            dropPos.x <= n.position.x + (n.measured?.width ?? 200) &&
-            dropPos.y >= n.position.y &&
-            dropPos.y <= n.position.y + (n.measured?.height ?? STEP_NODE_HEIGHT),
-        )
-        if (stepUnder) {
-          quickCreateField(stepUnder.id)
-        } else {
-          setLinkingField("quick")
-        }
-      } else if (type === "estimatorNode") {
-        // Pick a default name that doesn't collide with existing estimators
-        const existingNames = new Set(estimators.map((e) => e.name))
-        let defaultName = "New_Estimator"
-        if (existingNames.has(defaultName)) {
-          let n = 2
-          while (existingNames.has(`New_Estimator_${n}`)) n++
-          defaultName = `New_Estimator_${n}`
-        }
-        createEstimator(
-          {
-            path: { flow_id: flowId },
-            body: { name: defaultName },
-          },
-          {
-            onSuccess: (data) => {
-              const estId = (data as { data?: { id?: string } })?.data?.id
-              if (estId) {
-                setPanelState({ mode: "estimator-details", estimatorId: estId })
-                setPendingFocusNodeId(`estimator-${estId}`)
-              }
-            },
-            onError: (err) => toast.error(`Failed to create estimator: ${err.message}`),
-          },
-        )
-      }
-    },
-    [flowId, screenToFlowPosition, getNodes, addStep, createEstimator, estimators, quickCreateField],
-  )
-
-  // ─── Node click ─────────────────────────────────────────────────────────────
+  // ─── Node click handlers ──────────────────────────────────────────────────
   function handleNodeClick(_: React.MouseEvent, node: Node) {
     // If in field-linking mode, clicking a step resolves it
     if (linkingField && node.type === "stepNode") {
@@ -836,84 +673,11 @@ function PageFlowCanvasInner() {
     }
   }
 
-  // ─── Step reorder via node drag ───────────────────────────────────────────
-  const onNodeDrag = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      if (node.type !== "stepNode" || !flow) return
-
-      const dragY = node.position.y
-      const steps = flow.steps
-      const draggedIndex = steps.findIndex((s) => s.id === node.id)
-
-      // Find insertion index based on drag Y vs step center positions
-      let insertAt = steps.length
-      for (let i = 0; i < steps.length; i++) {
-        if (i === draggedIndex) continue
-        const posY = stepPositionsRef.current.get(steps[i].id) ?? 0
-        const centerY = posY + STEP_NODE_HEIGHT / 2
-        if (dragY < centerY) {
-          insertAt = i <= draggedIndex ? i : i
-          break
-        }
-      }
-
-      // Don't show indicator if it would result in no move
-      if (insertAt === draggedIndex || insertAt === draggedIndex + 1) {
-        setDropIndicatorIndex(null)
-      } else {
-        setDropIndicatorIndex(insertAt)
-      }
-    },
-    [flow],
-  )
-
-  const onNodeDragStop = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      if (node.type !== "stepNode" || !flow || dropIndicatorIndex === null) {
-        setDropIndicatorIndex(null)
-        return
-      }
-
-      const steps = flow.steps
-      const draggedIndex = steps.findIndex((s) => s.id === node.id)
-      if (draggedIndex === -1) {
-        setDropIndicatorIndex(null)
-        return
-      }
-
-      // Compute after_id / before_id from the target insertion index
-      // The insertion index refers to the position in the *original* array
-      // after_id = step just before the target slot, before_id = step just after
-      let afterId: string | null = null
-      let beforeId: string | null = null
-
-      if (dropIndicatorIndex === 0) {
-        beforeId = steps[0].id === node.id ? (steps[1]?.id ?? null) : steps[0].id
-      } else if (dropIndicatorIndex >= steps.length) {
-        const last = steps[steps.length - 1]
-        afterId = last.id === node.id ? (steps[steps.length - 2]?.id ?? null) : last.id
-      } else {
-        // Insert between [dropIndicatorIndex - 1] and [dropIndicatorIndex]
-        const prevStep = steps[dropIndicatorIndex - 1]
-        const nextStep = steps[dropIndicatorIndex]
-        afterId = prevStep.id === node.id ? (steps[dropIndicatorIndex - 2]?.id ?? null) : prevStep.id
-        beforeId = nextStep.id === node.id ? (steps[dropIndicatorIndex + 1]?.id ?? null) : nextStep.id
-      }
-
-      setDropIndicatorIndex(null)
-
-      reorderStep({
-        path: { step_id: node.id },
-        body: { after_id: afterId, before_id: beforeId },
-      })
-    },
-    [flow, dropIndicatorIndex, reorderStep],
-  )
-
   function handlePaneClick() {
     if (linkingField) setLinkingField(false)
   }
 
+  // ─── Graph build ──────────────────────────────────────────────────────────
   const { nodes, edges, stepPositions } = flow
     ? buildGraph(
       flow,
@@ -925,9 +689,9 @@ function PageFlowCanvasInner() {
         : panelState?.mode === "step-details" ? panelState.stepId
           : panelState?.mode === "edit-field" ? `field-${panelState.fieldId}`
             : null,
-      handleDeleteStep,
-      handleDeleteField,
-      handleDeleteEstimator,
+      deleteDialogs.handleDeleteStep,
+      deleteDialogs.handleDeleteField,
+      deleteDialogs.handleDeleteEstimator,
     )
     : { nodes: [], edges: [], stepPositions: new Map<string, number>() }
 
@@ -937,32 +701,21 @@ function PageFlowCanvasInner() {
   return (
     <>
       <AlertDialog
-        open={deletingStep !== null}
-        onOpenChange={(open) => !open && setDeletingStep(null)}
+        open={deleteDialogs.deletingStep !== null}
+        onOpenChange={(open) => !open && deleteDialogs.setDeletingStep(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete step?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deletingStep?.title}" and all its fields will be permanently deleted.
+              "{deleteDialogs.deletingStep?.title}" and all its fields will be permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (!deletingStep) return
-                removeStep({ path: { step_id: deletingStep.id } })
-                if (
-                  panelState &&
-                  "stepId" in panelState &&
-                  panelState.stepId === deletingStep.id
-                ) {
-                  setPanelState(null)
-                }
-                setDeletingStep(null)
-              }}
+              onClick={deleteDialogs.confirmDeleteStep}
             >
               Delete
             </AlertDialogAction>
@@ -971,21 +724,21 @@ function PageFlowCanvasInner() {
       </AlertDialog>
 
       <AlertDialog
-        open={deletingField !== null}
-        onOpenChange={(open) => !open && setDeletingField(null)}
+        open={deleteDialogs.deletingField !== null}
+        onOpenChange={(open) => !open && deleteDialogs.setDeletingField(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete field?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deletingField?.label}" will be permanently deleted.
+              "{deleteDialogs.deletingField?.label}" will be permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteField}
+              onClick={deleteDialogs.confirmDeleteField}
             >
               Delete
             </AlertDialogAction>
@@ -994,21 +747,21 @@ function PageFlowCanvasInner() {
       </AlertDialog>
 
       <AlertDialog
-        open={deletingEstimator !== null}
-        onOpenChange={(open) => !open && setDeletingEstimator(null)}
+        open={deleteDialogs.deletingEstimator !== null}
+        onOpenChange={(open) => !open && deleteDialogs.setDeletingEstimator(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete estimator?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deletingEstimator?.name}" and all its variables will be permanently deleted.
+              "{deleteDialogs.deletingEstimator?.name}" and all its variables will be permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteEstimator}
+              onClick={deleteDialogs.confirmDeleteEstimator}
             >
               Delete
             </AlertDialogAction>
@@ -1086,7 +839,7 @@ function PageFlowCanvasInner() {
             }
             onAddField={handleAddField}
             onEditField={handleEditField}
-            onDeleteField={handleDeleteField}
+            onDeleteField={deleteDialogs.handleDeleteField}
             onOpenAddField={handleOpenAddField}
             onOpenEditField={handleOpenEditField}
           />
