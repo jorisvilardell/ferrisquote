@@ -1,9 +1,11 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2, Calculator } from "lucide-react"
 import type { Schemas } from "@/api/api.client"
+import { NodeDescriptionTooltip } from "./node-description-tooltip"
 
 export type EstimatorNodeData = {
   name: string
+  description: string
   variables: Schemas.VariableResponse[]
   color: string
   onDelete: () => void
@@ -24,7 +26,7 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
   const c = data.color
   const ringColor = `${c.replace(")", " / 0.2)")}` // e.g. hsl(330, 80%, 60% / 0.2)
 
-  return (
+  const nodeInner = (
     <div
       className="group relative min-w-[200px] max-w-[240px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer"
       style={{
@@ -125,5 +127,11 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
         )}
       </div>
     </div>
+  )
+
+  return (
+    <NodeDescriptionTooltip description={data.description}>
+      {nodeInner}
+    </NodeDescriptionTooltip>
   )
 }

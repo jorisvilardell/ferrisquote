@@ -1,16 +1,18 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2 } from "lucide-react"
+import { NodeDescriptionTooltip } from "./node-description-tooltip"
 
 export type FieldNodeData = {
   label: string
   type: string
+  description: string
   color: string
   index: number
   onDelete: () => void
 }
 
 export function FieldNode({ data, selected }: NodeProps<Node<FieldNodeData>>) {
-  return (
+  const nodeInner = (
     <div
       className="group relative min-w-[160px] rounded-md border border-border/60 bg-card text-card-foreground shadow-sm px-3 py-2 cursor-pointer transition-shadow animate-[field-enter_0.25s_ease-out_both]"
       style={{
@@ -50,5 +52,11 @@ export function FieldNode({ data, selected }: NodeProps<Node<FieldNodeData>>) {
         className="!border-2 !border-background !bg-muted-foreground !w-2 !h-2"
       />
     </div>
+  )
+
+  return (
+    <NodeDescriptionTooltip description={data.description}>
+      {nodeInner}
+    </NodeDescriptionTooltip>
   )
 }
