@@ -215,10 +215,12 @@ where
         &self,
         field_id: FieldId,
         label: Option<String>,
+        key: Option<String>,
+        description: Option<String>,
         config: Option<FieldConfig>,
     ) -> Result<Field, DomainError> {
         self.field_repo
-            .update_field(field_id, None, label, None, config)
+            .update_field(field_id, key, label, description, config)
             .await
     }
 

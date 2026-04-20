@@ -52,11 +52,12 @@ where
         &self,
         id: EstimatorId,
         name: Option<String>,
+        description: Option<String>,
     ) -> Result<Estimator, DomainError> {
         if let Some(n) = &name {
             validate_estimator_name(n)?;
         }
-        self.repo.update_estimator(id, name).await
+        self.repo.update_estimator(id, name, description).await
     }
 
     async fn delete_estimator(&self, id: EstimatorId) -> Result<(), DomainError> {

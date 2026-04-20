@@ -14,6 +14,7 @@ pub struct Estimator {
     pub id: EstimatorId,
     pub flow_id: FlowId,
     pub name: String,
+    pub description: String,
     pub variables: Vec<EstimatorVariable>,
 }
 
@@ -23,6 +24,7 @@ impl Estimator {
             id: EstimatorId::new(),
             flow_id,
             name,
+            description: String::new(),
             variables: Vec::new(),
         }
     }
@@ -32,6 +34,7 @@ impl Estimator {
             id,
             flow_id,
             name,
+            description: String::new(),
             variables: Vec::new(),
         }
     }
@@ -46,6 +49,23 @@ impl Estimator {
             id,
             flow_id,
             name,
+            description: String::new(),
+            variables,
+        }
+    }
+
+    pub fn with_full(
+        id: EstimatorId,
+        flow_id: FlowId,
+        name: String,
+        description: String,
+        variables: Vec<EstimatorVariable>,
+    ) -> Self {
+        Self {
+            id,
+            flow_id,
+            name,
+            description,
             variables,
         }
     }

@@ -69,12 +69,13 @@ async fn load_variables_for_estimators(
 impl EstimatorRepository for PostgresEstimatorRepository {
     async fn create_estimator(&self, estimator: Estimator) -> Result<Estimator, DomainError> {
         sqlx::query(
-            "INSERT INTO estimators (id, flow_id, name, created_at, updated_at) \
-             VALUES ($1, $2, $3, NOW(), NOW())",
+            "INSERT INTO estimators (id, flow_id, name, description, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, NOW(), NOW())",
         )
         .bind(estimator.id.into_uuid())
         .bind(estimator.flow_id.into_uuid())
         .bind(&estimator.name)
+        .bind(&estimator.description)
         .execute(&*self.pool)
         .await
         .map_err(|e| DomainError::repository(e.to_string()))?;
@@ -84,7 +85,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
 
     async fn get_estimator(&self, id: EstimatorId) -> Result<Estimator, DomainError> {
         let row = sqlx::query(
-            "SELECT id, flow_id, name FROM estimators WHERE id = $1",
+            "SELECT id, flow_id, name, description FROM estimators WHERE id = $1",
         )
         .bind(id.into_uuid())
         .fetch_optional(&*self.pool)
@@ -96,10 +97,11 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         let mut vars_map = load_variables_for_estimators(&self.pool, &[est_uuid]).await?;
         let variables = vars_map.remove(&est_uuid).unwrap_or_default();
 
-        Ok(Estimator::with_variables(
+        Ok(Estimator::with_full(
             EstimatorId::from_uuid(est_uuid),
             FlowId::from_uuid(row.get("flow_id")),
             row.get("name"),
+            row.get::<Option<String>, _>("description").unwrap_or_default(),
             variables,
         ))
     }
@@ -109,7 +111,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         flow_id: FlowId,
     ) -> Result<Vec<Estimator>, DomainError> {
         let rows = sqlx::query(
-            "SELECT id, flow_id, name FROM estimators \
+            "SELECT id, flow_id, name, description FROM estimators \
              WHERE flow_id = $1 \
              ORDER BY created_at",
         )
@@ -126,10 +128,11 @@ impl EstimatorRepository for PostgresEstimatorRepository {
             .map(|row| {
                 let eid: Uuid = row.get("id");
                 let variables = vars_map.remove(&eid).unwrap_or_default();
-                Estimator::with_variables(
+                Estimator::with_full(
                     EstimatorId::from_uuid(eid),
                     FlowId::from_uuid(row.get("flow_id")),
                     row.get("name"),
+                    row.get::<Option<String>, _>("description").unwrap_or_default(),
                     variables,
                 )
             })
@@ -142,16 +145,19 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         &self,
         id: EstimatorId,
         name: Option<String>,
+        description: Option<String>,
     ) -> Result<Estimator, DomainError> {
         let row = sqlx::query(
             "UPDATE estimators \
              SET name = COALESCE($2, name), \
+                 description = COALESCE($3, description), \
                  updated_at = NOW() \
              WHERE id = $1 \
-             RETURNING id, flow_id, name",
+             RETURNING id, flow_id, name, description",
         )
         .bind(id.into_uuid())
         .bind(name)
+        .bind(description)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| DomainError::repository(e.to_string()))?
@@ -161,10 +167,11 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         let mut vars_map = load_variables_for_estimators(&self.pool, &[est_uuid]).await?;
         let variables = vars_map.remove(&est_uuid).unwrap_or_default();
 
-        Ok(Estimator::with_variables(
+        Ok(Estimator::with_full(
             EstimatorId::from_uuid(est_uuid),
             FlowId::from_uuid(row.get("flow_id")),
             row.get("name"),
+            row.get::<Option<String>, _>("description").unwrap_or_default(),
             variables,
         ))
     }

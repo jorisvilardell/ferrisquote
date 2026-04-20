@@ -31,6 +31,7 @@ pub trait EstimatorRepository: Send + Sync {
         &self,
         id: EstimatorId,
         name: Option<String>,
+        description: Option<String>,
     ) -> impl Future<Output = Result<Estimator, DomainError>> + Send;
 
     fn delete_estimator(
@@ -83,6 +84,7 @@ pub trait EstimatorService: Send + Sync {
         &self,
         id: EstimatorId,
         name: Option<String>,
+        description: Option<String>,
     ) -> impl Future<Output = Result<Estimator, DomainError>> + Send;
 
     fn delete_estimator(
