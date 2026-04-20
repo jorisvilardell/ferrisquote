@@ -28,6 +28,10 @@ import {
   useGetFlow,
 } from "@/api/flows.api"
 import { useCreateEstimator, useDeleteEstimator, useEstimators } from "@/api/estimators.api"
+import {
+  overlayEstimators,
+  useEstimatorDraftStore,
+} from "@/pages/flows/feature/estimator-draft-store"
 import { idsToNames } from "@/pages/flows/lib/expression-refs"
 import { useCanvasDragDrop } from "@/pages/flows/hooks/use-canvas-drag-drop"
 import { useDeleteDialogs } from "@/pages/flows/hooks/use-delete-dialogs"
@@ -453,7 +457,11 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
   const { data: flowData } = useGetFlow(flowId)
   const { data: estimatorsData } = useEstimators(flowId)
   const flow = flowData?.data ?? null
-  const estimators = estimatorsData?.data?.estimators ?? []
+  const rawEstimators = estimatorsData?.data?.estimators ?? []
+
+  // Overlay sidenav drafts so the graph reflects unsaved edits live
+  const drafts = useEstimatorDraftStore()
+  const estimators = overlayEstimators(rawEstimators, drafts)
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
   const stepPositionsRef = useRef<Map<string, number>>(new Map())

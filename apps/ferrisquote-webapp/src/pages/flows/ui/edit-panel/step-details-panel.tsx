@@ -17,9 +17,31 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { StepRepeatableConfig } from "./step-repeatable-config"
+import {
+  StepRepeatableConfig,
+  validateRepeatable,
+  type RepeatableDraft,
+} from "./step-repeatable-config"
 
 const STEP_COLOR = "hsl(28, 85%, 55%)"
+
+function repeatableFromStep(step: Schemas.StepResponse): RepeatableDraft {
+  return {
+    isRepeatable: step.is_repeatable,
+    repeatLabel: step.repeat_label ?? "",
+    minRepeats: step.min_repeats,
+    maxRepeats: step.max_repeats ?? "",
+  }
+}
+
+function sameRepeatable(a: RepeatableDraft, b: RepeatableDraft): boolean {
+  return (
+    a.isRepeatable === b.isRepeatable &&
+    a.repeatLabel === b.repeatLabel &&
+    a.minRepeats === b.minRepeats &&
+    a.maxRepeats === b.maxRepeats
+  )
+}
 
 export function StepDetailsPanel({
   step,
@@ -37,21 +59,62 @@ export function StepDetailsPanel({
   onDeleteField: (fieldId: string, stepId: string) => void
 }) {
   const [editingTitle, setEditingTitle] = useState(false)
-  const [title, setTitle] = useState(step.title)
-  const [description, setDescription] = useState(step.description)
+  const [titleDraft, setTitleDraft] = useState(step.title)
+  const [descDraft, setDescDraft] = useState(step.description)
+  const [repeatDraft, setRepeatDraft] = useState<RepeatableDraft>(
+    repeatableFromStep(step),
+  )
 
   useEffect(() => {
-    setTitle(step.title)
+    setTitleDraft(step.title)
+    setDescDraft(step.description)
+    setRepeatDraft(repeatableFromStep(step))
     setEditingTitle(false)
-  }, [step.id, step.title])
+  }, [
+    step.id,
+    step.title,
+    step.description,
+    step.is_repeatable,
+    step.repeat_label,
+    step.min_repeats,
+    step.max_repeats,
+  ])
 
-  useEffect(() => {
-    setDescription(step.description)
-  }, [step.id, step.description])
+  const trimmedTitle = titleDraft.trim()
+  const titleDirty = trimmedTitle !== step.title
+  const descDirty = descDraft !== step.description
+  const repeatDirty = !sameRepeatable(repeatDraft, repeatableFromStep(step))
+  const isDirty = titleDirty || descDirty || repeatDirty
 
-  const commitDescription = () => {
-    if (description === step.description) return
-    onUpdateStep(step.id, { description })
+  const repeatError = validateRepeatable(repeatDraft)
+  const titleValid = trimmedTitle.length > 0
+  const canSave = isDirty && titleValid && !repeatError
+
+  function handleSave() {
+    if (!canSave) return
+    const body: Schemas.UpdateStepMetadataRequest = {}
+    if (titleDirty) body.title = trimmedTitle
+    if (descDirty) body.description = descDraft
+    if (repeatDirty) {
+      body.is_repeatable = repeatDraft.isRepeatable
+      if (repeatDraft.isRepeatable) {
+        body.repeat_label = repeatDraft.repeatLabel.trim() || null
+        body.min_repeats = repeatDraft.minRepeats
+        body.max_repeats = repeatDraft.maxRepeats === "" ? null : repeatDraft.maxRepeats
+      } else {
+        body.repeat_label = null
+        body.min_repeats = 1
+        body.max_repeats = null
+      }
+    }
+    onUpdateStep(step.id, body)
+  }
+
+  function handleCancel() {
+    setTitleDraft(step.title)
+    setDescDraft(step.description)
+    setRepeatDraft(repeatableFromStep(step))
+    setEditingTitle(false)
   }
 
   return (
@@ -62,25 +125,11 @@ export function StepDetailsPanel({
             autoFocus
             className="flex-1 !text-base font-semibold h-7 rounded-sm border border-border/60 bg-transparent px-2 py-0 shadow-none focus-visible:border-border focus-visible:ring-0"
             style={{ color: STEP_COLOR }}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => {
-              if (title.trim() && title.trim() !== step.title) {
-                onUpdateStep(step.id, { title: title.trim() })
-              }
-              setEditingTitle(false)
-            }}
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => setEditingTitle(false)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (title.trim() && title.trim() !== step.title) {
-                  onUpdateStep(step.id, { title: title.trim() })
-                }
-                setEditingTitle(false)
-              }
-              if (e.key === "Escape") {
-                setTitle(step.title)
-                setEditingTitle(false)
-              }
+              if (e.key === "Enter" || e.key === "Escape") setEditingTitle(false)
             }}
           />
         ) : (
@@ -89,7 +138,7 @@ export function StepDetailsPanel({
             style={{ color: STEP_COLOR }}
             onClick={() => setEditingTitle(true)}
           >
-            {step.title}
+            {titleDraft || step.title}
           </button>
         )}
         {!editingTitle && (
@@ -107,13 +156,16 @@ export function StepDetailsPanel({
           id="step-desc"
           rows={2}
           placeholder="Optional — describe this step"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={commitDescription}
+          value={descDraft}
+          onChange={(e) => setDescDraft(e.target.value)}
         />
       </div>
 
-      <StepRepeatableConfig step={step} onUpdateStep={onUpdateStep} />
+      <StepRepeatableConfig
+        draft={repeatDraft}
+        onChange={setRepeatDraft}
+        validationError={repeatError}
+      />
 
       <div className="flex items-center justify-between px-5 py-3 border-b shrink-0">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -187,6 +239,24 @@ export function StepDetailsPanel({
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="flex gap-2 px-5 py-4 border-t shrink-0">
+        <Button
+          variant="outline"
+          className="flex-1"
+          disabled={!isDirty}
+          onClick={handleCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={!canSave}
+          onClick={handleSave}
+        >
+          Save
+        </Button>
       </div>
     </>
   )
