@@ -14,7 +14,7 @@ import { StepNode, type StepNodeData } from "../ui/step-node"
 import { FieldNode, type FieldNodeData } from "../ui/field-node"
 import { EstimatorNode, type EstimatorNodeData } from "../ui/estimator-node"
 import { CanvasToolbar, type DragNodeType } from "../ui/canvas-toolbar"
-import { FlowEditPanel, type PanelState } from "../ui/flow-edit-sheet"
+import { FlowEditPanel, type PanelState } from "./flow-edit-panel"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -646,11 +646,21 @@ function PageFlowCanvasInner() {
   function handleEditField(
     fieldId: string,
     _stepId: string,
-    data: { label: string; config: Schemas.FieldConfigDto },
+    data: {
+      label?: string
+      key?: string
+      description?: string | null
+      config?: Schemas.FieldConfigDto
+    },
   ) {
     updateField({
       path: { field_id: fieldId },
-      body: { label: data.label, config: data.config },
+      body: {
+        label: data.label,
+        key: data.key,
+        description: data.description,
+        config: data.config,
+      },
     })
   }
 
