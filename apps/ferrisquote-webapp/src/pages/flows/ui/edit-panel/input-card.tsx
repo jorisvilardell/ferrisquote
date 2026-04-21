@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Trash2 } from "lucide-react"
 import type { Schemas } from "@/api/api.client"
 import {
@@ -42,18 +42,22 @@ function buildParamType(kind: ParamKind, labelFilter: string): Schemas.Estimator
 
 export function InputCard({
   input,
+  expanded,
+  onToggle,
   onUpdate,
   onDelete,
 }: {
   input: Schemas.InputResponse
+  expanded: boolean
+  onToggle: () => void
   onUpdate: (inputId: string, patch: Partial<Schemas.InputResponse>) => void
   onDelete: (inputId: string) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
   const [keyDraft, setKeyDraft] = useState(input.key)
   const [descDraft, setDescDraft] = useState(input.description)
   const [kindDraft, setKindDraft] = useState<ParamKind>(paramKindOf(input.parameter_type))
   const [labelFilterDraft, setLabelFilterDraft] = useState(paramLabelFilter(input.parameter_type))
+  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setKeyDraft(input.key)
@@ -61,6 +65,13 @@ export function InputCard({
     setKindDraft(paramKindOf(input.parameter_type))
     setLabelFilterDraft(paramLabelFilter(input.parameter_type))
   }, [input.id, input.key, input.description, input.parameter_type])
+
+  // Scroll into view when the parent just expanded this card.
+  useEffect(() => {
+    if (expanded) {
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }, [expanded])
 
   const commitKey = () => {
     const trimmed = keyDraft.trim()
@@ -85,9 +96,9 @@ export function InputCard({
   }
 
   return (
-    <div className="rounded-md border border-border/60 overflow-hidden shrink-0">
+    <div ref={rootRef} className="rounded-md border border-border/60 overflow-hidden shrink-0">
       <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/30">
-        <button className="flex-1 text-left" onClick={() => setExpanded((p) => !p)}>
+        <button className="flex-1 text-left" onClick={onToggle}>
           <span className="text-sm font-mono font-semibold" style={{ color: EMERALD }}>
             {input.key}
           </span>

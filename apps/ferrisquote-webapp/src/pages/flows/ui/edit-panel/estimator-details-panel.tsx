@@ -62,6 +62,11 @@ export function EstimatorDetailsPanel({
   onClose: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
+  // Accordion-style: only one input or output card expanded at a time.
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
+
+  const toggleCard = (id: string) =>
+    setExpandedCardId((prev) => (prev === id ? null : id))
 
   const drafts = useEstimatorDraftStore()
 
@@ -78,6 +83,11 @@ export function EstimatorDetailsPanel({
   useEffect(() => {
     setEditingName(false)
   }, [estimator.id, estimator.name, estimator.description])
+
+  // Reset the accordion when switching estimators.
+  useEffect(() => {
+    setExpandedCardId(null)
+  }, [estimator.id])
 
   const updateEstimator = useUpdateEstimator(flowId, estimator.id)
   const addInput = useAddInput(flowId, estimator.id)
@@ -317,14 +327,16 @@ export function EstimatorDetailsPanel({
       description: "",
       parameter_type: { kind: "number" },
     })
+    setExpandedCardId(tempId)
   }
 
   function handleDeleteInput(inputId: string) {
     if (inputId.startsWith(TEMP_PREFIX)) {
       drafts.removePendingInput(inputId)
-      return
+    } else {
+      drafts.markInputDelete(inputId)
     }
-    drafts.markInputDelete(inputId)
+    setExpandedCardId((prev) => (prev === inputId ? null : prev))
   }
 
   function handleOutputPatch(outputId: string, patch: Partial<Schemas.OutputResponse>) {
@@ -358,14 +370,16 @@ export function EstimatorDetailsPanel({
       expression: "0",
       description: "",
     })
+    setExpandedCardId(tempId)
   }
 
   function handleDeleteOutput(outputId: string) {
     if (outputId.startsWith(TEMP_PREFIX)) {
       drafts.removePendingOutput(outputId)
-      return
+    } else {
+      drafts.markOutputDelete(outputId)
     }
-    drafts.markOutputDelete(outputId)
+    setExpandedCardId((prev) => (prev === outputId ? null : prev))
   }
 
   const ownInputKeys = effectiveInputs.map((i) => i.key)
@@ -485,6 +499,8 @@ export function EstimatorDetailsPanel({
           <InputCard
             key={i.id}
             input={i}
+            expanded={expandedCardId === i.id}
+            onToggle={() => toggleCard(i.id)}
             onUpdate={handleInputPatch}
             onDelete={handleDeleteInput}
           />
@@ -511,6 +527,8 @@ export function EstimatorDetailsPanel({
           <OutputCard
             key={o.id}
             output={o}
+            expanded={expandedCardId === o.id}
+            onToggle={() => toggleCard(o.id)}
             ownEstimatorName={estimator.name}
             ownInputKeys={ownInputKeys}
             ownOutputKeys={ownOutputKeys.filter((k) => k !== o.key)}

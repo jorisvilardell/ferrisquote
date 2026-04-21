@@ -38,6 +38,8 @@ type Suggestion = {
 
 export function OutputCard({
   output,
+  expanded,
+  onToggle,
   ownEstimatorName,
   ownInputKeys,
   ownOutputKeys,
@@ -48,6 +50,8 @@ export function OutputCard({
   onDelete,
 }: {
   output: Schemas.OutputResponse
+  expanded: boolean
+  onToggle: () => void
   ownEstimatorName: string
   ownInputKeys: string[]
   ownOutputKeys: string[]
@@ -57,10 +61,10 @@ export function OutputCard({
   onUpdate: (outputId: string, patch: Partial<Schemas.OutputResponse>) => void
   onDelete: (outputId: string) => void
 }) {
-  const [expanded, setExpanded] = useState(!output.expression)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionFilter, setSuggestionFilter] = useState("")
   const exprRef = useRef<HTMLTextAreaElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const displayExpression = idsToNames(output.expression, estimatorsIndex)
 
@@ -76,6 +80,12 @@ export function OutputCard({
     pickedIdsRef.current = new Map()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [output.id, output.key, output.expression, output.description])
+
+  useEffect(() => {
+    if (expanded) {
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }, [expanded])
 
   const [dropdownPos, setDropdownPos] = useState<{
     top: number
@@ -240,9 +250,9 @@ export function OutputCard({
   }
 
   return (
-    <div className="rounded-md border border-border/60 overflow-hidden shrink-0">
+    <div ref={rootRef} className="rounded-md border border-border/60 overflow-hidden shrink-0">
       <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/30">
-        <button className="flex-1 text-left" onClick={() => setExpanded((p) => !p)}>
+        <button className="flex-1 text-left" onClick={onToggle}>
           <span className="text-sm font-mono font-semibold" style={{ color: ROSE }}>
             {output.key}
           </span>
