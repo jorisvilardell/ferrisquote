@@ -128,6 +128,17 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
         </button>
       </div>
 
+      {/* Error badge — always visible when the node has diagnostics so the
+          user spots the problem without hovering. */}
+      {hasError && (
+        <div
+          className="absolute -top-2 -left-2 flex items-center justify-center w-5 h-5 rounded-full bg-destructive text-destructive-foreground shadow z-10"
+          title={String(data.errorCount)}
+        >
+          <AlertTriangle className="w-3 h-3" />
+        </div>
+      )}
+
       {/* Header */}
       <div
         className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b"
