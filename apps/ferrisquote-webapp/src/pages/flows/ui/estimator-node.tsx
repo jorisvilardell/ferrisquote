@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
-import { Trash2, Calculator } from "lucide-react"
+import { Trash2, Calculator, AlertTriangle } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import { NodeDescriptionTooltip } from "./node-description-tooltip"
@@ -10,6 +10,10 @@ export type EstimatorNodeData = {
   inputs: Schemas.InputResponse[]
   outputs: Schemas.OutputResponse[]
   color: string
+  /** Number of live diagnostics attached to this estimator. When > 0 the
+   *  node shows a red ⚠ badge; click is handled by ReactFlow's node click
+   *  handler which opens the edit panel. */
+  errorCount?: number
   onDelete: () => void
 }
 
@@ -42,13 +46,22 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
   const c = data.color
   const ringColor = `${c.replace(")", " / 0.2)")}`
   const inputColor = "hsl(158, 64%, 52%)"
+  const hasError = (data.errorCount ?? 0) > 0
 
   const nodeInner = (
     <div
       className="group relative min-w-[220px] max-w-[260px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer"
       style={{
-        borderColor: selected ? c : undefined,
-        boxShadow: selected ? `0 0 0 3px ${ringColor}` : undefined,
+        borderColor: hasError
+          ? "var(--destructive)"
+          : selected
+            ? c
+            : undefined,
+        boxShadow: hasError
+          ? "0 0 0 2px color-mix(in srgb, var(--destructive) 25%, transparent)"
+          : selected
+            ? `0 0 0 3px ${ringColor}`
+            : undefined,
       }}
     >
       {/* Fallback handles at header when no inputs/outputs */}
