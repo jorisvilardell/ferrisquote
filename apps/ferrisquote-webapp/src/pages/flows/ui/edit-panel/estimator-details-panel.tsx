@@ -358,6 +358,58 @@ export function EstimatorDetailsPanel({
       return
     }
 
+    // Cascade output renames into any downstream binding whose mapping
+    // chained this estimator's old output key. Binding mappings persist
+    // output_key strings (not ids), so without this step the chain would
+    // silently break on the next reload.
+    if (binding) {
+      const outputRenames = new Map<string, string>()
+      for (const [outputId, patch] of Object.entries(drafts.outputEdits)) {
+        if (patch.key === undefined) continue
+        const server = estimator.outputs.find((o) => o.id === outputId)
+        if (!server || server.key === patch.key) continue
+        outputRenames.set(server.key, patch.key)
+      }
+
+      if (outputRenames.size > 0) {
+        const cascadePromises: Promise<unknown>[] = []
+        for (const otherB of otherBindings) {
+          const mapping = otherB.inputs_mapping as InputsMap
+          let touched = false
+          const newMapping: InputsMap = {}
+          for (const [k, src] of Object.entries(mapping)) {
+            if (
+              src.source === "binding_output" &&
+              src.binding_id === binding.id &&
+              outputRenames.has(src.output_key)
+            ) {
+              newMapping[k] = {
+                ...src,
+                output_key: outputRenames.get(src.output_key)!,
+              }
+              touched = true
+            } else {
+              newMapping[k] = src
+            }
+          }
+          if (touched) {
+            cascadePromises.push(
+              updateBinding.mutateAsync({
+                path: { flow_id: flowId, binding_id: otherB.id },
+                body: { inputs_mapping: newMapping },
+              }),
+            )
+          }
+        }
+        try {
+          await Promise.all(cascadePromises)
+        } catch (err) {
+          toast.error(`Downstream chain update failed: ${(err as Error).message}`)
+          return
+        }
+      }
+    }
+
     if (bindingDirty && binding) {
       // Rebuild the mapping keyed strictly by the *current* input/output
       // keys. This guards against any stale entries that the live rekey
@@ -841,16 +893,22 @@ export function EstimatorDetailsPanel({
                             </SelectItem>
                           )
                         })}
-                      {otherBindings.flatMap((b) =>
-                        Object.keys(b.outputs_reduce_strategy as ReduceMap).map((key) => (
+                      {otherBindings.flatMap((b) => {
+                        const src = otherEstimators.find((e) => e.id === b.estimator_id)
+                        if (!src) return []
+                        const prettyName = src.name.replace(/_/g, " ")
+                        // List every output of the upstream estimator — not
+                        // just the ones with a reduce strategy set — since
+                        // any output can feed a chain.
+                        return src.outputs.map((outKey) => (
                           <SelectItem
-                            key={`b-${b.id}-${key}`}
-                            value={`binding:${b.id}.${key}`}
+                            key={`b-${b.id}-${outKey}`}
+                            value={`binding:${b.id}.${outKey}`}
                           >
-                            Binding {b.id.slice(0, 8)} → {key}
+                            {prettyName} → {outKey}
                           </SelectItem>
-                        )),
-                      )}
+                        ))
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
