@@ -1,0 +1,5 @@
+ALTER TABLE estimators
+  ADD COLUMN IF NOT EXISTS inputs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS outputs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+DROP TABLE IF EXISTS estimator_variables;
