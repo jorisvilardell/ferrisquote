@@ -36,48 +36,47 @@ type Suggestion = {
   estimatorId?: string
 }
 
-export function VariableCard({
-  variable,
+export function OutputCard({
+  output,
   ownEstimatorName,
-  ownEstimatorVariables,
+  ownInputKeys,
+  ownOutputKeys,
   availableFieldKeys,
   otherEstimators,
   estimatorsIndex,
   onUpdate,
   onDelete,
 }: {
-  variable: Schemas.VariableResponse
+  output: Schemas.OutputResponse
   ownEstimatorName: string
-  ownEstimatorVariables: string[]
+  ownInputKeys: string[]
+  ownOutputKeys: string[]
   availableFieldKeys: string[]
-  otherEstimators: Array<{ id: string; name: string; variables: string[] }>
+  otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
   estimatorsIndex: EstimatorIndex
-  onUpdate: (variableId: string, patch: Partial<Schemas.VariableResponse>) => void
-  onDelete: (variableId: string) => void
+  onUpdate: (outputId: string, patch: Partial<Schemas.OutputResponse>) => void
+  onDelete: (outputId: string) => void
 }) {
-  const [expanded, setExpanded] = useState(!variable.expression)
+  const [expanded, setExpanded] = useState(!output.expression)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionFilter, setSuggestionFilter] = useState("")
   const exprRef = useRef<HTMLTextAreaElement>(null)
 
-  const displayExpression = idsToNames(variable.expression, estimatorsIndex)
+  const displayExpression = idsToNames(output.expression, estimatorsIndex)
 
-  const [nameDraft, setNameDraft] = useState(variable.name)
+  const [keyDraft, setKeyDraft] = useState(output.key)
   const [exprDraft, setExprDraft] = useState(displayExpression)
-  const [descDraft, setDescDraft] = useState(variable.description)
-  // Remember which estimator id was chosen for each `name.var` via autocomplete,
-  // so free-form editing doesn't silently reroute to the first same-named estimator.
+  const [descDraft, setDescDraft] = useState(output.description)
   const pickedIdsRef = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
-    setNameDraft(variable.name)
-    setExprDraft(idsToNames(variable.expression, estimatorsIndex))
-    setDescDraft(variable.description)
+    setKeyDraft(output.key)
+    setExprDraft(idsToNames(output.expression, estimatorsIndex))
+    setDescDraft(output.description)
     pickedIdsRef.current = new Map()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variable.id, variable.name, variable.expression, variable.description])
+  }, [output.id, output.key, output.expression, output.description])
 
-  // Dropdown portal positioning — escapes all parent overflow clips
   const [dropdownPos, setDropdownPos] = useState<{
     top: number
     left: number
@@ -122,28 +121,30 @@ export function VariableCard({
 
   const filterLower = suggestionFilter.toLowerCase()
   const suggestions: Suggestion[] = [
-    // Fields
     ...availableFieldKeys
       .filter((k) => k.toLowerCase().includes(filterLower))
       .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "Fields" })),
-    // Functions
     ...AGG_FUNCTIONS
       .filter((fn) => fn.toLowerCase().includes(filterLower))
       .map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "Functions" })),
-    // Variables of the current estimator (bare references)
-    ...ownEstimatorVariables
-      .filter((v) => v.toLowerCase().includes(filterLower))
-      .map((v) => ({
-        label: `@${v}`,
-        insert: `@${v}`,
+    ...ownInputKeys
+      .filter((k) => k.toLowerCase().includes(filterLower))
+      .map((k) => ({
+        label: `@${k}`,
+        insert: `@${k}`,
+        group: "Inputs",
+      })),
+    ...ownOutputKeys
+      .filter((k) => k.toLowerCase().includes(filterLower))
+      .map((k) => ({
+        label: `@${k}`,
+        insert: `@${k}`,
         group: ownEstimatorName.replace(/_/g, " "),
         isEstimator: true,
       })),
-    // Variables of other estimators (cross-references).
-    // Group key uses estimator id so duplicates stay separate.
     ...otherEstimators.flatMap((est) => {
       const displayName = est.name.replace(/_/g, " ")
-      return est.variables
+      return est.outputs
         .filter((v) =>
           v.toLowerCase().includes(filterLower) ||
           `${est.name}.${v}`.toLowerCase().includes(filterLower) ||
@@ -183,10 +184,10 @@ export function VariableCard({
     const stored = namesToIdsPreservingIds(
       newVal,
       estimatorsIndex,
-      variable.expression,
+      output.expression,
       pickedIdsRef.current,
     )
-    onUpdate(variable.id, { expression: stored })
+    onUpdate(output.id, { expression: stored })
 
     requestAnimationFrame(() => {
       el.focus()
@@ -211,47 +212,43 @@ export function VariableCard({
     }
   }
 
-  const commitName = () => {
-    const trimmed = nameDraft.trim()
-    if (!trimmed || trimmed === variable.name) {
-      setNameDraft(variable.name)
+  const commitKey = () => {
+    const trimmed = keyDraft.trim()
+    if (!trimmed || trimmed === output.key) {
+      setKeyDraft(output.key)
       return
     }
-    onUpdate(variable.id, { name: trimmed })
+    onUpdate(output.id, { key: trimmed })
   }
   const commitExpr = () => {
     if (!exprDraft.trim()) {
-      setExprDraft(idsToNames(variable.expression, estimatorsIndex))
+      setExprDraft(idsToNames(output.expression, estimatorsIndex))
       return
     }
     const stored = namesToIdsPreservingIds(
       exprDraft,
       estimatorsIndex,
-      variable.expression,
+      output.expression,
       pickedIdsRef.current,
     )
-    if (stored === variable.expression) return
-    onUpdate(variable.id, { expression: stored })
+    if (stored === output.expression) return
+    onUpdate(output.id, { expression: stored })
   }
   const commitDesc = () => {
-    if (descDraft === variable.description) return
-    onUpdate(variable.id, { description: descDraft })
+    if (descDraft === output.description) return
+    onUpdate(output.id, { description: descDraft })
   }
 
   return (
     <div className="rounded-md border border-border/60 overflow-hidden">
-      {/* Header row */}
       <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/30">
-        <button
-          className="flex-1 text-left"
-          onClick={() => setExpanded((p) => !p)}
-        >
+        <button className="flex-1 text-left" onClick={() => setExpanded((p) => !p)}>
           <span className="text-sm font-mono font-semibold" style={{ color: ROSE }}>
-            {variable.name}
+            {output.key}
           </span>
-          {!expanded && variable.expression && (
+          {!expanded && output.expression && (
             <span className="text-xs text-muted-foreground ml-2 font-mono">
-              = {variable.expression.length > 20 ? variable.expression.slice(0, 20) + "..." : variable.expression}
+              = {output.expression.length > 20 ? output.expression.slice(0, 20) + "..." : output.expression}
             </span>
           )}
         </button>
@@ -263,16 +260,16 @@ export function VariableCard({
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete variable?</AlertDialogTitle>
+              <AlertDialogTitle>Delete output?</AlertDialogTitle>
               <AlertDialogDescription>
-                "{variable.name}" will be permanently deleted.
+                "{output.key}" will be permanently deleted.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => onDelete(variable.id)}
+                onClick={() => onDelete(output.id)}
               >
                 Delete
               </AlertDialogAction>
@@ -281,28 +278,25 @@ export function VariableCard({
         </AlertDialog>
       </div>
 
-      {/* Expanded editor */}
       {expanded && (
         <div className="px-3 py-2.5 space-y-2.5 border-t border-border/40">
-          {/* Name */}
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Name</Label>
+            <Label className="text-xs">Key</Label>
             <Input
               className="h-7 text-sm font-mono"
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={commitName}
+              value={keyDraft}
+              onChange={(e) => setKeyDraft(e.target.value)}
+              onBlur={commitKey}
               onKeyDown={(e) => {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur()
                 if (e.key === "Escape") {
-                  setNameDraft(variable.name)
+                  setKeyDraft(output.key)
                   ;(e.target as HTMLInputElement).blur()
                 }
               }}
             />
           </div>
 
-          {/* Expression */}
           <div className="flex flex-col gap-1 relative">
             <Label className="text-xs">Expression</Label>
             <Textarea
@@ -367,7 +361,6 @@ export function VariableCard({
               )}
           </div>
 
-          {/* Description */}
           <div className="flex flex-col gap-1">
             <Label className="text-xs">Description</Label>
             <Input
