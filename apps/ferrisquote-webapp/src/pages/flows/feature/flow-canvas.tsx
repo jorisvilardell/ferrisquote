@@ -579,6 +579,7 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
     addStep,
     addField,
     createEstimator,
+    createBinding,
   })
   const { dropIndicatorIndex, onNodeDrag, onNodeDragStop } = useStepReorder(
     flow,
