@@ -42,7 +42,6 @@ pub fn build_routes<
         .nest("/api/v1/flows", estimator_routes::estimator_flow_routes())
         .nest("/api/v1/flows", submission_routes::submission_flow_routes())
         .nest("/api/v1/estimators", estimator_routes::estimator_routes())
-        .nest("/api/v1/variables", estimator_routes::variable_routes())
         .nest("/api/v1/submissions", submission_routes::submission_routes())
         .with_state(state);
 
