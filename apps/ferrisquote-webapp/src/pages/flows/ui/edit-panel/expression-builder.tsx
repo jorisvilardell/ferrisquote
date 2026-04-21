@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Calculator, Delete, X } from "lucide-react"
+import { Calculator, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { Button } from "@/components/ui/button"
+import { HelpHint } from "@/components/help-hint"
 import { cn } from "@/lib/utils"
 import type { EstimatorIndex } from "@/pages/flows/lib/expression-refs"
 import {
@@ -196,7 +196,7 @@ export function ExpressionBuilder({
       ref={containerRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/20 p-2 focus:outline-none focus:ring-2 focus:ring-ring/60"
+      className="flex flex-col gap-3 rounded-xl border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 p-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/60"
     >
       <DisplayZone
         tiles={tiles}
@@ -204,53 +204,56 @@ export function ExpressionBuilder({
         setCursor={setCursor}
         removeAt={removeAt}
         error={errorText}
+        hint={t("builder.keyboard_hint")}
       />
 
-      <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1 text-xs"
-          onClick={backspace}
-          disabled={tiles.length === 0}
-          aria-label={t("builder.backspace")}
-        >
-          <Delete className="h-3 w-3" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs"
+      {/* Calculator keypad — 4 cols, Numworks-ish:
+             row 1: C / ⌫ / ( / )
+             rows 2-4: digits + ÷/×/−
+             row 5: 0 (spans 2) / . / + */}
+      <div className="grid grid-cols-4 gap-1.5">
+        <CalcKey
+          variant="fn"
           onClick={clearAll}
           disabled={tiles.length === 0}
-          aria-label={t("builder.clear")}
+          ariaLabel={t("builder.clear")}
         >
-          {t("builder.clear")}
-        </Button>
-        <div className="flex-1" />
-        <span className="text-[10px] text-muted-foreground italic">
-          {t("builder.keyboard_hint")}
-        </span>
-      </div>
+          C
+        </CalcKey>
+        <CalcKey
+          variant="fn"
+          onClick={backspace}
+          disabled={tiles.length === 0}
+          ariaLabel={t("builder.backspace")}
+        >
+          ⌫
+        </CalcKey>
+        <CalcKey variant="fn" onClick={() => pushChar("(")}>
+          (
+        </CalcKey>
+        <CalcKey variant="fn" onClick={() => pushChar(")")}>
+          )
+        </CalcKey>
 
-      <PaletteSection label={t("builder.digits_ops")}>
-        <div className="grid grid-cols-5 gap-1">
-          {["7", "8", "9", "(", ")"].map((c) => (
-            <NumOpButton key={c} label={c} onClick={() => pushChar(c)} />
-          ))}
-          {["4", "5", "6", "+", "-"].map((c) => (
-            <NumOpButton key={c} label={c} onClick={() => pushChar(c)} />
-          ))}
-          {["1", "2", "3", "*", "/"].map((c) => (
-            <NumOpButton key={c} label={c === "*" ? "×" : c === "/" ? "÷" : c} onClick={() => pushChar(c === "×" ? "*" : c === "÷" ? "/" : c)} />
-          ))}
-          {["0", "."].map((c) => (
-            <NumOpButton key={c} label={c} onClick={() => pushChar(c)} />
-          ))}
-        </div>
-      </PaletteSection>
+        <CalcKey variant="num" onClick={() => pushChar("7")}>7</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar("8")}>8</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar("9")}>9</CalcKey>
+        <CalcKey variant="op" onClick={() => pushChar("/")}>÷</CalcKey>
+
+        <CalcKey variant="num" onClick={() => pushChar("4")}>4</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar("5")}>5</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar("6")}>6</CalcKey>
+        <CalcKey variant="op" onClick={() => pushChar("*")}>×</CalcKey>
+
+        <CalcKey variant="num" onClick={() => pushChar("1")}>1</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar("2")}>2</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar("3")}>3</CalcKey>
+        <CalcKey variant="op" onClick={() => pushChar("-")}>−</CalcKey>
+
+        <CalcKey variant="num" wide onClick={() => pushChar("0")}>0</CalcKey>
+        <CalcKey variant="num" onClick={() => pushChar(".")}>.</CalcKey>
+        <CalcKey variant="op" onClick={() => pushChar("+")}>+</CalcKey>
+      </div>
 
       {ownInputKeys.length > 0 && (
         <PaletteSection label={t("builder.inputs")}>
@@ -444,46 +447,63 @@ function DisplayZone({
   setCursor,
   removeAt,
   error,
+  hint,
 }: {
   tiles: Tile[]
   cursor: number
   setCursor: (c: number) => void
   removeAt: (i: number) => void
   error: string | null
+  hint: string
 }) {
   const { t } = useTranslation()
 
   return (
     <div
       className={cn(
-        "min-h-[56px] rounded-md border bg-background px-2 py-2 flex flex-wrap items-center gap-1",
-        error ? "border-destructive/60" : "border-border/60",
+        "relative rounded-lg border shadow-inner",
+        // Dark "LCD screen" look. Subtle gradient so the chips pop.
+        "bg-gradient-to-b from-slate-900 to-slate-950 dark:from-slate-800 dark:to-slate-900",
+        error ? "border-destructive/70 ring-1 ring-destructive/40" : "border-slate-700",
       )}
-      onClick={(e) => {
-        // Click on empty space sets cursor at end
-        if (e.target === e.currentTarget) setCursor(tiles.length)
-      }}
     >
-      {tiles.length === 0 && (
-        <span className="text-xs text-muted-foreground italic flex items-center gap-1">
-          <Calculator className="h-3 w-3" />
-          {t("builder.placeholder")}
-        </span>
-      )}
-      {tiles.map((tile, i) => (
-        <span key={tile.id} className="flex items-center">
-          <Caret active={cursor === i} onClick={() => setCursor(i)} />
-          <TileChip
-            tile={tile}
-            selected={cursor === i + 1}
-            onClick={() => setCursor(i + 1)}
-            onRemove={() => removeAt(i)}
-          />
-        </span>
-      ))}
-      <Caret active={cursor === tiles.length} onClick={() => setCursor(tiles.length)} />
+      <div
+        className="min-h-[72px] px-3 py-2.5 flex flex-wrap items-center gap-1"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setCursor(tiles.length)
+        }}
+      >
+        {tiles.length === 0 && (
+          <span className="text-xs text-slate-400 italic flex items-center gap-1.5">
+            <Calculator className="h-3 w-3" />
+            {t("builder.placeholder")}
+          </span>
+        )}
+        {tiles.map((tile, i) => (
+          <span key={tile.id} className="flex items-center">
+            <Caret active={cursor === i} onClick={() => setCursor(i)} />
+            <TileChip
+              tile={tile}
+              selected={cursor === i + 1}
+              onClick={() => setCursor(i + 1)}
+              onRemove={() => removeAt(i)}
+            />
+          </span>
+        ))}
+        <Caret
+          active={cursor === tiles.length}
+          onClick={() => setCursor(tiles.length)}
+        />
+      </div>
+      {/* Help icon floating in the top-right corner of the screen — holds
+          the keyboard-shortcut hint so the display itself stays clean. */}
+      <div className="absolute top-1.5 right-1.5">
+        <div className="text-slate-300 hover:text-slate-100">
+          <HelpHint text={hint} label={t("common.help")} />
+        </div>
+      </div>
       {error && (
-        <div className="w-full text-[11px] text-destructive mt-1">{error}</div>
+        <div className="px-3 pb-2 text-[11px] text-red-300">{error}</div>
       )}
     </div>
   )
@@ -495,8 +515,10 @@ function Caret({ active, onClick }: { active: boolean; onClick: () => void }) {
       role="presentation"
       onClick={onClick}
       className={cn(
-        "inline-block w-[2px] self-stretch cursor-text mx-0.5 transition-colors",
-        active ? "bg-primary animate-pulse" : "bg-transparent hover:bg-border",
+        "inline-block w-[2px] h-5 cursor-text mx-0.5 transition-colors rounded-sm",
+        active
+          ? "bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.7)]"
+          : "bg-transparent hover:bg-slate-600",
       )}
     />
   )
@@ -515,15 +537,19 @@ function TileChip({
 }) {
   const label = tileLabel(tile)
   const color = tileColor(tile)
+  // Tiles live on the dark "screen" — use saturated text + tinted bg so
+  // they read like pill-shaped LED labels rather than muted form chips.
+  const bg = color ? `${color}30` : "rgba(148,163,184,0.18)"
+  const border = color ?? "rgba(148,163,184,0.35)"
+  const text = color ?? "rgb(226, 232, 240)"
   return (
     <span
       onClick={onClick}
       className={cn(
-        "group inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-mono cursor-pointer select-none",
-        "hover:bg-accent",
-        selected ? "ring-1 ring-primary" : "",
+        "group inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-mono cursor-pointer select-none shadow-sm",
+        selected ? "ring-1 ring-offset-1 ring-offset-slate-900 ring-primary" : "",
       )}
-      style={color ? { color, borderColor: color, backgroundColor: `${color}15` } : undefined}
+      style={{ color: text, borderColor: border, backgroundColor: bg }}
     >
       {label}
       <button
@@ -597,14 +623,42 @@ function PaletteSection({
   )
 }
 
-function NumOpButton({ label, onClick }: { label: string; onClick: () => void }) {
+function CalcKey({
+  children,
+  onClick,
+  variant,
+  wide,
+  disabled,
+  ariaLabel,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  variant: "num" | "op" | "fn"
+  wide?: boolean
+  disabled?: boolean
+  ariaLabel?: string
+}) {
+  const base =
+    "h-10 rounded-lg border text-base font-mono font-semibold shadow-sm " +
+    "active:translate-y-px active:shadow-none transition-all " +
+    "disabled:opacity-40 disabled:cursor-not-allowed"
+  const variantCls = {
+    num:
+      "bg-background hover:bg-accent border-border/70 text-foreground",
+    op:
+      "bg-amber-500 hover:bg-amber-600 border-amber-600 text-white shadow-amber-900/20",
+    fn:
+      "bg-slate-700 hover:bg-slate-600 border-slate-800 text-slate-100 text-sm",
+  }[variant]
   return (
     <button
       type="button"
       onClick={onClick}
-      className="h-7 rounded-md border border-border/60 bg-background text-sm font-mono hover:bg-accent active:bg-accent/70 transition-colors"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className={cn(base, variantCls, wide && "col-span-2")}
     >
-      {label}
+      {children}
     </button>
   )
 }
