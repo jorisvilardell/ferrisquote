@@ -6,13 +6,17 @@ use axum::{
 use ferrisquote_domain::domain::{
     estimator::ports::EstimatorService,
     flows::ports::{FieldService, FlowService, StepService},
+    submission::ports::SubmissionService,
 };
 
 use crate::{handlers, state::AppState};
 
 /// Estimator routes nested under /flows (create + list by flow, flow-wide evaluation)
-pub fn estimator_flow_routes<FS: FlowService + StepService + FieldService + Clone + 'static, ES: EstimatorService + Clone + 'static>(
-) -> Router<AppState<FS, ES>> {
+pub fn estimator_flow_routes<
+    FS: FlowService + StepService + FieldService + Clone + 'static,
+    ES: EstimatorService + Clone + 'static,
+    SS: SubmissionService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS>> {
     Router::new()
         .route("/{flow_id}/estimators", post(handlers::create_estimator))
         .route("/{flow_id}/estimators", get(handlers::list_estimators))
@@ -20,8 +24,11 @@ pub fn estimator_flow_routes<FS: FlowService + StepService + FieldService + Clon
 }
 
 /// Standalone estimator routes under /estimators
-pub fn estimator_routes<FS: FlowService + StepService + FieldService + Clone + 'static, ES: EstimatorService + Clone + 'static>(
-) -> Router<AppState<FS, ES>> {
+pub fn estimator_routes<
+    FS: FlowService + StepService + FieldService + Clone + 'static,
+    ES: EstimatorService + Clone + 'static,
+    SS: SubmissionService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS>> {
     Router::new()
         .route("/{estimator_id}", get(handlers::get_estimator))
         .route("/{estimator_id}", put(handlers::update_estimator))
@@ -35,8 +42,11 @@ pub fn estimator_routes<FS: FlowService + StepService + FieldService + Clone + '
 }
 
 /// Variable routes under /variables
-pub fn variable_routes<FS: FlowService + StepService + FieldService + Clone + 'static, ES: EstimatorService + Clone + 'static>(
-) -> Router<AppState<FS, ES>> {
+pub fn variable_routes<
+    FS: FlowService + StepService + FieldService + Clone + 'static,
+    ES: EstimatorService + Clone + 'static,
+    SS: SubmissionService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS>> {
     Router::new()
         .route("/{variable_id}", put(handlers::update_variable))
         .route("/{variable_id}", delete(handlers::remove_variable))

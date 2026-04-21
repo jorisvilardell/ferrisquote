@@ -6,13 +6,17 @@ use axum::{
 use ferrisquote_domain::domain::{
     estimator::ports::EstimatorService,
     flows::ports::{FieldService, FlowService, StepService},
+    submission::ports::SubmissionService,
 };
 
 use crate::{handlers, state::AppState};
 
 /// Flow-specific routes
-pub fn flow_routes<FS: FlowService + StepService + FieldService + Clone + 'static, ES: EstimatorService + Clone + 'static>(
-) -> Router<AppState<FS, ES>> {
+pub fn flow_routes<
+    FS: FlowService + StepService + FieldService + Clone + 'static,
+    ES: EstimatorService + Clone + 'static,
+    SS: SubmissionService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS>> {
     Router::new()
         // Flow CRUD
         .route("/", post(handlers::create_flow))

@@ -14,4 +14,5 @@ pub use domain::flows::entities::{
     ids::{FieldId, FlowId, StepId},
     step::Step,
 };
+pub use domain::submission::entities::{FieldValue, StepIteration, Submission, SubmissionId};
 pub use domain::user::entities::{User, UserId};

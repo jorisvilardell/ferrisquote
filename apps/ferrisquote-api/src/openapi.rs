@@ -4,10 +4,11 @@ use crate::dto::{
     ApiResponse, CreateEstimatorRequest, CreateFieldRequest, CreateFlowRequest,
     CreateStepRequest, CreateVariableRequest, EstimatorListResponse, EstimatorResponse,
     EvaluateFlowResponse, EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest,
-    FieldConfigDto, FieldResponse, FlowListResponse, FlowResponse, FlowSummaryResponse,
-    MessageResponse, MoveFieldRequest, ReorderStepRequest, StepResponse, UpdateEstimatorRequest,
-    UpdateFieldConfigRequest, UpdateFlowMetadataRequest, UpdateStepMetadataRequest,
-    UpdateVariableRequest, VariableResponse,
+    FieldConfigDto, FieldResponse, FieldValueDto, FlowListResponse, FlowResponse,
+    FlowSummaryResponse, MessageResponse, MoveFieldRequest, ReorderStepRequest, StepIterationDto,
+    StepResponse, SubmissionListResponse, SubmissionResponse, SubmitAnswersRequest,
+    UpdateEstimatorRequest, UpdateFieldConfigRequest, UpdateFlowMetadataRequest,
+    UpdateStepMetadataRequest, UpdateVariableRequest, VariableResponse,
 };
 
 #[derive(OpenApi)]
@@ -42,6 +43,9 @@ use crate::dto::{
         crate::handlers::estimator_handlers::evaluate,
         crate::handlers::estimator_handlers::evaluate_submission,
         crate::handlers::estimator_handlers::evaluate_flow,
+        crate::handlers::submission_handlers::submit_answers,
+        crate::handlers::submission_handlers::get_submission_by_id,
+        crate::handlers::submission_handlers::list_submissions_for_flow,
     ),
     components(schemas(
         CreateFlowRequest,
@@ -70,6 +74,11 @@ use crate::dto::{
         EvaluateResponse,
         EvaluateFlowResponse,
         MessageResponse,
+        FieldValueDto,
+        StepIterationDto,
+        SubmitAnswersRequest,
+        SubmissionResponse,
+        SubmissionListResponse,
         ApiResponse<FlowResponse>,
         ApiResponse<FlowListResponse>,
         ApiResponse<StepResponse>,
@@ -80,6 +89,8 @@ use crate::dto::{
         ApiResponse<EvaluateResponse>,
         ApiResponse<EvaluateFlowResponse>,
         ApiResponse<MessageResponse>,
+        ApiResponse<SubmissionResponse>,
+        ApiResponse<SubmissionListResponse>,
     )),
     tags(
         (name = "flows", description = "Flow management"),
@@ -87,6 +98,7 @@ use crate::dto::{
         (name = "fields", description = "Field management"),
         (name = "estimators", description = "Estimator management"),
         (name = "estimator_variables", description = "Estimator variable management"),
+        (name = "submissions", description = "Flow answer submissions"),
     )
 )]
 pub struct ApiDoc;

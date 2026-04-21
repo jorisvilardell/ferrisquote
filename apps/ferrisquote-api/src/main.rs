@@ -2,10 +2,12 @@ use ferrisquote_domain::domain::{
     estimator::services::EstimatorServiceImpl,
     flows::services::FlowServiceImpl,
     rank::services::LexoRankProvider,
+    submission::services::SubmissionServiceImpl,
 };
 use ferrisquote_postgres::repositories::{
     estimator_repository::PostgresEstimatorRepository,
     flow_repository::PostgresFlowRepository,
+    submission_repository::PostgresSubmissionRepository,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -49,7 +51,8 @@ async fn main() -> anyhow::Result<()> {
     let pg_pool = Arc::new(pool);
 
     let flow_repo = PostgresFlowRepository::with_pool(pg_pool.clone());
-    let estimator_repo = PostgresEstimatorRepository::with_pool(pg_pool);
+    let estimator_repo = PostgresEstimatorRepository::with_pool(pg_pool.clone());
+    let submission_repo = PostgresSubmissionRepository::with_pool(pg_pool);
     let rank_service = LexoRankProvider;
 
     let flow_service = FlowServiceImpl::new(
@@ -60,8 +63,13 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let estimator_service = EstimatorServiceImpl::new(estimator_repo);
+    let submission_service = SubmissionServiceImpl::new(submission_repo, flow_repo);
 
-    let app_state = AppState::new(Arc::new(flow_service), Arc::new(estimator_service));
+    let app_state = AppState::new(
+        Arc::new(flow_service),
+        Arc::new(estimator_service),
+        Arc::new(submission_service),
+    );
 
     let app = build_routes(app_state);
 

@@ -1,5 +1,6 @@
 pub mod estimators;
 pub mod flows;
+pub mod submissions;
 
 // Re-export commonly used DTOs
 pub use estimators::{
@@ -12,4 +13,8 @@ pub use flows::{
     FieldResponse, FlowListResponse, FlowResponse, FlowSummaryResponse, MessageResponse,
     MoveFieldRequest, ReorderStepRequest, StepResponse, UpdateFieldConfigRequest,
     UpdateFlowMetadataRequest, UpdateStepMetadataRequest,
+};
+pub use submissions::{
+    FieldValueDto, StepIterationDto, SubmissionListResponse, SubmissionResponse,
+    SubmitAnswersRequest,
 };
