@@ -4,7 +4,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use ferrisquote_domain::domain::{
     error::DomainError,
-    flows::entities::ids::{FlowId, StepId},
+    flows::entities::id::{FlowId, StepId},
     submission::{
         entities::{StepIteration, Submission, SubmissionId},
         ports::SubmissionRepository,

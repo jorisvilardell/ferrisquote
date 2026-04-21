@@ -6,11 +6,11 @@ use axum::{
     http::StatusCode,
 };
 use ferrisquote_domain::domain::{
-    estimator::{entities::ids::EstimatorId, ports::EstimatorService},
+    estimator::{entities::id::EstimatorId, ports::EstimatorService},
     flows::{
         entities::{
             binding::{AggregationStrategy, EstimatorBinding, InputBindingValue},
-            ids::{BindingId, FieldId, FlowId, StepId},
+            id::{BindingId, FieldId, FlowId, StepId},
         },
         ports::{BindingService, FieldService, FlowService, StepService},
     },

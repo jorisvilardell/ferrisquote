@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{field::Field, ids::StepId};
+use super::{field::Field, id::StepId};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Step {
@@ -72,18 +72,18 @@ impl Step {
         self.fields.push(field);
     }
 
-    pub fn remove_field(&mut self, field_id: &super::ids::FieldId) -> Option<Field> {
+    pub fn remove_field(&mut self, field_id: &super::id::FieldId) -> Option<Field> {
         self.fields
             .iter()
             .position(|f| &f.id == field_id)
             .map(|pos| self.fields.remove(pos))
     }
 
-    pub fn get_field(&self, field_id: &super::ids::FieldId) -> Option<&Field> {
+    pub fn get_field(&self, field_id: &super::id::FieldId) -> Option<&Field> {
         self.fields.iter().find(|f| &f.id == field_id)
     }
 
-    pub fn get_field_mut(&mut self, field_id: &super::ids::FieldId) -> Option<&mut Field> {
+    pub fn get_field_mut(&mut self, field_id: &super::id::FieldId) -> Option<&mut Field> {
         self.fields.iter_mut().find(|f| &f.id == field_id)
     }
 }

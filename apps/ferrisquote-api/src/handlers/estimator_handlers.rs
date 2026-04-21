@@ -6,7 +6,7 @@ use axum::{
 use ferrisquote_domain::domain::{
     estimator::{
         entities::{
-            ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+            id::{EstimatorId, EstimatorInputId, EstimatorOutputId},
             output::EstimatorOutput,
             parameter::{EstimatorParameter, EstimatorParameterType},
             submission::SubmissionData,

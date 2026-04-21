@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ids::EstimatorOutputId;
+use super::id::EstimatorOutputId;
 
 /// One output variable of an Estimator's signature — the result of a
 /// named formula. Each output has its own expression evaluated against

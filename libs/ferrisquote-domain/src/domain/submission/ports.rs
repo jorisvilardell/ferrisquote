@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::future::Future;
 
 use crate::domain::error::DomainError;
-use crate::domain::flows::entities::ids::{FlowId, StepId};
+use crate::domain::flows::entities::id::{FlowId, StepId};
 use crate::domain::user::entities::UserId;
 
 use super::entities::{StepIteration, Submission, SubmissionId};

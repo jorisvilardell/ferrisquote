@@ -7,7 +7,7 @@ use super::{
     entities::{
         field::{Field, FieldConfig},
         flow::Flow,
-        ids::{FieldId, FlowId, StepId},
+        id::{FieldId, FlowId, StepId},
         step::Step,
     },
     ports::{
@@ -339,10 +339,10 @@ where
 
 use std::collections::HashMap;
 
-use crate::domain::estimator::{entities::ids::EstimatorId, ports::EstimatorRepository};
+use crate::domain::estimator::{entities::id::EstimatorId, ports::EstimatorRepository};
 
 use super::entities::binding::{AggregationStrategy, EstimatorBinding, InputBindingValue};
-use super::entities::ids::BindingId;
+use super::entities::id::BindingId;
 use super::ports::{BindingRepository, BindingService};
 
 /// Orchestrates EstimatorBinding CRUD, validating wiring against the target

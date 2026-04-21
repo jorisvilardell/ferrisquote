@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{binding::EstimatorBinding, ids::FlowId, step::Step};
+use super::{binding::EstimatorBinding, id::FlowId, step::Step};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Flow {
@@ -66,18 +66,18 @@ impl Flow {
         self.steps.push(step);
     }
 
-    pub fn remove_step(&mut self, step_id: &super::ids::StepId) -> Option<Step> {
+    pub fn remove_step(&mut self, step_id: &super::id::StepId) -> Option<Step> {
         self.steps
             .iter()
             .position(|s| &s.id == step_id)
             .map(|pos| self.steps.remove(pos))
     }
 
-    pub fn get_step(&self, step_id: &super::ids::StepId) -> Option<&Step> {
+    pub fn get_step(&self, step_id: &super::id::StepId) -> Option<&Step> {
         self.steps.iter().find(|s| &s.id == step_id)
     }
 
-    pub fn get_step_mut(&mut self, step_id: &super::ids::StepId) -> Option<&mut Step> {
+    pub fn get_step_mut(&mut self, step_id: &super::id::StepId) -> Option<&mut Step> {
         self.steps.iter_mut().find(|s| &s.id == step_id)
     }
 

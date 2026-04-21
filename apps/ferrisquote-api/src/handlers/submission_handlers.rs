@@ -8,7 +8,7 @@ use axum::{
 use ferrisquote_domain::domain::{
     estimator::ports::EstimatorService,
     flows::{
-        entities::ids::{FieldId, FlowId, StepId},
+        entities::id::{FieldId, FlowId, StepId},
         ports::{FieldService, FlowService, StepService},
     },
     submission::{

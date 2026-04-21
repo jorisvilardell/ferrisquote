@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::future::Future;
 
 use crate::domain::error::DomainError;
-use crate::domain::estimator::entities::ids::EstimatorId;
+use crate::domain::estimator::entities::id::EstimatorId;
 
 use super::entities::{
     binding::{AggregationStrategy, EstimatorBinding, InputBindingValue},
     field::{Field, FieldConfig},
     flow::Flow,
-    ids::{BindingId, FieldId, FlowId, StepId},
+    id::{BindingId, FieldId, FlowId, StepId},
     step::Step,
 };
 

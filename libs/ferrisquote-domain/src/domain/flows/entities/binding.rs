@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    estimator::entities::ids::EstimatorId, submission::entities::FieldValue,
+    estimator::entities::id::EstimatorId, submission::entities::FieldValue,
 };
 
-use super::ids::{BindingId, FieldId, StepId};
+use super::id::{BindingId, FieldId, StepId};
 
 /// How to aggregate an output across iterations when a binding is mapped
 /// over a repeatable step. One strategy per output key.

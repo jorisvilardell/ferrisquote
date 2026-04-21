@@ -8,7 +8,7 @@ use ferrisquote_domain::domain::{
             binding::{AggregationStrategy, EstimatorBinding, InputBindingValue},
             field::{Field, FieldConfig},
             flow::Flow,
-            ids::{BindingId, FieldId, FlowId, StepId},
+            id::{BindingId, FieldId, FlowId, StepId},
             step::Step,
         },
         ports::{BindingRepository, FieldRepository, FlowRepository, StepRepository},

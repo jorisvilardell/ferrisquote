@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::domain::{error::DomainError, flows::entities::ids::FlowId};
+use crate::domain::{error::DomainError, flows::entities::id::FlowId};
 
 use super::{
     entities::{
         estimator::Estimator,
-        ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+        id::{EstimatorId, EstimatorInputId, EstimatorOutputId},
         output::EstimatorOutput,
         parameter::{EstimatorParameter, EstimatorParameterType},
         submission::SubmissionData,
@@ -714,7 +714,7 @@ fn evaluate_single_estimator_in_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::flows::entities::ids::FlowId;
+    use crate::domain::flows::entities::id::FlowId;
 
     fn make_output(key: &str, expr: &str) -> EstimatorOutput {
         EstimatorOutput::new(key.to_string(), expr.to_string(), String::new())

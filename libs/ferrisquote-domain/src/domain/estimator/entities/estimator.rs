@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::flows::entities::ids::FlowId;
+use crate::domain::flows::entities::id::FlowId;
 
 use super::{
-    ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+    id::{EstimatorId, EstimatorInputId, EstimatorOutputId},
     output::EstimatorOutput,
     parameter::EstimatorParameter,
 };

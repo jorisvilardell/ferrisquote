@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use crate::domain::error::DomainError;
 use crate::domain::flows::entities::field::{Field, FieldConfig};
 use crate::domain::flows::entities::flow::Flow;
-use crate::domain::flows::entities::ids::{FieldId, FlowId, StepId};
+use crate::domain::flows::entities::id::{FieldId, FlowId, StepId};
 use crate::domain::flows::entities::step::Step;
 use crate::domain::flows::ports::FlowRepository;
 use crate::domain::user::entities::UserId;

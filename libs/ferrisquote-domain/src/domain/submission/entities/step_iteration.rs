@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::flows::entities::ids::FieldId;
+use crate::domain::flows::entities::id::FieldId;
 
 use super::field_value::FieldValue;
 
