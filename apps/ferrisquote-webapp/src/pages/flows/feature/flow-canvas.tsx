@@ -188,7 +188,7 @@ function buildGraph(
       })
     }
 
-    if (isExpanded && step.fields.length > 0) {
+    if (step.fields.length > 0) {
       const totalFieldsHeight =
         step.fields.length * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP) - FIELD_NODE_GAP
       const hueStep = step.fields.length > 1 ? 200 / (step.fields.length - 1) : 0
@@ -196,10 +196,13 @@ function buildGraph(
       step.fields.forEach((field, j) => {
         const fieldNodeId = `field-${field.id}`
         const targetY = stepY + j * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP)
-        const fieldY = targetY
-        const xOffset = FIELD_X_OFFSET
-        const opacity = 1
-        const pointerEvents = "auto" as const
+        // When collapsed, fields snap back under the step and fade out —
+        // keeps them in the DOM so React Flow can animate opacity + position
+        // instead of mounting/unmounting.
+        const fieldY = isExpanded ? targetY : stepY
+        const xOffset = isExpanded ? FIELD_X_OFFSET : 0
+        const opacity = isExpanded ? 1 : 0
+        const pointerEvents = isExpanded ? ("auto" as const) : ("none" as const)
         const color = `hsl(${28 + j * hueStep}, 85%, 55%)`
 
         const fieldNode: Node<FieldNodeData> = {
@@ -234,13 +237,19 @@ function buildGraph(
             strokeWidth: 1.5,
             stroke: color,
             opacity,
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            // Fade edges in slightly after the node position settles when
+            // expanding; snap-out fast when collapsing.
+            transition: isExpanded
+              ? "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.15s"
+              : "opacity 0.1s ease-out 0s",
           },
         })
       })
 
-      const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
-      yOffset += extraSpace + STEP_NODE_GAP
+      if (isExpanded) {
+        const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
+        yOffset += extraSpace + STEP_NODE_GAP
+      }
     }
   }
 
