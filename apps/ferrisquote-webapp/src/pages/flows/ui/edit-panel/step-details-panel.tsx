@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Pencil, Plus, Trash2, X } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import {
   AlertDialog,
@@ -58,6 +59,7 @@ export function StepDetailsPanel({
   onEditField: (fieldId: string, stepId: string) => void
   onDeleteField: (fieldId: string, stepId: string) => void
 }) {
+  const { t } = useTranslation()
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(step.title)
   const [descDraft, setDescDraft] = useState(step.description)
@@ -150,12 +152,12 @@ export function StepDetailsPanel({
 
       <div className="px-5 py-3 border-b space-y-1.5">
         <Label htmlFor="step-desc" className="text-xs font-medium">
-          Description
+          {t("step_panel.description_label")}
         </Label>
         <Textarea
           id="step-desc"
           rows={2}
-          placeholder="Optional — describe this step"
+          placeholder={t("step_panel.description_optional")}
           value={descDraft}
           onChange={(e) => setDescDraft(e.target.value)}
         />
@@ -169,21 +171,21 @@ export function StepDetailsPanel({
 
       <div className="flex items-center justify-between px-5 py-3 border-b shrink-0">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Fields
+          {t("step_panel.fields_section")}
         </span>
         <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => onAddField(step.id)}>
           <Plus className="w-3 h-3" />
-          Add field
+          {t("step_panel.add_field_button")}
         </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {step.fields.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center px-5">
-            <p className="text-sm text-muted-foreground">No fields yet.</p>
+            <p className="text-sm text-muted-foreground">{t("step_panel.no_fields")}</p>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onAddField(step.id)}>
               <Plus className="w-3.5 h-3.5" />
-              Add field
+              {t("step_panel.add_field_button")}
             </Button>
           </div>
         ) : (
@@ -195,7 +197,7 @@ export function StepDetailsPanel({
                   <p className="text-xs text-muted-foreground">{field.key}</p>
                 </div>
                 <Badge variant="secondary" className="shrink-0 text-xs">
-                  {field.config.type}
+                  {t(`node.field.types.${field.config.type}`, { defaultValue: field.config.type })}
                 </Badge>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <Button
@@ -218,18 +220,18 @@ export function StepDetailsPanel({
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Delete field?</AlertDialogTitle>
+                        <AlertDialogTitle>{t("step_panel.delete_field_title")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          "{field.label}" will be permanently deleted.
+                          {t("step_panel.delete_field_confirm", { label: field.label })}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                         <AlertDialogAction
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           onClick={() => onDeleteField(field.id, step.id)}
                         >
-                          Delete
+                          {t("common.delete")}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -248,14 +250,14 @@ export function StepDetailsPanel({
           disabled={!isDirty}
           onClick={handleCancel}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           className="flex-1"
           disabled={!canSave}
           onClick={handleSave}
         >
-          Save
+          {t("common.save")}
         </Button>
       </div>
     </>
