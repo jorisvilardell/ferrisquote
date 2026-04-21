@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use ferrisquote_domain::domain::{
     error::DomainError,
-    flows::entities::ids::FlowId,
+    flows::entities::ids::{FlowId, StepId},
     submission::{
-        entities::{Submission, SubmissionAnswer, SubmissionId},
+        entities::{StepIteration, Submission, SubmissionId},
         ports::SubmissionRepository,
     },
     user::entities::UserId,
@@ -31,16 +32,14 @@ fn map_sqlx_err(err: sqlx::Error) -> DomainError {
     if let sqlx::Error::Database(db_err) = &err {
         // foreign_key_violation — referenced flow/user does not exist
         if db_err.code().as_deref() == Some("23503") {
-            return DomainError::validation(
-                "Referenced flow or user does not exist",
-            );
+            return DomainError::validation("Referenced flow or user does not exist");
         }
     }
     DomainError::repository(err.to_string())
 }
 
 fn row_to_submission(row: &sqlx::postgres::PgRow) -> Result<Submission, DomainError> {
-    let answers_json: sqlx::types::Json<Vec<SubmissionAnswer>> = row
+    let answers_json: sqlx::types::Json<HashMap<StepId, Vec<StepIteration>>> = row
         .try_get("answers")
         .map_err(|e| DomainError::internal(format!("Failed to decode submission answers: {e}")))?;
     Ok(Submission::with_id(
@@ -87,22 +86,6 @@ impl SubmissionRepository for PostgresSubmissionRepository {
         row_to_submission(&row)
     }
 
-    async fn list_user_submissions(
-        &self,
-        user_id: UserId,
-    ) -> Result<Vec<Submission>, DomainError> {
-        let rows = sqlx::query(
-            "SELECT id, flow_id, user_id, submitted_at, answers \
-             FROM submissions WHERE user_id = $1 ORDER BY submitted_at DESC",
-        )
-        .bind(user_id.into_uuid())
-        .fetch_all(&*self.pool)
-        .await
-        .map_err(map_sqlx_err)?;
-
-        rows.iter().map(row_to_submission).collect()
-    }
-
     async fn list_flow_submissions(
         &self,
         flow_id: FlowId,
@@ -112,6 +95,22 @@ impl SubmissionRepository for PostgresSubmissionRepository {
              FROM submissions WHERE flow_id = $1 ORDER BY submitted_at DESC",
         )
         .bind(flow_id.into_uuid())
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(map_sqlx_err)?;
+
+        rows.iter().map(row_to_submission).collect()
+    }
+
+    async fn list_user_submissions(
+        &self,
+        user_id: UserId,
+    ) -> Result<Vec<Submission>, DomainError> {
+        let rows = sqlx::query(
+            "SELECT id, flow_id, user_id, submitted_at, answers \
+             FROM submissions WHERE user_id = $1 ORDER BY submitted_at DESC",
+        )
+        .bind(user_id.into_uuid())
         .fetch_all(&*self.pool)
         .await
         .map_err(map_sqlx_err)?;
