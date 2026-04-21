@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Trash2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import {
   AlertDialog,
@@ -105,6 +106,7 @@ export function OutputCard({
   onUpdate: (outputId: string, patch: Partial<Schemas.OutputResponse>) => void
   onDelete: (outputId: string) => void
 }) {
+  const { t } = useTranslation()
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionFilter, setSuggestionFilter] = useState("")
   const exprRef = useRef<HTMLTextAreaElement>(null)
@@ -315,18 +317,18 @@ export function OutputCard({
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete output?</AlertDialogTitle>
+              <AlertDialogTitle>{t("output.delete_title")}</AlertDialogTitle>
               <AlertDialogDescription>
-                "{output.key}" will be permanently deleted.
+                {t("output.delete_confirm", { key: output.key })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => onDelete(output.id)}
               >
-                Delete
+                {t("common.delete")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -336,7 +338,7 @@ export function OutputCard({
       {expanded && (
         <div className="px-3 py-2.5 space-y-2.5 border-t border-border/40">
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Key</Label>
+            <Label className="text-xs">{t("output.key")}</Label>
             <Input
               className="h-7 text-sm font-mono"
               value={keyDraft}
@@ -353,7 +355,7 @@ export function OutputCard({
           </div>
 
           <div className="flex flex-col gap-1 relative">
-            <Label className="text-xs">Expression</Label>
+            <Label className="text-xs">{t("output.expression")}</Label>
             <div className="relative">
               {/* Syntax-highlighted layer sits behind a transparent textarea.
                   Both share identical font + padding so glyphs align. The
@@ -379,7 +381,7 @@ export function OutputCard({
                   // overlay layer handles rendering.
                   WebkitTextFillColor: "transparent",
                 }}
-                placeholder="e.g. @surface * @prix_unitaire * 1.2"
+                placeholder={t("output.expression_placeholder")}
                 value={exprDraft}
                 onChange={(e) => handleExpressionChange(e.target.value)}
                 onFocus={() => {
@@ -446,10 +448,10 @@ export function OutputCard({
           </div>
 
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Description</Label>
+            <Label className="text-xs">{t("output.description")}</Label>
             <Input
               className="h-7 text-sm"
-              placeholder="Optional"
+              placeholder={t("common.optional")}
               value={descDraft}
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={commitDesc}

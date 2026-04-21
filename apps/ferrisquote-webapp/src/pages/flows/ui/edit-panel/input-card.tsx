@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Trash2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import {
   AlertDialog,
@@ -53,6 +54,7 @@ export function InputCard({
   onUpdate: (inputId: string, patch: Partial<Schemas.InputResponse>) => void
   onDelete: (inputId: string) => void
 }) {
+  const { t } = useTranslation()
   const [keyDraft, setKeyDraft] = useState(input.key)
   const [descDraft, setDescDraft] = useState(input.description)
   const [kindDraft, setKindDraft] = useState<ParamKind>(paramKindOf(input.parameter_type))
@@ -117,18 +119,18 @@ export function InputCard({
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete input?</AlertDialogTitle>
+              <AlertDialogTitle>{t("input.delete_title")}</AlertDialogTitle>
               <AlertDialogDescription>
-                "{input.key}" will be permanently deleted.
+                {t("input.delete_confirm", { key: input.key })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => onDelete(input.id)}
               >
-                Delete
+                {t("common.delete")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -138,7 +140,7 @@ export function InputCard({
       {expanded && (
         <div className="px-3 py-2.5 space-y-2.5 border-t border-border/40">
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Key</Label>
+            <Label className="text-xs">{t("input.key")}</Label>
             <Input
               className="h-7 text-sm font-mono"
               value={keyDraft}
@@ -155,22 +157,22 @@ export function InputCard({
           </div>
 
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Type</Label>
+            <Label className="text-xs">{t("input.type")}</Label>
             <Select value={kindDraft} onValueChange={(v) => commitKind(v as ParamKind)}>
               <SelectTrigger className="h-7 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="number">Number</SelectItem>
-                <SelectItem value="boolean">Boolean</SelectItem>
-                <SelectItem value="product">Product</SelectItem>
+                <SelectItem value="number">{t("input.type_number")}</SelectItem>
+                <SelectItem value="boolean">{t("input.type_boolean")}</SelectItem>
+                <SelectItem value="product">{t("input.type_product")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {kindDraft === "product" && (
             <div className="flex flex-col gap-1">
-              <Label className="text-xs">Label filter (optional)</Label>
+              <Label className="text-xs">{t("input.label_filter")}</Label>
               <Input
                 className="h-7 text-sm font-mono"
                 placeholder="e.g. socket, lamp"
@@ -185,10 +187,10 @@ export function InputCard({
           )}
 
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Description</Label>
+            <Label className="text-xs">{t("input.description")}</Label>
             <Input
               className="h-7 text-sm"
-              placeholder="Optional"
+              placeholder={t("common.optional")}
               value={descDraft}
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={commitDesc}

@@ -1,23 +1,23 @@
 {
   "node": {
     "step": {
-      "repeatable_tooltip": "Étape répétable",
+      "repeatable_tooltip": "Étape à répéter plusieurs fois",
       "no_description": "Pas de description",
-      "fields_count_one": "{{count}} champ",
-      "fields_count_other": "{{count}} champs"
+      "fields_count_one": "{{count}} question",
+      "fields_count_other": "{{count}} questions"
     },
     "field": {
       "types": {
         "text": "texte",
         "number": "nombre",
         "date": "date",
-        "boolean": "booléen",
-        "select": "sélection"
+        "boolean": "oui/non",
+        "select": "choix"
       }
     },
     "estimator": {
-      "inputs": "Entrées",
-      "outputs": "Sorties",
+      "inputs": "Données à fournir",
+      "outputs": "Résultats produits",
       "none": "Aucun"
     }
   },
@@ -30,12 +30,13 @@
     "edit": "Modifier",
     "optional": "Optionnel",
     "loading": "Chargement…",
-    "not_mapped": "— Non relié —"
+    "not_mapped": "— À relier —",
+    "help": "Aide"
   },
   "nav": {
     "dashboard": "Tableau de bord",
     "quotes": "Devis",
-    "flows": "Flux",
+    "flows": "Formulaires",
     "settings": "Paramètres",
     "navigation": "Navigation",
     "language": "Langue"
@@ -43,65 +44,111 @@
   "flow": {
     "description": "Description",
     "add_step": "Ajouter une étape",
-    "add_field": "Ajouter un champ"
+    "add_field": "Ajouter une question"
+  },
+  "step_panel": {
+    "add_title": "Ajouter une étape",
+    "add_description": "Ajoute une nouvelle étape à ce formulaire.",
+    "title_label": "Titre *",
+    "title_placeholder": "ex. Informations personnelles",
+    "description_label": "Description",
+    "description_placeholder": "Décrivez cette étape…",
+    "description_optional": "Optionnel — décrit cette étape",
+    "fields_section": "Questions",
+    "no_fields": "Aucune question pour l'instant.",
+    "add_field_button": "Ajouter une question",
+    "delete_field_title": "Supprimer cette question ?",
+    "delete_field_confirm": "\"{{label}}\" sera supprimé définitivement."
+  },
+  "repeatable": {
+    "allow": "Autoriser la répétition",
+    "button_label": "Texte du bouton",
+    "button_label_placeholder": "ex. « Ajouter une pièce »",
+    "min": "Minimum",
+    "max": "Maximum",
+    "max_placeholder": "Sans limite",
+    "error_max_lt_min": "Le maximum doit être supérieur ou égal au minimum.",
+    "error_min_negative": "Le minimum ne peut pas être négatif."
+  },
+  "field_panel": {
+    "add_title": "Ajouter une question",
+    "add_description_prefix": "À \"{{step}}\"",
+    "edit_title": "Modifier la question",
+    "label": "Libellé *",
+    "label_placeholder": "ex. Prénom",
+    "key": "Clé *",
+    "key_placeholder": "ex. first_name",
+    "key_invalid": "Lettres minuscules, chiffres et tirets bas uniquement ; doit commencer par une lettre.",
+    "description_label": "Description",
+    "description_placeholder": "Optionnel",
+    "type_label": "Type",
+    "type_changed_warning": "Changer le type réinitialise les paramètres spécifiques à ce type.",
+    "add_submit": "Ajouter la question"
   },
   "estimator": {
-    "description": "Description",
-    "description_placeholder": "Optionnel — décrit cet estimateur",
-    "inputs": "Entrées",
-    "inputs_help": "Paramètres requis pour exécuter cet estimateur. Types : nombre, booléen, produit.",
-    "outputs": "Sorties",
-    "outputs_help": "Variables produites par le calcul. Référencez les entrées avec @input_key.",
-    "add_input": "Ajouter une entrée",
-    "add_output": "Ajouter une sortie",
-    "execution_context": "Contexte d'exécution",
-    "execution_help": "Exécuter une seule fois, ou boucler sur chaque itération d'une étape répétable.",
-    "global_execution": "Exécution globale",
-    "loop_over": "Boucler sur : {{step}}",
-    "no_repeatable_steps": "Aucune étape répétable dans ce flux",
-    "arguments": "Arguments",
-    "arguments_help": "Associez chaque entrée à un champ du flux ou à la sortie d'un autre bloc.",
-    "reduce": "Combinaison",
-    "reduce_help": "Comment agréger chaque sortie sur les itérations de la boucle.",
-    "context_locked": "Le contexte est verrouillé tant que les champs de {{steps}} sont référencés.",
+    "description": "À quoi sert cette table de calcul",
+    "description_placeholder": "Optionnel — explique ce que fait cette table de calcul",
+    "inputs": "Données à fournir",
+    "inputs_help": "Les éléments dont la table de calcul a besoin pour calculer (un nombre, un oui/non, ou un produit du catalogue).",
+    "inputs_help_example": "Exemple : pour calculer le prix d'une pièce, la table a besoin de la « surface » et du « prix au m² ».",
+    "outputs": "Résultats produits",
+    "outputs_help": "Ce que la table de calcul produit à partir des données fournies. Utilisez @nom_donnée pour faire référence à une donnée d'entrée.",
+    "outputs_help_example": "Exemple : « prix_pièce = @surface * @prix_au_m2 ».",
+    "add_input": "Ajouter une donnée",
+    "add_output": "Ajouter un résultat",
+    "execution_context": "Quand exécuter cette table de calcul",
+    "execution_help": "Une seule fois pour l'ensemble du formulaire, ou une fois pour chaque élément répété (ex. une fois par pièce).",
+    "execution_help_example": "Exemple : si vous cochez « Répéter pour chaque pièce », la table sera calculée pour chaque pièce saisie.",
+    "global_execution": "Exécuter une seule fois",
+    "loop_over": "Répéter pour chaque : {{step}}",
+    "no_repeatable_steps": "Aucune étape répétable dans ce formulaire",
+    "arguments": "Données à utiliser",
+    "arguments_help": "Reliez chaque donnée d'entrée à une question du formulaire ou au résultat d'une table de calcul précédente.",
+    "arguments_help_example": "Exemple : reliez « surface » à la question « Surface de la pièce ».",
+    "reduce": "Comment combiner les résultats",
+    "reduce_help": "Si la table tourne plusieurs fois (une par pièce), comment obtenir une seule valeur finale pour chaque résultat.",
+    "reduce_help_example": "Exemple : « prix_pièce » doit donner le total sur toutes les pièces — choisissez « Total ».",
+    "context_locked": "Ce paramètre est verrouillé tant que des questions de {{steps}} sont utilisées.",
     "validation": {
       "name_chars": "Le nom ne peut contenir que des lettres, chiffres, espaces et tirets bas.",
-      "name_duplicate": "Un estimateur nommé \"{{name}}\" existe déjà."
+      "name_duplicate": "Une table de calcul nommée \"{{name}}\" existe déjà."
     }
   },
   "input": {
-    "key": "Clé",
-    "type": "Type",
+    "key": "Nom de la donnée",
+    "type": "Type de donnée",
     "type_number": "Nombre",
-    "type_boolean": "Booléen",
-    "type_product": "Produit",
-    "label_filter": "Filtre de libellé (optionnel)",
-    "delete_title": "Supprimer cette entrée ?",
+    "type_boolean": "Oui / Non",
+    "type_product": "Produit du catalogue",
+    "label_filter": "Filtrer les produits (optionnel)",
+    "description": "Description de la donnée",
+    "delete_title": "Supprimer cette donnée ?",
     "delete_confirm": "\"{{key}}\" sera supprimé définitivement."
   },
   "output": {
-    "key": "Clé",
-    "expression": "Expression",
-    "expression_placeholder": "ex. @surface * @prix_unitaire * 1.2",
-    "delete_title": "Supprimer cette sortie ?",
+    "key": "Nom du résultat",
+    "expression": "Calcul",
+    "expression_placeholder": "ex. @surface * @prix_au_m2 * 1.2",
+    "description": "Description du résultat",
+    "delete_title": "Supprimer ce résultat ?",
     "delete_confirm": "\"{{key}}\" sera supprimé définitivement."
   },
   "aggregation": {
-    "sum": "Somme",
+    "sum": "Total",
     "average": "Moyenne",
     "max": "Maximum",
     "min": "Minimum",
-    "count": "Nombre",
+    "count": "Nombre de fois",
     "first": "Premier",
     "last": "Dernier"
   },
   "errors": {
     "generic": "Une erreur est survenue",
     "update_failed": "La mise à jour a échoué : {{msg}}",
-    "signature_update_failed": "La mise à jour de la signature a échoué : {{msg}}",
-    "wiring_update_failed": "La mise à jour du câblage a échoué : {{msg}}",
-    "field_not_numeric": "Le champ \"{{key}}\" n'est pas numérique",
-    "field_needs_context": "Le champ \"{{label}}\" appartient à l'étape répétable \"{{step}}\". Définissez d'abord le contexte d'exécution sur cette étape.",
-    "context_in_use": "Impossible de changer le contexte d'exécution — des champs de {{steps}} sont utilisés. Retirez ces références d'abord."
+    "signature_update_failed": "La mise à jour de la table de calcul a échoué : {{msg}}",
+    "wiring_update_failed": "La mise à jour des liaisons a échoué : {{msg}}",
+    "field_not_numeric": "La question \"{{key}}\" n'est pas un nombre",
+    "field_needs_context": "La question \"{{label}}\" appartient à une étape répétable \"{{step}}\". Réglez d'abord « Quand exécuter » sur cette étape.",
+    "context_in_use": "Impossible de changer « Quand exécuter » — des questions de {{steps}} sont utilisées. Retirez ces références d'abord."
   }
 }

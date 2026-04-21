@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,6 +33,7 @@ export function AddFieldForm({
     data: { label: string; key: string; config: Schemas.FieldConfigDto },
   ) => void
 }) {
+  const { t } = useTranslation()
   const [label, setLabel] = useState("")
   const [key, setKey] = useState("")
   const [keyTouched, setKeyTouched] = useState(false)
@@ -48,22 +50,26 @@ export function AddFieldForm({
 
   return (
     <>
-      <PanelHeader title="Add field" description={`To "${stepTitle}"`} onClose={onClose} />
+      <PanelHeader
+        title={t("field_panel.add_title")}
+        description={t("field_panel.add_description_prefix", { step: stepTitle })}
+        onClose={onClose}
+      />
       <div className="flex flex-col gap-4 px-5 py-4 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="field-label">Label *</Label>
+          <Label htmlFor="field-label">{t("field_panel.label")}</Label>
           <Input
             id="field-label"
-            placeholder="e.g. First name"
+            placeholder={t("field_panel.label_placeholder")}
             value={label}
             onChange={(e) => handleLabelChange(e.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="field-key">Key *</Label>
+          <Label htmlFor="field-key">{t("field_panel.key")}</Label>
           <Input
             id="field-key"
-            placeholder="e.g. first_name"
+            placeholder={t("field_panel.key_placeholder")}
             value={key}
             onChange={(e) => {
               setKeyTouched(true)
@@ -72,17 +78,17 @@ export function AddFieldForm({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Type</Label>
+          <Label>{t("field_panel.type_label")}</Label>
           <Select value={config.type} onValueChange={(v) => handleTypeChange(v as FieldType)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="text">Text</SelectItem>
-              <SelectItem value="number">Number</SelectItem>
-              <SelectItem value="date">Date</SelectItem>
-              <SelectItem value="boolean">Boolean</SelectItem>
-              <SelectItem value="select">Select</SelectItem>
+              <SelectItem value="text">{t("node.field.types.text")}</SelectItem>
+              <SelectItem value="number">{t("node.field.types.number")}</SelectItem>
+              <SelectItem value="date">{t("node.field.types.date")}</SelectItem>
+              <SelectItem value="boolean">{t("node.field.types.boolean")}</SelectItem>
+              <SelectItem value="select">{t("node.field.types.select")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -90,7 +96,7 @@ export function AddFieldForm({
       </div>
       <div className="flex gap-2 px-5 py-4 border-t shrink-0">
         <Button variant="outline" className="flex-1" onClick={onClose}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           className="flex-1"
@@ -100,7 +106,7 @@ export function AddFieldForm({
             onClose()
           }}
         >
-          Add field
+          {t("field_panel.add_submit")}
         </Button>
       </div>
     </>

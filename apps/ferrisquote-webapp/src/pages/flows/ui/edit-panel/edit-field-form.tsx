@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +39,7 @@ export function EditFieldForm({
     },
   ) => void
 }) {
+  const { t } = useTranslation()
   const [label, setLabel] = useState(field.label)
   const [key, setKey] = useState(field.key)
   const [description, setDescription] = useState(field.description)
@@ -60,13 +62,13 @@ export function EditFieldForm({
   return (
     <>
       <PanelHeader
-        title="Edit field"
-        description={`${field.label} — ${field.config.type}`}
+        title={t("field_panel.edit_title")}
+        description={`${field.label} — ${t(`node.field.types.${field.config.type}`, { defaultValue: field.config.type })}`}
         onClose={onClose}
       />
       <div className="flex flex-col gap-4 px-5 py-4 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-field-label">Label *</Label>
+          <Label htmlFor="edit-field-label">{t("field_panel.label")}</Label>
           <Input
             id="edit-field-label"
             value={label}
@@ -74,46 +76,44 @@ export function EditFieldForm({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-field-key">Key *</Label>
+          <Label htmlFor="edit-field-key">{t("field_panel.key")}</Label>
           <Input
             id="edit-field-key"
-            placeholder="e.g. first_name"
+            placeholder={t("field_panel.key_placeholder")}
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
           {!keyValid && key.length > 0 && (
-            <p className="text-xs text-destructive">
-              Lowercase letters, digits and underscores only; must start with a letter.
-            </p>
+            <p className="text-xs text-destructive">{t("field_panel.key_invalid")}</p>
           )}
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-field-desc">Description</Label>
+          <Label htmlFor="edit-field-desc">{t("field_panel.description_label")}</Label>
           <Textarea
             id="edit-field-desc"
-            placeholder="Optional"
+            placeholder={t("field_panel.description_placeholder")}
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Type</Label>
+          <Label>{t("field_panel.type_label")}</Label>
           <Select value={config.type} onValueChange={(v) => handleTypeChange(v as FieldType)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="text">Text</SelectItem>
-              <SelectItem value="number">Number</SelectItem>
-              <SelectItem value="date">Date</SelectItem>
-              <SelectItem value="boolean">Boolean</SelectItem>
-              <SelectItem value="select">Select</SelectItem>
+              <SelectItem value="text">{t("node.field.types.text")}</SelectItem>
+              <SelectItem value="number">{t("node.field.types.number")}</SelectItem>
+              <SelectItem value="date">{t("node.field.types.date")}</SelectItem>
+              <SelectItem value="boolean">{t("node.field.types.boolean")}</SelectItem>
+              <SelectItem value="select">{t("node.field.types.select")}</SelectItem>
             </SelectContent>
           </Select>
           {config.type !== field.config.type && (
             <p className="text-xs text-muted-foreground">
-              Changing the type resets type-specific settings.
+              {t("field_panel.type_changed_warning")}
             </p>
           )}
         </div>
@@ -121,7 +121,7 @@ export function EditFieldForm({
       </div>
       <div className="flex gap-2 px-5 py-4 border-t shrink-0">
         <Button variant="outline" className="flex-1" onClick={onClose}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           className="flex-1"
@@ -146,7 +146,7 @@ export function EditFieldForm({
             onClose()
           }}
         >
-          Save
+          {t("common.save")}
         </Button>
       </div>
     </>
