@@ -1,5 +1,6 @@
 pub mod error;
 pub mod estimator;
+pub mod evaluation;
 pub mod flows;
 pub mod rank;
 pub mod submission;
