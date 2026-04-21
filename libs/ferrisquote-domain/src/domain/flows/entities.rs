@@ -1,3 +1,4 @@
+pub mod binding;
 pub mod field;
 pub mod flow;
 pub mod ids;
