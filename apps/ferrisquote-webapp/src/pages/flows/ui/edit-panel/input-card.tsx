@@ -177,6 +177,9 @@ export function InputCard({
                 value={labelFilterDraft}
                 onChange={(e) => setLabelFilterDraft(e.target.value)}
                 onBlur={commitLabelFilter}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                }}
               />
             </div>
           )}
@@ -189,6 +192,9 @@ export function InputCard({
               value={descDraft}
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={commitDesc}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+              }}
             />
           </div>
         </div>

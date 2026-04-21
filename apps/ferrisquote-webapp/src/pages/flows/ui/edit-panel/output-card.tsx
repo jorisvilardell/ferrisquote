@@ -453,6 +453,9 @@ export function OutputCard({
               value={descDraft}
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={commitDesc}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+              }}
             />
           </div>
         </div>
