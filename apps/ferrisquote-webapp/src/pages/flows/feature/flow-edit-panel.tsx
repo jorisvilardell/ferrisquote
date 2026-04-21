@@ -166,14 +166,29 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
     }
   }
 
+  // Estimator-details holds the ExpressionBuilder calculator — give it more
+  // room to breathe (wider on desktop, full-width on mobile). Other modes
+  // stay at the compact 320px width so the canvas keeps its real-estate.
+  const wide = state?.mode === "estimator-details"
+  const widthCls = !state
+    ? "w-0"
+    : wide
+      ? "w-full sm:w-[460px] lg:w-[520px]"
+      : "w-full sm:w-80"
+
   return (
     <div
       className={cn(
         "shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out",
-        state ? "w-80" : "w-0",
+        widthCls,
       )}
     >
-      <div className="w-80 h-full border-l bg-background flex flex-col overflow-hidden">
+      <div
+        className={cn(
+          "h-full border-l bg-background flex flex-col overflow-hidden",
+          wide ? "w-full sm:w-[460px] lg:w-[520px]" : "w-full sm:w-80",
+        )}
+      >
         {state?.mode === "add-step" && (
           <AddStepForm onClose={onClose} onSubmit={handleAddStep} />
         )}

@@ -457,12 +457,29 @@ function DisplayZone({
   hint: string
 }) {
   const { t } = useTranslation()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [overflowTop, setOverflowTop] = useState(false)
+
+  // Autoscroll to the bottom on content change so the cursor line stays
+  // in view — and detect whether there's content scrolled off the top so
+  // we can show the TI-83-style "…" ellipsis indicator.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    setOverflowTop(el.scrollHeight > el.clientHeight)
+  }, [tiles, cursor])
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    setOverflowTop(el.scrollTop > 0)
+  }
 
   return (
     <div
       className={cn(
         "relative rounded-lg border shadow-inner overflow-hidden",
-        // Dark "LCD screen" with a subtle scanline/grain hint.
         "bg-gradient-to-b from-slate-900 to-slate-950 dark:from-slate-800 dark:to-slate-900",
         error
           ? "border-destructive/70 ring-1 ring-destructive/40"
@@ -478,13 +495,31 @@ function DisplayZone({
             "repeating-linear-gradient(0deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 3px)",
         }}
       />
+      {/* TI-83-style overflow indicator — three dots at the very top
+          whenever content has scrolled above the viewport. Sits above the
+          scroll container so the glyphs don't move with scrollTop. */}
+      {overflowTop && (
+        <div className="absolute top-1 left-0 right-0 flex justify-center z-10 pointer-events-none">
+          <span className="text-slate-400 text-xs leading-none tracking-widest">
+            •••
+          </span>
+        </div>
+      )}
       <div
+        ref={scrollRef}
+        onScroll={handleScroll}
         className={cn(
-          "relative min-h-[96px] px-4 pt-6 pb-3",
-          "flex flex-wrap items-baseline justify-end gap-y-1",
-          "font-mono text-slate-100 leading-tight tracking-tight",
+          // Three-line viewport: line-height-none + text-2xl ≈ 28-30px per
+          // line; 3 lines + top padding for the overflow indicator.
+          "relative max-h-[108px] overflow-y-auto px-4 pt-5 pb-3",
+          "flex flex-wrap items-center justify-start gap-y-1",
+          "font-mono text-slate-100 leading-none tracking-tight",
           "cursor-text",
+          // Hide scrollbar chrome on all engines — the `•••` glyph is the
+          // only overflow cue, TI-style.
+          "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none]",
         )}
+        style={{ scrollbarWidth: "none" }}
         onClick={(e) => {
           if (e.target === e.currentTarget) setCursor(tiles.length)
         }}
@@ -496,7 +531,7 @@ function DisplayZone({
           </span>
         )}
         {tiles.map((tile, i) => (
-          <span key={tile.id} className="inline-flex items-baseline">
+          <span key={tile.id} className="inline-flex items-center">
             <Caret active={cursor === i} onClick={() => setCursor(i)} />
             <TileToken
               tile={tile}
@@ -513,7 +548,7 @@ function DisplayZone({
       </div>
       {/* Help icon floating in the top-right corner of the screen — holds
           the keyboard-shortcut hint so the display itself stays clean. */}
-      <div className="absolute top-1.5 right-1.5 z-10">
+      <div className="absolute top-1.5 right-1.5 z-20">
         <div className="text-slate-300 hover:text-slate-100">
           <HelpHint text={hint} label={t("common.help")} />
         </div>
@@ -528,12 +563,14 @@ function DisplayZone({
 }
 
 function Caret({ active, onClick }: { active: boolean; onClick: () => void }) {
+  // Height matches the tallest glyph (text-2xl ≈ 1.5em). align-middle +
+  // items-center on the row keeps the bar centered on the text box.
   return (
     <span
       role="presentation"
       onClick={onClick}
       className={cn(
-        "inline-block w-[2px] h-6 cursor-text mx-px align-baseline rounded-sm transition-colors",
+        "inline-block w-[2px] h-7 cursor-text mx-px align-middle rounded-sm transition-colors",
         active
           ? "bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.8)]"
           : "bg-transparent hover:bg-slate-600",
@@ -609,7 +646,7 @@ function TileToken({
       )}
       style={{ color: fg, backgroundColor: bg }}
     >
-      {prefix && <span className="opacity-70 text-xs">{prefix}</span>}
+      {prefix && <span className="opacity-70 text-sm">{prefix}</span>}
       <span>{body}</span>
       <button
         type="button"
@@ -617,10 +654,10 @@ function TileToken({
           e.stopPropagation()
           onRemove()
         }}
-        className="ml-0.5 opacity-0 group-hover:opacity-80 hover:opacity-100 transition-opacity"
+        className="ml-1 inline-flex items-center justify-center rounded-full bg-slate-800/80 hover:bg-red-500/80 p-0.5 opacity-60 group-hover:opacity-100 transition-all"
         aria-label="Remove tile"
       >
-        <X className="h-3 w-3" />
+        <X className="h-4 w-4" />
       </button>
     </span>
   )
@@ -661,12 +698,12 @@ function GlyphToken({
           onRemove()
         }}
         className={cn(
-          "absolute -top-1.5 -right-1.5 rounded-full bg-slate-800 border border-slate-600 p-0.5",
-          "opacity-0 group-hover:opacity-100 transition-opacity",
+          "absolute -top-2 -right-2 rounded-full bg-slate-800 hover:bg-red-500 border border-slate-600 p-1 shadow-md",
+          "opacity-0 group-hover:opacity-100 transition-all",
         )}
         aria-label="Remove"
       >
-        <X className="h-2.5 w-2.5 text-slate-200" />
+        <X className="h-3.5 w-3.5 text-slate-100" />
       </button>
     </span>
   )
@@ -749,16 +786,16 @@ function CalcKey({
   ariaLabel?: string
 }) {
   const base =
-    "h-10 rounded-lg border text-base font-mono font-semibold shadow-sm " +
+    "h-12 sm:h-[52px] rounded-lg border text-lg font-mono font-semibold shadow-sm " +
     "active:translate-y-px active:shadow-none transition-all " +
     "disabled:opacity-40 disabled:cursor-not-allowed"
   const variantCls = {
     num:
       "bg-background hover:bg-accent border-border/70 text-foreground",
     op:
-      "bg-amber-500 hover:bg-amber-600 border-amber-600 text-white shadow-amber-900/20",
+      "bg-amber-500 hover:bg-amber-600 border-amber-600 text-white shadow-amber-900/20 text-xl",
     fn:
-      "bg-slate-700 hover:bg-slate-600 border-slate-800 text-slate-100 text-sm",
+      "bg-slate-700 hover:bg-slate-600 border-slate-800 text-slate-100 text-base",
   }[variant]
   return (
     <button
