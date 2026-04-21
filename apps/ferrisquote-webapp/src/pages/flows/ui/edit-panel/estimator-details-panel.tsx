@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { HelpHint } from "@/components/help-hint"
 import { InputCard } from "./input-card"
 import { OutputCard } from "./output-card"
 
@@ -712,10 +713,14 @@ export function EstimatorDetailsPanel({
         )}
 
         {/* ─── Inputs ─── */}
-        <h3 className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mt-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t("estimator.inputs")}
+          <HelpHint
+            text={t("estimator.inputs_help")}
+            example={t("estimator.inputs_help_example")}
+            label={t("common.help")}
+          />
         </h3>
-        <p className="text-xs text-muted-foreground">{t("estimator.inputs_help")}</p>
 
         {effectiveInputs.map((i) => (
           <InputCard
@@ -738,10 +743,14 @@ export function EstimatorDetailsPanel({
         </Button>
 
         {/* ─── Outputs ─── */}
-        <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t("estimator.outputs")}
+          <HelpHint
+            text={t("estimator.outputs_help")}
+            example={t("estimator.outputs_help_example")}
+            label={t("common.help")}
+          />
         </h3>
-        <p className="text-xs text-muted-foreground">{t("estimator.outputs_help")}</p>
 
         {effectiveOutputs.map((o) => (
           <OutputCard
@@ -777,12 +786,14 @@ export function EstimatorDetailsPanel({
         {/* ─── Execution context ─── */}
         {binding && (
           <>
-            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t("estimator.execution_context")}
+              <HelpHint
+                text={t("estimator.execution_help")}
+                example={t("estimator.execution_help_example")}
+                label={t("common.help")}
+              />
             </h3>
-            <p className="text-xs text-muted-foreground">
-              {t("estimator.execution_help")}
-            </p>
             <Select
               value={mapOverStep ?? "__global__"}
               onValueChange={(v) => {
@@ -841,12 +852,14 @@ export function EstimatorDetailsPanel({
         {/* ─── Argument mapping ─── */}
         {binding && hasInputs && (
           <>
-            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t("estimator.arguments")}
+              <HelpHint
+                text={t("estimator.arguments_help")}
+                example={t("estimator.arguments_help_example")}
+                label={t("common.help")}
+              />
             </h3>
-            <p className="text-xs text-muted-foreground">
-              {t("estimator.arguments_help")}
-            </p>
 
             {effectiveInputs.map((input) => {
               const numericOnly = input.parameter_type.kind !== "product"
@@ -918,12 +931,14 @@ export function EstimatorDetailsPanel({
         {/* ─── Reduce ─── */}
         {binding && showReduce && (
           <>
-            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t("estimator.reduce")}
+              <HelpHint
+                text={t("estimator.reduce_help")}
+                example={t("estimator.reduce_help_example")}
+                label={t("common.help")}
+              />
             </h3>
-            <p className="text-xs text-muted-foreground">
-              {t("estimator.reduce_help")}
-            </p>
 
             {effectiveOutputs.map((out) => (
               <div
