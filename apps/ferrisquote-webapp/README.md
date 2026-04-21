@@ -102,3 +102,51 @@ export type CreateQuoteSchema = z.infer<typeof createQuoteSchema>
 
 const form = useForm<CreateQuoteSchema>({ resolver: zodResolver(createQuoteSchema) })
 ```
+
+## Internationalization (i18n)
+
+Translations live under `src/locales/<lng>/translation.json`. Default is French (`fr`); English (`en`) is the secondary language. The `LanguageSwitcher` component in the nav sidebar lets users switch languages at runtime — the choice is persisted in `localStorage` (`i18nextLng`).
+
+### Adding a new translation key
+
+1. Pick (or create) a namespace in both `src/locales/fr/translation.json` and `src/locales/en/translation.json`. Keep the structure identical across locales.
+2. Use `useTranslation()` in the component:
+
+   ```tsx
+   import { useTranslation } from "react-i18next"
+
+   export function MyButton() {
+     const { t } = useTranslation()
+     return <button>{t("common.save")}</button>
+   }
+   ```
+
+3. Interpolation uses `{{var}}`:
+
+   ```json
+   { "errors.update_failed": "Update failed: {{msg}}" }
+   ```
+   ```tsx
+   toast.error(t("errors.update_failed", { msg: err.message }))
+   ```
+
+### Adding a new language
+
+1. Create `src/locales/<code>/translation.json` (copy the English file as a template).
+2. Register it in `src/i18n/index.ts`:
+
+   ```ts
+   import es from "@/locales/es/translation.json"
+   export const SUPPORTED_LANGS = ["fr", "en", "es"] as const
+   // …
+   resources: { en: { translation: en }, fr: { translation: fr }, es: { translation: es } }
+   ```
+
+3. Update `LanguageSwitcher` label fallback if needed.
+
+### Style guide
+
+- Keep keys snake_case, grouped by domain (`estimator.*`, `flow.*`, `common.*`, `errors.*`).
+- Don't concatenate translated strings — use full sentences with interpolation. Word order varies between languages.
+- Number + date formatting goes through `Intl.NumberFormat` / `Intl.DateTimeFormat` with `i18n.resolvedLanguage` as the locale.
+
