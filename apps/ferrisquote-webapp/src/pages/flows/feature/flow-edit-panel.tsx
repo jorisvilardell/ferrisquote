@@ -9,6 +9,7 @@ import {
   useUpdateStep,
 } from "@/api/flows.api"
 import { useEstimators } from "@/api/estimators.api"
+import { useBindings } from "@/api/bindings.api"
 import { AddFieldForm } from "@/pages/flows/ui/edit-panel/add-field-form"
 import { AddStepForm } from "@/pages/flows/ui/edit-panel/add-step-form"
 import { EditFieldForm } from "@/pages/flows/ui/edit-panel/edit-field-form"
@@ -36,8 +37,10 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
   // Queries
   const { data: flowData } = useGetFlow(flowId)
   const { data: estimatorsData } = useEstimators(flowId)
+  const { data: bindingsData } = useBindings(flowId)
   const flow = flowData?.data ?? null
   const estimators = estimatorsData?.data?.estimators ?? []
+  const bindings = bindingsData?.data?.bindings ?? []
 
   // Sidenav-side mutations (forms submit → mutation here, parent stays clean)
   const { mutate: addStep } = useAddStep(flowId)
@@ -59,6 +62,16 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
     state?.mode === "estimator-details"
       ? estimators.find((e) => e.id === state.estimatorId) ?? null
       : null
+  // The unified panel also edits the binding when one exists for this
+  // estimator — one binding per estimator by convention.
+  const activeBinding =
+    estimator != null
+      ? bindings.find((b) => b.estimator_id === estimator.id) ?? null
+      : null
+  const otherBindings =
+    activeBinding != null
+      ? bindings.filter((b) => b.id !== activeBinding.id)
+      : bindings
 
   // Autocomplete data: only numeric fields make sense as operands in an
   // estimator expression (text/date/select/boolean are not directly usable
@@ -169,11 +182,14 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
             onSubmit={handleEditField}
           />
         )}
-        {state?.mode === "estimator-details" && estimator && (
+        {state?.mode === "estimator-details" && estimator && flow && (
           <EstimatorDetailsPanel
             key={estimator.id}
             estimator={estimator}
             flowId={flowId}
+            flow={flow}
+            binding={activeBinding}
+            otherBindings={otherBindings}
             availableFieldKeys={availableFieldKeys}
             otherEstimators={otherEstimators}
             estimatorsIndex={estimatorsIndex}

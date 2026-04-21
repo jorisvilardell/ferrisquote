@@ -28,6 +28,7 @@ import {
   useGetFlow,
 } from "@/api/flows.api"
 import { useCreateEstimator, useDeleteEstimator, useEstimators } from "@/api/estimators.api"
+import { useBindings, useCreateBinding } from "@/api/bindings.api"
 import {
   overlayEstimators,
   useEstimatorDraftStore,
@@ -469,8 +470,10 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
 
   const { data: flowData } = useGetFlow(flowId)
   const { data: estimatorsData } = useEstimators(flowId)
+  const { data: bindingsData } = useBindings(flowId)
   const flow = flowData?.data ?? null
   const rawEstimators = estimatorsData?.data?.estimators ?? []
+  const bindings = bindingsData?.data?.bindings ?? []
 
   // Overlay sidenav drafts so the graph reflects unsaved edits live
   const drafts = useEstimatorDraftStore()
@@ -487,6 +490,7 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
   const { mutate: createEstimator } = useCreateEstimator(flowId)
   const { mutate: deleteEstimator } = useDeleteEstimator(flowId)
   const { mutate: reorderStep } = useReorderStep(flowId)
+  const { mutate: createBinding } = useCreateBinding(flowId)
 
   // ─── Canvas hooks ─────────────────────────────────────────────────────────
   const { linkingField, setLinkingField } = useLinkingMode(flow, fitView)
@@ -545,6 +549,20 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
 
     if (node.type === "estimatorNode") {
       const estimatorId = node.id.replace("estimator-", "")
+      // Open the unified estimator panel. Silently ensure a binding exists —
+      // the panel surfaces wiring + reduce sections only once we have one.
+      const existing = bindings.find((b) => b.estimator_id === estimatorId)
+      if (!existing) {
+        createBinding({
+          path: { flow_id: flowId },
+          body: {
+            estimator_id: estimatorId,
+            inputs_mapping: {},
+            map_over_step: null,
+            outputs_reduce_strategy: {},
+          },
+        })
+      }
       setPanelState({ mode: "estimator-details", estimatorId })
       return
     }

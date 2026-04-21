@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Schemas } from "@/api/api.client"
@@ -11,6 +11,7 @@ import {
   useUpdateInput,
   useUpdateOutput,
 } from "@/api/estimators.api"
+import { useUpdateBinding } from "@/api/bindings.api"
 import { type EstimatorIndex } from "@/pages/flows/lib/expression-refs"
 import {
   TEMP_PREFIX,
@@ -19,15 +20,31 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { InputCard } from "./input-card"
 import { OutputCard } from "./output-card"
 
 const ROSE = "hsl(330, 80%, 60%)"
+const EMERALD = "hsl(158, 64%, 52%)"
+
+// OpenAPI generator widens these to `Record<string, unknown>` — we restore the
+// real wire shape locally instead of leaking `unknown` through the UI.
+type InputsMap = Record<string, Schemas.InputBindingValueDto>
+type ReduceMap = Record<string, Schemas.AggregationStrategyDto>
 
 export function EstimatorDetailsPanel({
   estimator,
   flowId,
+  flow,
+  binding,
+  otherBindings,
   availableFieldKeys,
   otherEstimators,
   estimatorsIndex,
@@ -35,12 +52,21 @@ export function EstimatorDetailsPanel({
 }: {
   estimator: Schemas.EstimatorResponse
   flowId: string
+  flow: Schemas.FlowResponse
+  /** Optional — unified panel also edits the binding's wiring when one exists. */
+  binding: Schemas.BindingResponse | null
+  otherBindings: Schemas.BindingResponse[]
   availableFieldKeys: string[]
   otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
   estimatorsIndex: EstimatorIndex
   onClose: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
+  // Accordion-style: only one input or output card expanded at a time.
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
+
+  const toggleCard = (id: string) =>
+    setExpandedCardId((prev) => (prev === id ? null : id))
 
   const drafts = useEstimatorDraftStore()
 
@@ -58,6 +84,11 @@ export function EstimatorDetailsPanel({
     setEditingName(false)
   }, [estimator.id, estimator.name, estimator.description])
 
+  // Reset the accordion when switching estimators.
+  useEffect(() => {
+    setExpandedCardId(null)
+  }, [estimator.id])
+
   const updateEstimator = useUpdateEstimator(flowId, estimator.id)
   const addInput = useAddInput(flowId, estimator.id)
   const updateInput = useUpdateInput(flowId, estimator.id)
@@ -65,6 +96,7 @@ export function EstimatorDetailsPanel({
   const addOutput = useAddOutput(flowId, estimator.id)
   const updateOutput = useUpdateOutput(flowId, estimator.id)
   const removeOutput = useRemoveOutput(flowId, estimator.id)
+  const updateBinding = useUpdateBinding(flowId)
 
   const nameDisplay =
     drafts.nameDraft != null ? drafts.nameDraft : estimator.name.replace(/_/g, " ")
@@ -90,6 +122,61 @@ export function EstimatorDetailsPanel({
     ...drafts.pendingOutputAdds,
   ]
 
+  // ─── Binding wiring local state ──────────────────────────────────────────
+  const serverInputsMap = (binding?.inputs_mapping ?? {}) as InputsMap
+  const serverReduceMap = (binding?.outputs_reduce_strategy ?? {}) as ReduceMap
+  const serverMapOver = binding?.map_over_step ?? null
+
+  const [mapOverStep, setMapOverStep] = useState<string | null>(serverMapOver)
+  const [inputsMapping, setInputsMapping] = useState<InputsMap>(serverInputsMap)
+  const [reduceMap, setReduceMap] = useState<ReduceMap>(serverReduceMap)
+
+  useEffect(() => {
+    setMapOverStep(serverMapOver)
+    setInputsMapping(serverInputsMap)
+    setReduceMap(serverReduceMap)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [binding?.id])
+
+  const allFields = useMemo(
+    () =>
+      flow.steps.flatMap((s) =>
+        s.fields.map((f) => ({
+          id: f.id,
+          key: f.key,
+          label: f.label,
+          stepId: s.id,
+          numeric: f.config.type === "number",
+        })),
+      ),
+    [flow.steps],
+  )
+
+  const repeatableSteps = useMemo(
+    () => flow.steps.filter((s) => s.is_repeatable),
+    [flow.steps],
+  )
+
+  // Resolve the *current* (draft-aware) key for an input id — bindings are
+  // keyed by input.key, so renaming an input must rekey the binding's
+  // inputs_mapping in step. Same idea for outputs → reduceMap.
+  function currentInputKey(inputId: string): string | null {
+    const temp = drafts.pendingInputAdds.find((v) => v.id === inputId)
+    if (temp) return temp.key
+    const edit = drafts.inputEdits[inputId]?.key
+    const server = estimator.inputs.find((v) => v.id === inputId)
+    return edit ?? server?.key ?? null
+  }
+
+  function currentOutputKey(outputId: string): string | null {
+    const temp = drafts.pendingOutputAdds.find((v) => v.id === outputId)
+    if (temp) return temp.key
+    const edit = drafts.outputEdits[outputId]?.key
+    const server = estimator.outputs.find((v) => v.id === outputId)
+    return edit ?? server?.key ?? null
+  }
+
+  // ─── Validation + dirty detection ────────────────────────────────────────
   const normalizedName = nameDisplay.trim().replace(/\s+/g, "_")
   const nameValid = /^[A-Za-z0-9_]+$/.test(normalizedName)
   const duplicateName = otherEstimators.some((e) => e.name === normalizedName)
@@ -102,6 +189,13 @@ export function EstimatorDetailsPanel({
   const outputEditsDirty = Object.keys(drafts.outputEdits).length > 0
   const outputAddsDirty = drafts.pendingOutputAdds.length > 0
   const outputDelsDirty = drafts.pendingOutputDeletes.size > 0
+
+  const bindingDirty =
+    binding != null &&
+    (mapOverStep !== serverMapOver ||
+      JSON.stringify(inputsMapping) !== JSON.stringify(serverInputsMap) ||
+      JSON.stringify(reduceMap) !== JSON.stringify(serverReduceMap))
+
   const isDirty =
     nameDirty ||
     descDirty ||
@@ -110,86 +204,136 @@ export function EstimatorDetailsPanel({
     inputDelsDirty ||
     outputEditsDirty ||
     outputAddsDirty ||
-    outputDelsDirty
+    outputDelsDirty ||
+    bindingDirty
 
   const canSave =
     isDirty && nameValid && !duplicateName && normalizedName.length > 0
 
-  function handleSave() {
+  // ─── Save ────────────────────────────────────────────────────────────────
+  async function handleSave() {
     if (!canSave) return
+
+    // Estimator signature must land BEFORE the binding update — binding
+    // validation runs against the live estimator state on the server, so a
+    // rename-then-rewire flow would fail the binding PUT otherwise.
+    const signaturePromises: Promise<unknown>[] = []
 
     if (nameDirty || descDirty) {
       const body: Schemas.UpdateEstimatorRequest = {}
       if (nameDirty) body.name = normalizedName
       if (descDirty) body.description = drafts.descDraft ?? ""
-      updateEstimator.mutate(
-        { path: { estimator_id: estimator.id }, body },
-        { onError: (err) => toast.error(`Update failed: ${err.message}`) },
+      signaturePromises.push(
+        updateEstimator.mutateAsync({ path: { estimator_id: estimator.id }, body }),
       )
     }
 
-    // Inputs
     for (const v of drafts.pendingInputAdds) {
-      addInput.mutate(
-        {
+      signaturePromises.push(
+        addInput.mutateAsync({
           path: { estimator_id: estimator.id },
           body: {
             key: v.key,
             description: v.description || null,
             parameter_type: v.parameter_type,
           },
-        },
-        { onError: (err) => toast.error(`Add input failed: ${err.message}`) },
+        }),
       )
     }
     for (const [inputId, patch] of Object.entries(drafts.inputEdits)) {
-      const body: Schemas.UpdateInputRequest = {
-        key: patch.key,
-        description: patch.description ?? null,
-        parameter_type: patch.parameter_type ?? null,
-      }
-      updateInput.mutate(
-        { path: { estimator_id: estimator.id, input_id: inputId }, body },
-        { onError: (err) => toast.error(`Input update failed: ${err.message}`) },
+      signaturePromises.push(
+        updateInput.mutateAsync({
+          path: { estimator_id: estimator.id, input_id: inputId },
+          body: {
+            key: patch.key,
+            description: patch.description ?? null,
+            parameter_type: patch.parameter_type ?? null,
+          },
+        }),
       )
     }
     for (const inputId of drafts.pendingInputDeletes) {
-      removeInput.mutate(
-        { path: { estimator_id: estimator.id, input_id: inputId } },
-        { onError: (err) => toast.error(`Delete input failed: ${err.message}`) },
+      signaturePromises.push(
+        removeInput.mutateAsync({
+          path: { estimator_id: estimator.id, input_id: inputId },
+        }),
       )
     }
 
-    // Outputs
     for (const v of drafts.pendingOutputAdds) {
-      addOutput.mutate(
-        {
+      signaturePromises.push(
+        addOutput.mutateAsync({
           path: { estimator_id: estimator.id },
           body: {
             key: v.key,
             expression: v.expression || "0",
             description: v.description || null,
           },
-        },
-        { onError: (err) => toast.error(`Add output failed: ${err.message}`) },
+        }),
       )
     }
     for (const [outputId, patch] of Object.entries(drafts.outputEdits)) {
-      const body: Schemas.UpdateOutputRequest = {
-        key: patch.key,
-        expression: patch.expression,
-        description: patch.description ?? null,
-      }
-      updateOutput.mutate(
-        { path: { estimator_id: estimator.id, output_id: outputId }, body },
-        { onError: (err) => toast.error(`Output update failed: ${err.message}`) },
+      signaturePromises.push(
+        updateOutput.mutateAsync({
+          path: { estimator_id: estimator.id, output_id: outputId },
+          body: {
+            key: patch.key,
+            expression: patch.expression,
+            description: patch.description ?? null,
+          },
+        }),
       )
     }
     for (const outputId of drafts.pendingOutputDeletes) {
-      removeOutput.mutate(
-        { path: { estimator_id: estimator.id, output_id: outputId } },
-        { onError: (err) => toast.error(`Delete output failed: ${err.message}`) },
+      signaturePromises.push(
+        removeOutput.mutateAsync({
+          path: { estimator_id: estimator.id, output_id: outputId },
+        }),
       )
+    }
+
+    try {
+      await Promise.all(signaturePromises)
+    } catch (err) {
+      toast.error(`Signature update failed: ${(err as Error).message}`)
+      return
+    }
+
+    if (bindingDirty && binding) {
+      // Rebuild the mapping keyed strictly by the *current* input/output
+      // keys. This guards against any stale entries that the live rekey
+      // might have missed (double renames, server refetch races, etc.) and
+      // drops entries that point to deleted inputs/outputs.
+      const finalInputsMapping: InputsMap = {}
+      for (const inp of effectiveInputs) {
+        const serverKey = estimator.inputs.find((s) => s.id === inp.id)?.key
+        const entry =
+          inputsMapping[inp.key] ??
+          (serverKey ? inputsMapping[serverKey] : undefined)
+        if (entry) finalInputsMapping[inp.key] = entry
+      }
+
+      const finalReduceMap: ReduceMap = {}
+      for (const out of effectiveOutputs) {
+        const serverKey = estimator.outputs.find((s) => s.id === out.id)?.key
+        const strat =
+          reduceMap[out.key] ?? (serverKey ? reduceMap[serverKey] : undefined)
+        if (strat) finalReduceMap[out.key] = strat
+      }
+
+      try {
+        await updateBinding.mutateAsync({
+          path: { flow_id: flowId, binding_id: binding.id },
+          body: {
+            inputs_mapping: finalInputsMapping,
+            outputs_reduce_strategy: finalReduceMap,
+            map_over_step: mapOverStep,
+          },
+        })
+      } catch (err) {
+        toast.error(`Wiring update failed: ${(err as Error).message}`)
+        return
+      }
     }
 
     drafts.clear()
@@ -200,10 +344,29 @@ export function EstimatorDetailsPanel({
     drafts.clear()
     drafts.setActive(estimator.id)
     setEditingName(false)
+    setMapOverStep(serverMapOver)
+    setInputsMapping(serverInputsMap)
+    setReduceMap(serverReduceMap)
   }
 
-  // ─── Input draft staging ──────────────────────────────────────────────────
+  // ─── Input/Output draft staging ──────────────────────────────────────────
   function handleInputPatch(inputId: string, patch: Partial<Schemas.InputResponse>) {
+    // Rename cascade: input key changed → rekey any binding entry that used
+    // the previous key so the PUT body matches the new signature.
+    if (patch.key !== undefined) {
+      const oldKey = currentInputKey(inputId)
+      const newKey = patch.key
+      if (oldKey && newKey && oldKey !== newKey) {
+        setInputsMapping((prev) => {
+          if (!(oldKey in prev)) return prev
+          const next = { ...prev }
+          next[newKey] = next[oldKey]
+          delete next[oldKey]
+          return next
+        })
+      }
+    }
+
     if (inputId.startsWith(TEMP_PREFIX)) {
       const cur = drafts.pendingInputAdds.find((v) => v.id === inputId)
       if (!cur) return
@@ -235,18 +398,42 @@ export function EstimatorDetailsPanel({
       description: "",
       parameter_type: { kind: "number" },
     })
+    setExpandedCardId(tempId)
   }
 
   function handleDeleteInput(inputId: string) {
+    const key = currentInputKey(inputId)
     if (inputId.startsWith(TEMP_PREFIX)) {
       drafts.removePendingInput(inputId)
-      return
+    } else {
+      drafts.markInputDelete(inputId)
     }
-    drafts.markInputDelete(inputId)
+    if (key) {
+      setInputsMapping((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+    setExpandedCardId((prev) => (prev === inputId ? null : prev))
   }
 
-  // ─── Output draft staging ─────────────────────────────────────────────────
   function handleOutputPatch(outputId: string, patch: Partial<Schemas.OutputResponse>) {
+    if (patch.key !== undefined) {
+      const oldKey = currentOutputKey(outputId)
+      const newKey = patch.key
+      if (oldKey && newKey && oldKey !== newKey) {
+        setReduceMap((prev) => {
+          if (!(oldKey in prev)) return prev
+          const next = { ...prev }
+          next[newKey] = next[oldKey]
+          delete next[oldKey]
+          return next
+        })
+      }
+    }
+
     if (outputId.startsWith(TEMP_PREFIX)) {
       const cur = drafts.pendingOutputAdds.find((v) => v.id === outputId)
       if (!cur) return
@@ -277,18 +464,72 @@ export function EstimatorDetailsPanel({
       expression: "0",
       description: "",
     })
+    setExpandedCardId(tempId)
   }
 
   function handleDeleteOutput(outputId: string) {
+    const key = currentOutputKey(outputId)
     if (outputId.startsWith(TEMP_PREFIX)) {
       drafts.removePendingOutput(outputId)
-      return
+    } else {
+      drafts.markOutputDelete(outputId)
     }
-    drafts.markOutputDelete(outputId)
+    if (key) {
+      setReduceMap((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+    setExpandedCardId((prev) => (prev === outputId ? null : prev))
   }
 
   const ownInputKeys = effectiveInputs.map((i) => i.key)
   const ownOutputKeys = effectiveOutputs.map((o) => o.key)
+
+  // ─── Wiring helpers ──────────────────────────────────────────────────────
+  function currentSelectValue(inputKey: string): string {
+    const v = inputsMapping[inputKey]
+    if (!v) return ""
+    if (v.source === "field") return `field:${v.field_id}`
+    if (v.source === "binding_output") return `binding:${v.binding_id}.${v.output_key}`
+    return ""
+  }
+
+  function handleSourceChange(inputKey: string, raw: string, numericOnly: boolean) {
+    if (raw === "__unset__") {
+      setInputsMapping((prev) => {
+        const next = { ...prev }
+        delete next[inputKey]
+        return next
+      })
+      return
+    }
+    if (raw.startsWith("field:")) {
+      const fid = raw.slice("field:".length)
+      const meta = allFields.find((f) => f.id === fid)
+      if (!meta) return
+      if (numericOnly && !meta.numeric) {
+        toast.error(`Field '${meta.key}' is not numeric`)
+        return
+      }
+      setInputsMapping((prev) => ({ ...prev, [inputKey]: { source: "field", field_id: fid } }))
+    } else if (raw.startsWith("binding:")) {
+      const [bid, okey] = raw.slice("binding:".length).split(".", 2)
+      setInputsMapping((prev) => ({
+        ...prev,
+        [inputKey]: { source: "binding_output", binding_id: bid, output_key: okey },
+      }))
+    }
+  }
+
+  function setReduceStrategy(outputKey: string, strategy: Schemas.AggregationStrategyDto) {
+    setReduceMap((prev) => ({ ...prev, [outputKey]: strategy }))
+  }
+
+  const hasInputs = effectiveInputs.length > 0
+  const showReduce = mapOverStep !== null && effectiveOutputs.length > 0
 
   return (
     <>
@@ -324,7 +565,7 @@ export function EstimatorDetailsPanel({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto pb-4">
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1 min-h-0 overflow-y-auto pb-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="estimator-desc" className="text-xs font-medium">
             Description
@@ -350,11 +591,9 @@ export function EstimatorDetailsPanel({
         )}
 
         {/* ─── Inputs ─── */}
-        <div className="flex items-center justify-between mt-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Inputs
-          </h3>
-        </div>
+        <h3 className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Inputs
+        </h3>
         <p className="text-xs text-muted-foreground">
           Parameters required to run this estimator. Types: number, boolean, product.
         </p>
@@ -363,11 +602,12 @@ export function EstimatorDetailsPanel({
           <InputCard
             key={i.id}
             input={i}
+            expanded={expandedCardId === i.id}
+            onToggle={() => toggleCard(i.id)}
             onUpdate={handleInputPatch}
             onDelete={handleDeleteInput}
           />
         ))}
-
         <Button
           variant="outline"
           size="sm"
@@ -379,11 +619,9 @@ export function EstimatorDetailsPanel({
         </Button>
 
         {/* ─── Outputs ─── */}
-        <div className="flex items-center justify-between mt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Outputs
-          </h3>
-        </div>
+        <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Outputs
+        </h3>
         <p className="text-xs text-muted-foreground">
           Variables produced by the calculation. Reference inputs with <code className="font-mono bg-muted px-1 rounded">@input_key</code>.
         </p>
@@ -392,6 +630,8 @@ export function EstimatorDetailsPanel({
           <OutputCard
             key={o.id}
             output={o}
+            expanded={expandedCardId === o.id}
+            onToggle={() => toggleCard(o.id)}
             ownEstimatorName={estimator.name}
             ownInputKeys={ownInputKeys}
             ownOutputKeys={ownOutputKeys.filter((k) => k !== o.key)}
@@ -402,7 +642,6 @@ export function EstimatorDetailsPanel({
             onDelete={handleDeleteOutput}
           />
         ))}
-
         <Button
           variant="outline"
           size="sm"
@@ -412,6 +651,147 @@ export function EstimatorDetailsPanel({
           <Plus className="w-3.5 h-3.5 mr-1.5" />
           Add output
         </Button>
+
+        {/* ─── Execution context ─── */}
+        {binding && (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Execution context
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Run once, or loop over each iteration of a repeatable step.
+            </p>
+            <Select
+              value={mapOverStep ?? "__global__"}
+              onValueChange={(v) => setMapOverStep(v === "__global__" ? null : v)}
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__global__">Global execution</SelectItem>
+                {repeatableSteps.length === 0 ? (
+                  <SelectItem value="__none__" disabled>
+                    No repeatable steps in this flow
+                  </SelectItem>
+                ) : (
+                  repeatableSteps.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      Loop over: {s.title}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        {/* ─── Argument mapping ─── */}
+        {binding && hasInputs && (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Arguments
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Map each input to a flow field or another binding's output.
+            </p>
+
+            {effectiveInputs.map((input) => {
+              const numericOnly = input.parameter_type.kind !== "product"
+              return (
+                <div
+                  key={`wiring-${input.id}`}
+                  className="flex flex-col gap-1 rounded-md border border-border/60 px-3 py-2"
+                >
+                  <Label className="text-xs">
+                    <span className="font-mono font-semibold" style={{ color: EMERALD }}>
+                      {input.key}
+                    </span>
+                    <span className="ml-2 text-[10px] text-muted-foreground">
+                      : {input.parameter_type.kind}
+                      {input.parameter_type.kind === "product" && input.parameter_type.label_filter
+                        ? ` (${input.parameter_type.label_filter})`
+                        : ""}
+                    </span>
+                  </Label>
+                  <Select
+                    value={currentSelectValue(input.key) || "__unset__"}
+                    onValueChange={(raw) => handleSourceChange(input.key, raw, numericOnly)}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Not mapped" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__unset__">— Not mapped —</SelectItem>
+                      {allFields
+                        .filter((f) => !numericOnly || f.numeric)
+                        .map((f) => (
+                          <SelectItem key={`f-${f.id}`} value={`field:${f.id}`}>
+                            Field: {f.label || f.key}
+                          </SelectItem>
+                        ))}
+                      {otherBindings.flatMap((b) =>
+                        Object.keys(b.outputs_reduce_strategy as ReduceMap).map((key) => (
+                          <SelectItem
+                            key={`b-${b.id}-${key}`}
+                            value={`binding:${b.id}.${key}`}
+                          >
+                            Binding {b.id.slice(0, 8)} → {key}
+                          </SelectItem>
+                        )),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {/* ─── Reduce ─── */}
+        {binding && showReduce && (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Reduce
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              How to aggregate each output across iterations of the loop.
+            </p>
+
+            {effectiveOutputs.map((out) => (
+              <div
+                key={`reduce-${out.id}`}
+                className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2"
+              >
+                <span
+                  className="text-xs font-mono font-semibold flex-1 min-w-0 truncate"
+                  style={{ color: ROSE }}
+                >
+                  {out.key}
+                </span>
+                <Select
+                  value={reduceMap[out.key] ?? "first"}
+                  onValueChange={(v) =>
+                    setReduceStrategy(out.key, v as Schemas.AggregationStrategyDto)
+                  }
+                >
+                  <SelectTrigger className="h-7 w-32 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sum">Sum</SelectItem>
+                    <SelectItem value="average">Average</SelectItem>
+                    <SelectItem value="max">Max</SelectItem>
+                    <SelectItem value="min">Min</SelectItem>
+                    <SelectItem value="count">Count</SelectItem>
+                    <SelectItem value="first">First</SelectItem>
+                    <SelectItem value="last">Last</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       <div className="flex gap-2 px-5 py-4 border-t shrink-0">
