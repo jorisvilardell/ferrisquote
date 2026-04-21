@@ -146,11 +146,70 @@ export function EstimatorDetailsPanel({
           key: f.key,
           label: f.label,
           stepId: s.id,
+          stepTitle: s.title,
+          stepRepeatable: s.is_repeatable,
           numeric: f.config.type === "number",
         })),
       ),
     [flow.steps],
   )
+
+  // A field is usable only if:
+  // - its owning step is not repeatable, OR
+  // - the binding's execution context loops over that exact step.
+  // Otherwise the field has N values at run time and picking one would be
+  // ambiguous — block it at the UI level to keep pipelines correct.
+  function fieldAllowedByContext(field: { stepId: string; stepRepeatable: boolean }): boolean {
+    if (!field.stepRepeatable) return true
+    return mapOverStep === field.stepId
+  }
+
+  /** Pull bare `@field_key` tokens from an expression. Cross-refs
+   *  (`@#<uuid>.name`) are stripped first so only flow-field candidates
+   *  remain. Results include inputs/outputs too — callers intersect with
+   *  the actual flow field keys before using. */
+  function extractBareRefs(expr: string): string[] {
+    const stripped = expr.replace(/@#[A-Za-z0-9-]+\.[A-Za-z0-9_]+/g, "")
+    const keys = new Set<string>()
+    const re = /@([A-Za-z0-9_]+)/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(stripped)) !== null) keys.add(m[1])
+    return [...keys]
+  }
+
+  // Repeatable steps that are currently "pinned" by some field usage —
+  // either in the binding's inputs_mapping or in any output expression.
+  // Changing map_over_step to anything else would break these references.
+  const pinnedRepeatableSteps = useMemo(() => {
+    const set = new Set<string>()
+    const fieldById = new Map(allFields.map((f) => [f.id, f]))
+    const fieldByKey = new Map(allFields.map((f) => [f.key, f]))
+
+    for (const src of Object.values(inputsMapping)) {
+      if (src.source !== "field") continue
+      const meta = fieldById.get(src.field_id)
+      if (meta?.stepRepeatable) set.add(meta.stepId)
+    }
+
+    for (const out of effectiveOutputs) {
+      for (const token of extractBareRefs(out.expression)) {
+        const meta = fieldByKey.get(token)
+        if (meta?.stepRepeatable) set.add(meta.stepId)
+      }
+    }
+    return set
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputsMapping, effectiveOutputs, allFields])
+
+  function contextOptionAllowed(candidate: string | null): boolean {
+    // Global: only if nothing pins a repeatable step
+    if (candidate === null) return pinnedRepeatableSteps.size === 0
+    // Specific step: allowed iff no OTHER pinned step exists
+    for (const s of pinnedRepeatableSteps) {
+      if (s !== candidate) return false
+    }
+    return true
+  }
 
   const repeatableSteps = useMemo(
     () => flow.steps.filter((s) => s.is_repeatable),
@@ -514,6 +573,12 @@ export function EstimatorDetailsPanel({
         toast.error(`Field '${meta.key}' is not numeric`)
         return
       }
+      if (!fieldAllowedByContext(meta)) {
+        toast.error(
+          `Field '${meta.label || meta.key}' belongs to repeatable step '${meta.stepTitle}'. Set the execution context to loop over this step first.`,
+        )
+        return
+      }
       setInputsMapping((prev) => ({ ...prev, [inputKey]: { source: "field", field_id: fid } }))
     } else if (raw.startsWith("binding:")) {
       const [bid, okey] = raw.slice("binding:".length).split(".", 2)
@@ -663,7 +728,32 @@ export function EstimatorDetailsPanel({
             </p>
             <Select
               value={mapOverStep ?? "__global__"}
-              onValueChange={(v) => setMapOverStep(v === "__global__" ? null : v)}
+              onValueChange={(v) => {
+                const next = v === "__global__" ? null : v
+                setMapOverStep(next)
+                // When the loop context changes, any field mapping that pulls
+                // from a repeatable step other than the new context becomes
+                // ambiguous — drop it so the binding stays consistent.
+                setInputsMapping((prev) => {
+                  const out: InputsMap = {}
+                  for (const [k, src] of Object.entries(prev)) {
+                    if (src.source !== "field") {
+                      out[k] = src
+                      continue
+                    }
+                    const meta = allFields.find((f) => f.id === src.field_id)
+                    if (!meta) continue
+                    if (!meta.stepRepeatable || next === meta.stepId) {
+                      out[k] = src
+                    } else {
+                      toast.warning(
+                        `Input '${k}' was unlinked — field '${meta.label || meta.key}' requires looping over '${meta.stepTitle}'.`,
+                      )
+                    }
+                  }
+                  return out
+                })
+              }}
             >
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue />
@@ -725,11 +815,20 @@ export function EstimatorDetailsPanel({
                       <SelectItem value="__unset__">— Not mapped —</SelectItem>
                       {allFields
                         .filter((f) => !numericOnly || f.numeric)
-                        .map((f) => (
-                          <SelectItem key={`f-${f.id}`} value={`field:${f.id}`}>
-                            Field: {f.label || f.key}
-                          </SelectItem>
-                        ))}
+                        .map((f) => {
+                          const allowed = fieldAllowedByContext(f)
+                          return (
+                            <SelectItem
+                              key={`f-${f.id}`}
+                              value={`field:${f.id}`}
+                              disabled={!allowed}
+                            >
+                              Field: {f.label || f.key}
+                              {f.stepRepeatable ? ` (${f.stepTitle})` : ""}
+                              {!allowed ? " — context required" : ""}
+                            </SelectItem>
+                          )
+                        })}
                       {otherBindings.flatMap((b) =>
                         Object.keys(b.outputs_reduce_strategy as ReduceMap).map((key) => (
                           <SelectItem
