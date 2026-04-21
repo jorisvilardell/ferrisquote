@@ -3,10 +3,13 @@ import { Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Schemas } from "@/api/api.client"
 import {
-  useAddVariable,
-  useRemoveVariable,
+  useAddInput,
+  useAddOutput,
+  useRemoveInput,
+  useRemoveOutput,
   useUpdateEstimator,
-  useUpdateVariable,
+  useUpdateInput,
+  useUpdateOutput,
 } from "@/api/estimators.api"
 import { type EstimatorIndex } from "@/pages/flows/lib/expression-refs"
 import {
@@ -17,7 +20,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { VariableCard } from "./variable-card"
+import { InputCard } from "./input-card"
+import { OutputCard } from "./output-card"
 
 const ROSE = "hsl(330, 80%, 60%)"
 
@@ -32,19 +36,16 @@ export function EstimatorDetailsPanel({
   estimator: Schemas.EstimatorResponse
   flowId: string
   availableFieldKeys: string[]
-  otherEstimators: Array<{ id: string; name: string; variables: string[] }>
+  otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
   estimatorsIndex: EstimatorIndex
   onClose: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
 
-  // Zustand draft store — shared with the canvas so the graph reflects
-  // uncommitted edits live. Reset whenever the estimator identity changes.
   const drafts = useEstimatorDraftStore()
 
   useEffect(() => {
     drafts.setActive(estimator.id)
-    // Cleanup when unmounting / switching estimator
     return () => {
       if (useEstimatorDraftStore.getState().estimatorId === estimator.id) {
         drafts.clear()
@@ -53,49 +54,67 @@ export function EstimatorDetailsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimator.id])
 
-  // Also resync when server values change under our feet (e.g. save just
-  // landed and cache refreshed) — only if no user edits are pending.
   useEffect(() => {
     setEditingName(false)
   }, [estimator.id, estimator.name, estimator.description])
 
   const updateEstimator = useUpdateEstimator(flowId, estimator.id)
-  const addVariable = useAddVariable(flowId, estimator.id)
-  const updateVariable = useUpdateVariable(flowId, estimator.id)
-  const removeVariable = useRemoveVariable(flowId, estimator.id)
+  const addInput = useAddInput(flowId, estimator.id)
+  const updateInput = useUpdateInput(flowId, estimator.id)
+  const removeInput = useRemoveInput(flowId, estimator.id)
+  const addOutput = useAddOutput(flowId, estimator.id)
+  const updateOutput = useUpdateOutput(flowId, estimator.id)
+  const removeOutput = useRemoveOutput(flowId, estimator.id)
 
-  // Display values: use draft when present, fall back to server
   const nameDisplay =
     drafts.nameDraft != null ? drafts.nameDraft : estimator.name.replace(/_/g, " ")
   const descDisplay = drafts.descDraft != null ? drafts.descDraft : estimator.description
 
-  // Effective variables (server + pending adds, minus pending deletes, with edits overlaid)
-  const effectiveVariables: Schemas.VariableResponse[] = [
-    ...estimator.variables
-      .filter((v) => !drafts.pendingDeletes.has(v.id))
+  const effectiveInputs: Schemas.InputResponse[] = [
+    ...estimator.inputs
+      .filter((v) => !drafts.pendingInputDeletes.has(v.id))
       .map((v) => {
-        const patch = drafts.variableEdits[v.id]
+        const patch = drafts.inputEdits[v.id]
         return patch ? { ...v, ...patch } : v
       }),
-    ...drafts.pendingAdds,
+    ...drafts.pendingInputAdds,
   ]
 
-  // Validation
+  const effectiveOutputs: Schemas.OutputResponse[] = [
+    ...estimator.outputs
+      .filter((v) => !drafts.pendingOutputDeletes.has(v.id))
+      .map((v) => {
+        const patch = drafts.outputEdits[v.id]
+        return patch ? { ...v, ...patch } : v
+      }),
+    ...drafts.pendingOutputAdds,
+  ]
+
   const normalizedName = nameDisplay.trim().replace(/\s+/g, "_")
   const nameValid = /^[A-Za-z0-9_]+$/.test(normalizedName)
   const duplicateName = otherEstimators.some((e) => e.name === normalizedName)
 
   const nameDirty = drafts.nameDraft != null && normalizedName !== estimator.name
   const descDirty = drafts.descDraft != null && drafts.descDraft !== estimator.description
-  const editsDirty = Object.keys(drafts.variableEdits).length > 0
-  const addsDirty = drafts.pendingAdds.length > 0
-  const deletesDirty = drafts.pendingDeletes.size > 0
-  const isDirty = nameDirty || descDirty || editsDirty || addsDirty || deletesDirty
+  const inputEditsDirty = Object.keys(drafts.inputEdits).length > 0
+  const inputAddsDirty = drafts.pendingInputAdds.length > 0
+  const inputDelsDirty = drafts.pendingInputDeletes.size > 0
+  const outputEditsDirty = Object.keys(drafts.outputEdits).length > 0
+  const outputAddsDirty = drafts.pendingOutputAdds.length > 0
+  const outputDelsDirty = drafts.pendingOutputDeletes.size > 0
+  const isDirty =
+    nameDirty ||
+    descDirty ||
+    inputEditsDirty ||
+    inputAddsDirty ||
+    inputDelsDirty ||
+    outputEditsDirty ||
+    outputAddsDirty ||
+    outputDelsDirty
 
   const canSave =
     isDirty && nameValid && !duplicateName && normalizedName.length > 0
 
-  // ─── Save / Cancel ────────────────────────────────────────────────────────
   function handleSave() {
     if (!canSave) return
 
@@ -109,36 +128,67 @@ export function EstimatorDetailsPanel({
       )
     }
 
-    for (const v of drafts.pendingAdds) {
-      addVariable.mutate(
+    // Inputs
+    for (const v of drafts.pendingInputAdds) {
+      addInput.mutate(
         {
           path: { estimator_id: estimator.id },
           body: {
-            name: v.name,
+            key: v.key,
+            description: v.description || null,
+            parameter_type: v.parameter_type,
+          },
+        },
+        { onError: (err) => toast.error(`Add input failed: ${err.message}`) },
+      )
+    }
+    for (const [inputId, patch] of Object.entries(drafts.inputEdits)) {
+      const body: Schemas.UpdateInputRequest = {
+        key: patch.key,
+        description: patch.description ?? null,
+        parameter_type: patch.parameter_type ?? null,
+      }
+      updateInput.mutate(
+        { path: { estimator_id: estimator.id, input_id: inputId }, body },
+        { onError: (err) => toast.error(`Input update failed: ${err.message}`) },
+      )
+    }
+    for (const inputId of drafts.pendingInputDeletes) {
+      removeInput.mutate(
+        { path: { estimator_id: estimator.id, input_id: inputId } },
+        { onError: (err) => toast.error(`Delete input failed: ${err.message}`) },
+      )
+    }
+
+    // Outputs
+    for (const v of drafts.pendingOutputAdds) {
+      addOutput.mutate(
+        {
+          path: { estimator_id: estimator.id },
+          body: {
+            key: v.key,
             expression: v.expression || "0",
             description: v.description || null,
           },
         },
-        { onError: (err) => toast.error(`Add variable failed: ${err.message}`) },
+        { onError: (err) => toast.error(`Add output failed: ${err.message}`) },
       )
     }
-
-    for (const [variableId, patch] of Object.entries(drafts.variableEdits)) {
-      const body: Schemas.UpdateVariableRequest = {
-        name: patch.name,
+    for (const [outputId, patch] of Object.entries(drafts.outputEdits)) {
+      const body: Schemas.UpdateOutputRequest = {
+        key: patch.key,
         expression: patch.expression,
         description: patch.description ?? null,
       }
-      updateVariable.mutate(
-        { path: { variable_id: variableId }, body },
-        { onError: (err) => toast.error(`Variable update failed: ${err.message}`) },
+      updateOutput.mutate(
+        { path: { estimator_id: estimator.id, output_id: outputId }, body },
+        { onError: (err) => toast.error(`Output update failed: ${err.message}`) },
       )
     }
-
-    for (const variableId of drafts.pendingDeletes) {
-      removeVariable.mutate(
-        { path: { variable_id: variableId } },
-        { onError: (err) => toast.error(`Delete variable failed: ${err.message}`) },
+    for (const outputId of drafts.pendingOutputDeletes) {
+      removeOutput.mutate(
+        { path: { estimator_id: estimator.id, output_id: outputId } },
+        { onError: (err) => toast.error(`Delete output failed: ${err.message}`) },
       )
     }
 
@@ -152,51 +202,93 @@ export function EstimatorDetailsPanel({
     setEditingName(false)
   }
 
-  // ─── Variable mutations (staged in store, not fired) ──────────────────────
-  function handleVariablePatch(variableId: string, patch: Partial<Schemas.VariableResponse>) {
-    if (variableId.startsWith(TEMP_PREFIX)) {
-      // Update the pending addition in place
-      const cur = drafts.pendingAdds.find((v) => v.id === variableId)
+  // ─── Input draft staging ──────────────────────────────────────────────────
+  function handleInputPatch(inputId: string, patch: Partial<Schemas.InputResponse>) {
+    if (inputId.startsWith(TEMP_PREFIX)) {
+      const cur = drafts.pendingInputAdds.find((v) => v.id === inputId)
       if (!cur) return
-      drafts.removePending(variableId)
-      drafts.addPending({ ...cur, ...patch })
+      drafts.removePendingInput(inputId)
+      drafts.addPendingInput({ ...cur, ...patch })
       return
     }
-    // Stage an edit; collapse to no-op if it matches server
-    const server = estimator.variables.find((v) => v.id === variableId)
+    const server = estimator.inputs.find((v) => v.id === inputId)
     if (!server) return
-    const merged = { ...(drafts.variableEdits[variableId] ?? {}), ...patch }
+    const merged = { ...(drafts.inputEdits[inputId] ?? {}), ...patch }
     const allSame =
-      (merged.name === undefined || merged.name === server.name) &&
+      (merged.key === undefined || merged.key === server.key) &&
+      (merged.description === undefined || merged.description === server.description) &&
+      (merged.parameter_type === undefined ||
+        JSON.stringify(merged.parameter_type) === JSON.stringify(server.parameter_type))
+    if (allSame) {
+      drafts.dropInputEdit(inputId)
+      return
+    }
+    drafts.patchInput(inputId, patch)
+  }
+
+  function handleAddInput() {
+    const tempId = `${TEMP_PREFIX}${crypto.randomUUID()}`
+    const n = drafts.pendingInputAdds.length + 1
+    drafts.addPendingInput({
+      id: tempId,
+      key: `input_${n}`,
+      description: "",
+      parameter_type: { kind: "number" },
+    })
+  }
+
+  function handleDeleteInput(inputId: string) {
+    if (inputId.startsWith(TEMP_PREFIX)) {
+      drafts.removePendingInput(inputId)
+      return
+    }
+    drafts.markInputDelete(inputId)
+  }
+
+  // ─── Output draft staging ─────────────────────────────────────────────────
+  function handleOutputPatch(outputId: string, patch: Partial<Schemas.OutputResponse>) {
+    if (outputId.startsWith(TEMP_PREFIX)) {
+      const cur = drafts.pendingOutputAdds.find((v) => v.id === outputId)
+      if (!cur) return
+      drafts.removePendingOutput(outputId)
+      drafts.addPendingOutput({ ...cur, ...patch })
+      return
+    }
+    const server = estimator.outputs.find((v) => v.id === outputId)
+    if (!server) return
+    const merged = { ...(drafts.outputEdits[outputId] ?? {}), ...patch }
+    const allSame =
+      (merged.key === undefined || merged.key === server.key) &&
       (merged.expression === undefined || merged.expression === server.expression) &&
       (merged.description === undefined || merged.description === server.description)
     if (allSame) {
-      drafts.dropVariableEdit(variableId)
+      drafts.dropOutputEdit(outputId)
       return
     }
-    drafts.patchVariable(variableId, patch)
+    drafts.patchOutput(outputId, patch)
   }
 
-  function handleAddVariable() {
+  function handleAddOutput() {
     const tempId = `${TEMP_PREFIX}${crypto.randomUUID()}`
-    const n = drafts.pendingAdds.length + 1
-    drafts.addPending({
+    const n = drafts.pendingOutputAdds.length + 1
+    drafts.addPendingOutput({
       id: tempId,
-      name: `new_var_${n}`,
+      key: `output_${n}`,
       expression: "0",
       description: "",
     })
   }
 
-  function handleDeleteVariable(variableId: string) {
-    if (variableId.startsWith(TEMP_PREFIX)) {
-      drafts.removePending(variableId)
+  function handleDeleteOutput(outputId: string) {
+    if (outputId.startsWith(TEMP_PREFIX)) {
+      drafts.removePendingOutput(outputId)
       return
     }
-    drafts.markDelete(variableId)
+    drafts.markOutputDelete(outputId)
   }
 
-  const ownEstimatorVariableNames = effectiveVariables.map((v) => v.name)
+  const ownInputKeys = effectiveInputs.map((i) => i.key)
+  const ownOutputKeys = effectiveOutputs.map((o) => o.key)
 
   return (
     <>
@@ -257,21 +349,22 @@ export function EstimatorDetailsPanel({
           </p>
         )}
 
+        {/* ─── Inputs ─── */}
+        <div className="flex items-center justify-between mt-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Inputs
+          </h3>
+        </div>
         <p className="text-xs text-muted-foreground">
-          Variables are evaluated in dependency order. Reference fields with <code className="font-mono bg-muted px-1 rounded">@field_key</code>.
+          Parameters required to run this estimator. Types: number, boolean, product.
         </p>
 
-        {effectiveVariables.map((v) => (
-          <VariableCard
-            key={v.id}
-            variable={v}
-            ownEstimatorName={estimator.name}
-            ownEstimatorVariables={ownEstimatorVariableNames.filter((n) => n !== v.name)}
-            availableFieldKeys={availableFieldKeys}
-            otherEstimators={otherEstimators}
-            estimatorsIndex={estimatorsIndex}
-            onUpdate={handleVariablePatch}
-            onDelete={handleDeleteVariable}
+        {effectiveInputs.map((i) => (
+          <InputCard
+            key={i.id}
+            input={i}
+            onUpdate={handleInputPatch}
+            onDelete={handleDeleteInput}
           />
         ))}
 
@@ -279,10 +372,45 @@ export function EstimatorDetailsPanel({
           variant="outline"
           size="sm"
           className="w-full border-dashed"
-          onClick={handleAddVariable}
+          onClick={handleAddInput}
         >
           <Plus className="w-3.5 h-3.5 mr-1.5" />
-          Add variable
+          Add input
+        </Button>
+
+        {/* ─── Outputs ─── */}
+        <div className="flex items-center justify-between mt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Outputs
+          </h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Variables produced by the calculation. Reference inputs with <code className="font-mono bg-muted px-1 rounded">@input_key</code>.
+        </p>
+
+        {effectiveOutputs.map((o) => (
+          <OutputCard
+            key={o.id}
+            output={o}
+            ownEstimatorName={estimator.name}
+            ownInputKeys={ownInputKeys}
+            ownOutputKeys={ownOutputKeys.filter((k) => k !== o.key)}
+            availableFieldKeys={availableFieldKeys}
+            otherEstimators={otherEstimators}
+            estimatorsIndex={estimatorsIndex}
+            onUpdate={handleOutputPatch}
+            onDelete={handleDeleteOutput}
+          />
+        ))}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full border-dashed"
+          onClick={handleAddOutput}
+        >
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add output
         </Button>
       </div>
 
