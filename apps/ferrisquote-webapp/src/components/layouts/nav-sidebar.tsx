@@ -16,13 +16,16 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@radix-ui/react-collapsible"
 import { ChevronRight, GitBranch, LayoutDashboard, FileText, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
+import { useTranslation } from "react-i18next"
 import logo from "@/assets/ferrisquote.svg"
+import { LanguageSwitcher } from "@/components/language-switcher"
 import { useFlowStore } from "@/store/flow.store"
 import { FLOW_URL, FLOWS_URL } from "@/routes/sub-router/flow.router"
 import { HOME_URL, QUOTES_URL } from "@/routes/router"
 
 export function NavSidebar() {
   const location = useLocation()
+  const { t } = useTranslation()
   const quotesOpen = location.pathname.startsWith(QUOTES_URL())
   const lastFlowId = useFlowStore((s) => s.lastFlowId)
   const flowsUrl = lastFlowId ? FLOW_URL(lastFlowId) : FLOWS_URL()
@@ -40,7 +43,7 @@ export function NavSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.navigation")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
 
@@ -49,7 +52,7 @@ export function NavSidebar() {
                 <SidebarMenuButton asChild isActive={location.pathname === HOME_URL()}>
                   <Link to={HOME_URL()}>
                     <LayoutDashboard />
-                    <span>Dashboard</span>
+                    <span>{t("nav.dashboard")}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -60,7 +63,7 @@ export function NavSidebar() {
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton isActive={location.pathname === "/quotes"}>
                       <FileText />
-                      <span>Quotes</span>
+                      <span>{t("nav.quotes")}</span>
                       <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -73,7 +76,7 @@ export function NavSidebar() {
                         >
                           <Link to={flowsUrl}>
                             <GitBranch />
-                            <span>Flows</span>
+                            <span>{t("nav.flows")}</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -87,7 +90,7 @@ export function NavSidebar() {
                 <SidebarMenuButton asChild isActive={location.pathname === "/settings"}>
                   <Link to="/settings">
                     <Settings />
-                    <span>Settings</span>
+                    <span>{t("nav.settings")}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -97,7 +100,8 @@ export function NavSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 gap-2">
+        <LanguageSwitcher />
         <span className="text-xs text-muted-foreground">v0.0.0</span>
       </SidebarFooter>
     </Sidebar>
