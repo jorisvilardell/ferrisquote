@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2, Calculator } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import { NodeDescriptionTooltip } from "./node-description-tooltip"
 
@@ -37,6 +38,7 @@ function paramTypeLabel(pt: Schemas.EstimatorParameterTypeDto): string {
 }
 
 export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeData>>) {
+  const { t } = useTranslation()
   const c = data.color
   const ringColor = `${c.replace(")", " / 0.2)")}`
   const inputColor = "hsl(158, 64%, 52%)"
@@ -136,14 +138,14 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
           className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
           style={{ height: SECTION_HEADER_H, lineHeight: `${SECTION_HEADER_H}px` }}
         >
-          Inputs
+          {t("node.estimator.inputs")}
         </div>
         {data.inputs.length === 0 ? (
           <div
             className="text-xs text-muted-foreground/50 italic"
             style={{ height: ROW_H, lineHeight: `${ROW_H}px` }}
           >
-            None
+            {t("node.estimator.none")}
           </div>
         ) : (
           data.inputs.map((i, idx) => (
@@ -174,14 +176,14 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
             marginTop: SECTION_GAP,
           }}
         >
-          Outputs
+          {t("node.estimator.outputs")}
         </div>
         {data.outputs.length === 0 ? (
           <div
             className="text-xs text-muted-foreground/50 italic text-right"
             style={{ height: ROW_H, lineHeight: `${ROW_H}px` }}
           >
-            None
+            {t("node.estimator.none")}
           </div>
         ) : (
           data.outputs.map((o, idx) => (

@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { NodeDescriptionTooltip } from "./node-description-tooltip"
 
 export type FieldNodeData = {
@@ -12,6 +13,10 @@ export type FieldNodeData = {
 }
 
 export function FieldNode({ data, selected }: NodeProps<Node<FieldNodeData>>) {
+  const { t } = useTranslation()
+  // Fall back to the raw type string when it's not a known config type —
+  // defensive against future additions so the node never renders blank.
+  const typeLabel = t(`node.field.types.${data.type}`, { defaultValue: data.type })
   const nodeInner = (
     <div
       className="group relative min-w-[160px] rounded-md border border-border/60 bg-card text-card-foreground shadow-sm px-3 py-2 cursor-pointer transition-shadow animate-[field-enter_0.25s_ease-out_both]"
@@ -43,7 +48,7 @@ export function FieldNode({ data, selected }: NodeProps<Node<FieldNodeData>>) {
       </div>
 
       <p className="text-sm font-medium leading-tight truncate">{data.label}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{data.type}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{typeLabel}</p>
 
       <Handle
         id="right"

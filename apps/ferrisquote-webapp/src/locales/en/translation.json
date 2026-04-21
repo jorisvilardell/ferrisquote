@@ -1,4 +1,26 @@
 {
+  "node": {
+    "step": {
+      "repeatable_tooltip": "Repeatable step",
+      "no_description": "No description",
+      "fields_count_one": "{{count}} field",
+      "fields_count_other": "{{count}} fields"
+    },
+    "field": {
+      "types": {
+        "text": "text",
+        "number": "number",
+        "date": "date",
+        "boolean": "boolean",
+        "select": "select"
+      }
+    },
+    "estimator": {
+      "inputs": "Inputs",
+      "outputs": "Outputs",
+      "none": "None"
+    }
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
