@@ -700,7 +700,12 @@ export function EstimatorDetailsPanel({
             ownEstimatorName={estimator.name}
             ownInputKeys={ownInputKeys}
             ownOutputKeys={ownOutputKeys.filter((k) => k !== o.key)}
-            availableFieldKeys={availableFieldKeys}
+            // Hide fields whose step is repeatable but not the current
+            // loop context — using them in an expression would be ambiguous.
+            availableFieldKeys={availableFieldKeys.filter((key) => {
+              const meta = allFields.find((f) => f.key === key)
+              return !meta || fieldAllowedByContext(meta)
+            })}
             otherEstimators={otherEstimators}
             estimatorsIndex={estimatorsIndex}
             onUpdate={handleOutputPatch}
@@ -730,49 +735,56 @@ export function EstimatorDetailsPanel({
               value={mapOverStep ?? "__global__"}
               onValueChange={(v) => {
                 const next = v === "__global__" ? null : v
+                if (!contextOptionAllowed(next)) {
+                  const pinned = [...pinnedRepeatableSteps]
+                    .map((id) => flow.steps.find((s) => s.id === id)?.title ?? id)
+                    .join(", ")
+                  toast.error(
+                    `Cannot change execution context — fields from '${pinned}' are in use. Remove those references first.`,
+                  )
+                  return
+                }
                 setMapOverStep(next)
-                // When the loop context changes, any field mapping that pulls
-                // from a repeatable step other than the new context becomes
-                // ambiguous — drop it so the binding stays consistent.
-                setInputsMapping((prev) => {
-                  const out: InputsMap = {}
-                  for (const [k, src] of Object.entries(prev)) {
-                    if (src.source !== "field") {
-                      out[k] = src
-                      continue
-                    }
-                    const meta = allFields.find((f) => f.id === src.field_id)
-                    if (!meta) continue
-                    if (!meta.stepRepeatable || next === meta.stepId) {
-                      out[k] = src
-                    } else {
-                      toast.warning(
-                        `Input '${k}' was unlinked — field '${meta.label || meta.key}' requires looping over '${meta.stepTitle}'.`,
-                      )
-                    }
-                  }
-                  return out
-                })
               }}
             >
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__global__">Global execution</SelectItem>
+                <SelectItem
+                  value="__global__"
+                  disabled={!contextOptionAllowed(null)}
+                >
+                  Global execution
+                </SelectItem>
                 {repeatableSteps.length === 0 ? (
                   <SelectItem value="__none__" disabled>
                     No repeatable steps in this flow
                   </SelectItem>
                 ) : (
-                  repeatableSteps.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      Loop over: {s.title}
-                    </SelectItem>
-                  ))
+                  repeatableSteps.map((s) => {
+                    const allowed = contextOptionAllowed(s.id)
+                    return (
+                      <SelectItem key={s.id} value={s.id} disabled={!allowed}>
+                        Loop over: {s.title}
+                        {!allowed ? " — conflicts with current usage" : ""}
+                      </SelectItem>
+                    )
+                  })
                 )}
               </SelectContent>
             </Select>
+            {pinnedRepeatableSteps.size > 0 && (
+              <p className="text-[11px] text-muted-foreground/80">
+                Context is locked while fields from{" "}
+                <code className="font-mono bg-muted px-1 rounded">
+                  {[...pinnedRepeatableSteps]
+                    .map((id) => flow.steps.find((s) => s.id === id)?.title ?? id)
+                    .join(", ")}
+                </code>{" "}
+                are referenced.
+              </p>
+            )}
           </>
         )}
 
