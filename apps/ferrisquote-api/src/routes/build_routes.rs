@@ -11,7 +11,7 @@ use ferrisquote_domain::domain::{
 
 use crate::{
     openapi::ApiDoc,
-    routes::{estimator_routes, flow_routes, submission_routes},
+    routes::{binding_routes, estimator_routes, flow_routes, submission_routes},
     state::AppState,
 };
 
@@ -20,8 +20,9 @@ pub fn build_routes<
     FS: FlowService + StepService + FieldService + Clone + 'static,
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
+    BS: ferrisquote_domain::domain::flows::ports::BindingService + Clone + 'static,
 >(
-    state: AppState<FS, ES, SS>,
+    state: AppState<FS, ES, SS, BS>,
 ) -> Router {
     let allowed_origins = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
@@ -41,6 +42,7 @@ pub fn build_routes<
         .nest("/api/v1/flows", flow_routes::flow_routes())
         .nest("/api/v1/flows", estimator_routes::estimator_flow_routes())
         .nest("/api/v1/flows", submission_routes::submission_flow_routes())
+        .nest("/api/v1/flows", binding_routes::binding_flow_routes())
         .nest("/api/v1/estimators", estimator_routes::estimator_routes())
         .nest("/api/v1/submissions", submission_routes::submission_routes())
         .with_state(state);

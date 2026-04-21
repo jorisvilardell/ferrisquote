@@ -99,8 +99,8 @@ fn map_estimator(e: ferrisquote_domain::Estimator) -> EstimatorResponse {
     ),
     tag = "estimators"
 )]
-pub async fn create_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn create_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(flow_id): Path<String>,
     Json(request): Json<CreateEstimatorRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<EstimatorResponse>>)> {
@@ -127,8 +127,8 @@ pub async fn create_estimator<FS: FlowService + StepService + FieldService, ES: 
     ),
     tag = "estimators"
 )]
-pub async fn list_estimators<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn list_estimators<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<EstimatorListResponse>>> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
@@ -154,8 +154,8 @@ pub async fn list_estimators<FS: FlowService + StepService + FieldService, ES: E
     ),
     tag = "estimators"
 )]
-pub async fn get_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn get_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<EstimatorResponse>>> {
     let id = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
@@ -176,8 +176,8 @@ pub async fn get_estimator<FS: FlowService + StepService + FieldService, ES: Est
     ),
     tag = "estimators"
 )]
-pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<UpdateEstimatorRequest>,
 ) -> ApiResult<Json<ApiResponse<EstimatorResponse>>> {
@@ -202,8 +202,8 @@ pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: 
     ),
     tag = "estimators"
 )]
-pub async fn delete_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn delete_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let id = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
@@ -233,8 +233,8 @@ pub async fn delete_estimator<FS: FlowService + StepService + FieldService, ES: 
     ),
     tag = "estimator_signature"
 )]
-pub async fn add_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn add_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<CreateInputRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<InputResponse>>)> {
@@ -272,8 +272,8 @@ pub async fn add_input<FS: FlowService + StepService + FieldService, ES: Estimat
     ),
     tag = "estimator_signature"
 )]
-pub async fn update_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn update_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path((estimator_id, input_id)): Path<(String, String)>,
     Json(request): Json<UpdateInputRequest>,
 ) -> ApiResult<Json<ApiResponse<InputResponse>>> {
@@ -308,8 +308,8 @@ pub async fn update_input<FS: FlowService + StepService + FieldService, ES: Esti
     ),
     tag = "estimator_signature"
 )]
-pub async fn remove_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn remove_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path((estimator_id, input_id)): Path<(String, String)>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let eid = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
@@ -340,8 +340,8 @@ pub async fn remove_input<FS: FlowService + StepService + FieldService, ES: Esti
     ),
     tag = "estimator_signature"
 )]
-pub async fn add_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn add_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<CreateOutputRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<OutputResponse>>)> {
@@ -379,8 +379,8 @@ pub async fn add_output<FS: FlowService + StepService + FieldService, ES: Estima
     ),
     tag = "estimator_signature"
 )]
-pub async fn update_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn update_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path((estimator_id, output_id)): Path<(String, String)>,
     Json(request): Json<UpdateOutputRequest>,
 ) -> ApiResult<Json<ApiResponse<OutputResponse>>> {
@@ -409,8 +409,8 @@ pub async fn update_output<FS: FlowService + StepService + FieldService, ES: Est
     ),
     tag = "estimator_signature"
 )]
-pub async fn remove_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn remove_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path((estimator_id, output_id)): Path<(String, String)>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let eid = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
@@ -441,8 +441,8 @@ pub async fn remove_output<FS: FlowService + StepService + FieldService, ES: Est
     ),
     tag = "estimators"
 )]
-pub async fn evaluate<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn evaluate<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<EvaluateRequest>,
 ) -> ApiResult<Json<ApiResponse<EvaluateResponse>>> {
@@ -467,8 +467,8 @@ pub async fn evaluate<FS: FlowService + StepService + FieldService, ES: Estimato
     ),
     tag = "estimators"
 )]
-pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<EvaluateSubmissionRequest>,
 ) -> ApiResult<Json<ApiResponse<EvaluateResponse>>> {
@@ -499,8 +499,8 @@ pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, E
     ),
     tag = "estimators"
 )]
-pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(flow_id): Path<String>,
     Json(request): Json<EvaluateSubmissionRequest>,
 ) -> ApiResult<Json<ApiResponse<EvaluateFlowResponse>>> {

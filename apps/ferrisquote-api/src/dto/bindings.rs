@@ -55,15 +55,8 @@ pub struct UpdateBindingRequest {
 }
 
 mod option_option_uuid {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{Deserialize, Deserializer};
     use uuid::Uuid;
-
-    pub fn serialize<S>(v: &Option<Option<Uuid>>, s: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        v.serialize(s)
-    }
 
     pub fn deserialize<'de, D>(d: D) -> Result<Option<Option<Uuid>>, D::Error>
     where
