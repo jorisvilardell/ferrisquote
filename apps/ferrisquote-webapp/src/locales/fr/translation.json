@@ -46,6 +46,45 @@
     "add_step": "Ajouter une étape",
     "add_field": "Ajouter une question"
   },
+  "step_panel": {
+    "add_title": "Ajouter une étape",
+    "add_description": "Ajoute une nouvelle étape à ce formulaire.",
+    "title_label": "Titre *",
+    "title_placeholder": "ex. Informations personnelles",
+    "description_label": "Description",
+    "description_placeholder": "Décrivez cette étape…",
+    "description_optional": "Optionnel — décrit cette étape",
+    "fields_section": "Questions",
+    "no_fields": "Aucune question pour l'instant.",
+    "add_field_button": "Ajouter une question",
+    "delete_field_title": "Supprimer cette question ?",
+    "delete_field_confirm": "\"{{label}}\" sera supprimé définitivement."
+  },
+  "repeatable": {
+    "allow": "Autoriser la répétition",
+    "button_label": "Texte du bouton",
+    "button_label_placeholder": "ex. « Ajouter une pièce »",
+    "min": "Minimum",
+    "max": "Maximum",
+    "max_placeholder": "Sans limite",
+    "error_max_lt_min": "Le maximum doit être supérieur ou égal au minimum.",
+    "error_min_negative": "Le minimum ne peut pas être négatif."
+  },
+  "field_panel": {
+    "add_title": "Ajouter une question",
+    "add_description_prefix": "À \"{{step}}\"",
+    "edit_title": "Modifier la question",
+    "label": "Libellé *",
+    "label_placeholder": "ex. Prénom",
+    "key": "Clé *",
+    "key_placeholder": "ex. first_name",
+    "key_invalid": "Lettres minuscules, chiffres et tirets bas uniquement ; doit commencer par une lettre.",
+    "description_label": "Description",
+    "description_placeholder": "Optionnel",
+    "type_label": "Type",
+    "type_changed_warning": "Changer le type réinitialise les paramètres spécifiques à ce type.",
+    "add_submit": "Ajouter la question"
+  },
   "estimator": {
     "description": "À quoi sert cette formule",
     "description_placeholder": "Optionnel — explique ce que fait cette formule",

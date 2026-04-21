@@ -46,6 +46,45 @@
     "add_step": "Add step",
     "add_field": "Add question"
   },
+  "step_panel": {
+    "add_title": "Add step",
+    "add_description": "Add a new step to this form.",
+    "title_label": "Title *",
+    "title_placeholder": "e.g. Personal information",
+    "description_label": "Description",
+    "description_placeholder": "Describe this step…",
+    "description_optional": "Optional — describe this step",
+    "fields_section": "Questions",
+    "no_fields": "No questions yet.",
+    "add_field_button": "Add question",
+    "delete_field_title": "Delete this question?",
+    "delete_field_confirm": "\"{{label}}\" will be permanently deleted."
+  },
+  "repeatable": {
+    "allow": "Allow repetition",
+    "button_label": "Button label",
+    "button_label_placeholder": "e.g. \"Add another room\"",
+    "min": "Minimum",
+    "max": "Maximum",
+    "max_placeholder": "No limit",
+    "error_max_lt_min": "Maximum must be greater than or equal to the minimum.",
+    "error_min_negative": "Minimum cannot be negative."
+  },
+  "field_panel": {
+    "add_title": "Add question",
+    "add_description_prefix": "To \"{{step}}\"",
+    "edit_title": "Edit question",
+    "label": "Label *",
+    "label_placeholder": "e.g. First name",
+    "key": "Key *",
+    "key_placeholder": "e.g. first_name",
+    "key_invalid": "Lowercase letters, digits and underscores only; must start with a letter.",
+    "description_label": "Description",
+    "description_placeholder": "Optional",
+    "type_label": "Type",
+    "type_changed_warning": "Changing the type resets type-specific settings.",
+    "add_submit": "Add question"
+  },
   "estimator": {
     "description": "What this formula does",
     "description_placeholder": "Optional — describe what this formula computes",
