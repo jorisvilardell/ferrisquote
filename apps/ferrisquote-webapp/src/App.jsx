@@ -16,7 +16,7 @@ function App() {
           <Route path={QUOTES_URL()} element={<Navigate to={`${QUOTES_URL()}/flows`} replace />} />
         </Route>
       </Routes>
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="top-center" richColors closeButton />
     </>
   )
 }

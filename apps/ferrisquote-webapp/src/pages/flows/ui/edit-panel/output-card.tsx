@@ -25,7 +25,50 @@ import {
 } from "@/pages/flows/lib/expression-refs"
 
 const ROSE = "hsl(330, 80%, 60%)"
+const EMERALD = "hsl(158, 64%, 52%)"
+const FIELD_ORANGE = "hsl(28, 85%, 55%)"
 const AGG_FUNCTIONS = ["SUM", "AVG", "COUNT_ITER"] as const
+
+/** Split the expression into colored spans so the overlay layer shows
+ *  @field / @input / @output / @cross refs in their reference colors.
+ *  Cross-refs use the display form `@EstName.var` after idsToNames. */
+function renderHighlighted(
+  expr: string,
+  inputKeys: string[],
+  outputKeys: string[],
+  fieldKeys: string[],
+): React.ReactNode[] {
+  const inputs = new Set(inputKeys)
+  const outputs = new Set(outputKeys)
+  const fields = new Set(fieldKeys)
+  const nodes: React.ReactNode[] = []
+  // Matches @Name.var (cross-estimator display form) or @identifier
+  const re = /@([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)/g
+  let lastIdx = 0
+  let m: RegExpExecArray | null
+  let key = 0
+  while ((m = re.exec(expr)) !== null) {
+    if (m.index > lastIdx) nodes.push(expr.slice(lastIdx, m.index))
+    const body = m[1]
+    let color: string | undefined
+    if (body.includes(".")) color = ROSE
+    else if (inputs.has(body)) color = EMERALD
+    else if (outputs.has(body)) color = ROSE
+    else if (fields.has(body)) color = FIELD_ORANGE
+    nodes.push(
+      <span key={`t-${key++}`} style={color ? { color } : undefined}>
+        {m[0]}
+      </span>,
+    )
+    lastIdx = m.index + m[0].length
+  }
+  if (lastIdx < expr.length) nodes.push(expr.slice(lastIdx))
+  // Trailing newline needed so the overlay matches the textarea's line count
+  // when the user ends with a newline (textarea reserves a blank line, div
+  // would otherwise collapse it).
+  nodes.push(" ")
+  return nodes
+}
 
 type Suggestion = {
   label: string
@@ -33,6 +76,7 @@ type Suggestion = {
   group: string
   groupLabel?: string
   isEstimator?: boolean
+  isInput?: boolean
   estimatorId?: string
 }
 
@@ -143,6 +187,7 @@ export function OutputCard({
         label: `@${k}`,
         insert: `@${k}`,
         group: "Inputs",
+        isInput: true,
       })),
     ...ownOutputKeys
       .filter((k) => k.toLowerCase().includes(filterLower))
@@ -309,22 +354,45 @@ export function OutputCard({
 
           <div className="flex flex-col gap-1 relative">
             <Label className="text-xs">Expression</Label>
-            <Textarea
-              ref={exprRef}
-              className="text-sm font-mono min-h-[60px] resize-none"
-              placeholder="e.g. @surface * @prix_unitaire * 1.2"
-              value={exprDraft}
-              onChange={(e) => handleExpressionChange(e.target.value)}
-              onFocus={() => {
-                if (!exprDraft) setShowSuggestions(true)
-              }}
-              onBlur={() => {
-                setTimeout(() => {
-                  setShowSuggestions(false)
-                  commitExpr()
-                }, 200)
-              }}
-            />
+            <div className="relative">
+              {/* Syntax-highlighted layer sits behind a transparent textarea.
+                  Both share identical font + padding so glyphs align. The
+                  textarea keeps all interaction (caret, selection, input);
+                  the layer only paints colored tokens. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words font-mono text-sm px-3 py-2 rounded-md text-foreground"
+              >
+                {renderHighlighted(
+                  exprDraft,
+                  ownInputKeys,
+                  ownOutputKeys,
+                  availableFieldKeys,
+                )}
+              </div>
+              <Textarea
+                ref={exprRef}
+                className="relative text-sm font-mono min-h-[60px] resize-none bg-transparent text-foreground"
+                style={{
+                  // Keep `color` at the theme foreground so the caret is
+                  // visible — only the glyph *fill* is transparent, so the
+                  // overlay layer handles rendering.
+                  WebkitTextFillColor: "transparent",
+                }}
+                placeholder="e.g. @surface * @prix_unitaire * 1.2"
+                value={exprDraft}
+                onChange={(e) => handleExpressionChange(e.target.value)}
+                onFocus={() => {
+                  if (!exprDraft) setShowSuggestions(true)
+                }}
+                onBlur={() => {
+                  setTimeout(() => {
+                    setShowSuggestions(false)
+                    commitExpr()
+                  }, 200)
+                }}
+              />
+            </div>
             {showSuggestions && suggestions.length > 0 && dropdownPos &&
               createPortal(
                 <div
@@ -354,8 +422,14 @@ export function OutputCard({
                         <button
                           className={cn(
                             "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
-                            s.isEstimator && "text-[hsl(330,70%,60%)]",
                           )}
+                          style={{
+                            color: s.isInput
+                              ? EMERALD
+                              : s.isEstimator
+                                ? ROSE
+                                : undefined,
+                          }}
                           onMouseDown={(e) => {
                             e.preventDefault()
                             insertSuggestion(s)
@@ -379,6 +453,9 @@ export function OutputCard({
               value={descDraft}
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={commitDesc}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+              }}
             />
           </div>
         </div>

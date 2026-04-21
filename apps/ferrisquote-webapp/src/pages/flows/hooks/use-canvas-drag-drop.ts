@@ -36,6 +36,22 @@ type CreateEstimatorMutation = (
   },
 ) => void
 
+type CreateBindingMutation = (
+  params: {
+    path: { flow_id: string }
+    body: {
+      estimator_id: string
+      inputs_mapping: Record<string, never>
+      map_over_step: null
+      outputs_reduce_strategy: Record<string, never>
+    }
+  },
+  options?: {
+    onSuccess?: (data: unknown) => void
+    onError?: (err: Error) => void
+  },
+) => void
+
 /**
  * Canvas-level drag-and-drop + quick-create flow. Exposes:
  * - `onDragOver` / `onDrop` handlers for the ReactFlow surface
@@ -56,6 +72,7 @@ export function useCanvasDragDrop(args: {
   addStep: AddStepMutation
   addField: AddFieldMutation
   createEstimator: CreateEstimatorMutation
+  createBinding: CreateBindingMutation
 }) {
   const {
     flowId,
@@ -69,6 +86,7 @@ export function useCanvasDragDrop(args: {
     addStep,
     addField,
     createEstimator,
+    createBinding,
   } = args
 
   const fieldCounter = useRef(0)
@@ -157,10 +175,22 @@ export function useCanvasDragDrop(args: {
           {
             onSuccess: (data) => {
               const estId = (data as { data?: { id?: string } })?.data?.id
-              if (estId) {
-                setPanelState({ mode: "estimator-details", estimatorId: estId })
-                setPendingFocusNodeId(`estimator-${estId}`)
-              }
+              if (!estId) return
+              // Match the click-to-open flow: silently provision an empty
+              // binding so the unified panel immediately shows the wiring
+              // + reduce sections (otherwise new estimators would open with
+              // a signature-only view, inconsistent with existing ones).
+              createBinding({
+                path: { flow_id: flowId },
+                body: {
+                  estimator_id: estId,
+                  inputs_mapping: {},
+                  map_over_step: null,
+                  outputs_reduce_strategy: {},
+                },
+              })
+              setPanelState({ mode: "estimator-details", estimatorId: estId })
+              setPendingFocusNodeId(`estimator-${estId}`)
             },
             onError: (err) => toast.error(`Failed to create estimator: ${err.message}`),
           },
@@ -173,6 +203,7 @@ export function useCanvasDragDrop(args: {
       getNodes,
       addStep,
       createEstimator,
+      createBinding,
       estimators,
       quickCreateField,
       setExpandedStepIds,
