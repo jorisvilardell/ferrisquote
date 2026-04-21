@@ -331,14 +331,16 @@ function buildGraph(
     const x = ESTIMATOR_X_OFFSET + d * ESTIMATOR_X_STEP
     let y = 0
     for (const est of estsAtDepth) {
-      const varCount = est.variables.length
-      const nodeHeight = 54 + Math.max(varCount, 1) * 24
+      const inputCount = est.inputs.length
+      const outputCount = est.outputs.length
+      const nodeHeight =
+        54 + Math.max(inputCount, 1) * 24 + 24 + Math.max(outputCount, 1) * 24
       const estimatorNodeId = `estimator-${est.id}`
       const color = estIdToColor.get(est.id) ?? "hsl(335, 70%, 55%)"
 
-      const displayVariables = est.variables.map((v) => ({
-        ...v,
-        expression: idsToNames(v.expression, estimatorsIndex),
+      const displayOutputs = est.outputs.map((o) => ({
+        ...o,
+        expression: idsToNames(o.expression, estimatorsIndex),
       }))
 
       const estNode: Node<EstimatorNodeData> = {
@@ -352,7 +354,8 @@ function buildGraph(
         data: {
           name: est.name,
           description: est.description,
-          variables: displayVariables,
+          inputs: est.inputs,
+          outputs: displayOutputs,
           color,
           onDelete: () => onDeleteEstimator(est.id),
         },
@@ -362,33 +365,34 @@ function buildGraph(
     }
   }
 
-  const estVariableNameToId = new Map<string, Map<string, string>>()
+  // Build per-estimator lookup: output key → output id (for cross-ref edges)
+  const estOutputKeyToId = new Map<string, Map<string, string>>()
   for (const est of estimators) {
     const m = new Map<string, string>()
-    for (const v of est.variables) m.set(v.name, v.id)
-    estVariableNameToId.set(est.id, m)
+    for (const o of est.outputs) m.set(o.key, o.id)
+    estOutputKeyToId.set(est.id, m)
   }
 
   for (const est of estimators) {
     const estimatorNodeId = `estimator-${est.id}`
     const estColor = estIdToColor.get(est.id) ?? "hsl(330, 75%, 58%)"
 
-    for (const v of est.variables) {
-      const refs = extractExprRefs(v.expression)
+    for (const o of est.outputs) {
+      const refs = extractExprRefs(o.expression)
       for (const ref of refs) {
         if (ref.type === "cross") {
           const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
           if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
-            const sourceVarId = estVariableNameToId
+            const sourceOutputId = estOutputKeyToId
               .get(ref.estimatorId)
               ?.get(ref.variableName)
-            const sourceHandle = sourceVarId ? `source-${sourceVarId}` : "default-source"
+            const sourceHandle = sourceOutputId ? `source-${sourceOutputId}` : "default-source"
             edges.push({
-              id: `e-cross-${est.id}-${v.id}-${ref.estimatorId}.${ref.variableName}`,
+              id: `e-cross-${est.id}-${o.id}-${ref.estimatorId}.${ref.variableName}`,
               source: sourceNodeId,
               sourceHandle,
               target: estimatorNodeId,
-              targetHandle: `target-${v.id}`,
+              targetHandle: `target-${o.id}`,
               type: "smoothstep",
               animated: true,
               style: {
@@ -411,11 +415,11 @@ function buildGraph(
           const isAgg = ref.aggregation !== false
 
           edges.push({
-            id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
+            id: `e-est-${est.id}-${o.id}-${ref.key}-${ref.aggregation || "direct"}`,
             source: sourceId,
             sourceHandle: "right",
             target: estimatorNodeId,
-            targetHandle: `target-${v.id}`,
+            targetHandle: `target-${o.id}`,
             type: "smoothstep",
             animated: isAgg,
             style: {
