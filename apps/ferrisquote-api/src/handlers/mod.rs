@@ -1,5 +1,6 @@
 pub mod binding_handlers;
 pub mod estimator_handlers;
+pub mod evaluation_handlers;
 pub mod field_handlers;
 pub mod flow_handlers;
 pub mod mappers;
@@ -7,6 +8,7 @@ pub mod step_handlers;
 pub mod submission_handlers;
 pub use binding_handlers::*;
 pub use estimator_handlers::*;
+pub use evaluation_handlers::*;
 pub use field_handlers::*;
 pub use flow_handlers::*;
 pub use step_handlers::*;

@@ -17,7 +17,8 @@ pub fn flow_routes<
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
     BS: ferrisquote_domain::domain::flows::ports::BindingService + Clone + 'static,
->() -> Router<AppState<FS, ES, SS, BS>> {
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS, BS, FES>> {
     Router::new()
         // Flow CRUD
         .route("/", post(handlers::create_flow))

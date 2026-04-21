@@ -17,7 +17,8 @@ pub fn submission_flow_routes<
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
     BS: ferrisquote_domain::domain::flows::ports::BindingService + Clone + 'static,
->() -> Router<AppState<FS, ES, SS, BS>> {
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS, BS, FES>> {
     Router::new()
         .route("/{flow_id}/submissions", post(handlers::submit_answers))
         .route(
@@ -32,7 +33,8 @@ pub fn submission_routes<
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
     BS: ferrisquote_domain::domain::flows::ports::BindingService + Clone + 'static,
->() -> Router<AppState<FS, ES, SS, BS>> {
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS, BS, FES>> {
     Router::new().route(
         "/{submission_id}",
         get(handlers::get_submission_by_id),

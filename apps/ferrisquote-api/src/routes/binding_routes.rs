@@ -5,6 +5,7 @@ use axum::{
 
 use ferrisquote_domain::domain::{
     estimator::ports::EstimatorService,
+    evaluation::ports::FlowEvaluationService,
     flows::ports::{BindingService, FieldService, FlowService, StepService},
     submission::ports::SubmissionService,
 };
@@ -16,7 +17,8 @@ pub fn binding_flow_routes<
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
     BS: BindingService + Clone + 'static,
->() -> Router<AppState<FS, ES, SS, BS>> {
+    FES: FlowEvaluationService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS, BS, FES>> {
     Router::new()
         .route("/{flow_id}/bindings", post(handlers::add_binding))
         .route("/{flow_id}/bindings", get(handlers::list_bindings))

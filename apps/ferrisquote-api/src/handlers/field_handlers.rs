@@ -30,8 +30,8 @@ use super::mappers::{map_field_config_from_dto, map_field_to_response, map_flow_
     ),
     tag = "fields"
 )]
-pub async fn add_field<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+pub async fn add_field<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService, FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService>(
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(step_id): Path<String>,
     Json(request): Json<CreateFieldRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<FieldResponse>>)> {
@@ -63,8 +63,8 @@ pub async fn add_field<FS: FlowService + StepService + FieldService, ES: Estimat
     ),
     tag = "fields"
 )]
-pub async fn update_field_config<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+pub async fn update_field_config<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService, FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService>(
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(field_id): Path<String>,
     Json(request): Json<UpdateFieldConfigRequest>,
 ) -> ApiResult<Json<ApiResponse<FieldResponse>>> {
@@ -100,8 +100,8 @@ pub async fn update_field_config<FS: FlowService + StepService + FieldService, E
     ),
     tag = "fields"
 )]
-pub async fn remove_field<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+pub async fn remove_field<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService, FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService>(
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(field_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let field_id = FieldId::from_uuid(uuid::Uuid::parse_str(&field_id)?);
@@ -127,8 +127,8 @@ pub async fn remove_field<FS: FlowService + StepService + FieldService, ES: Esti
     ),
     tag = "fields"
 )]
-pub async fn move_field<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+pub async fn move_field<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService, FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService>(
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(field_id): Path<String>,
     Json(request): Json<MoveFieldRequest>,
 ) -> ApiResult<Json<ApiResponse<crate::dto::FlowResponse>>> {

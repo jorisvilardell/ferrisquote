@@ -4,13 +4,14 @@ use crate::dto::{
     AggregationStrategyDto, ApiResponse, BindingListResponse, BindingResponse,
     CreateBindingRequest, CreateEstimatorRequest, CreateFieldRequest, CreateFlowRequest,
     CreateInputRequest, CreateOutputRequest, CreateStepRequest, EstimatorListResponse,
-    EstimatorParameterTypeDto, EstimatorResponse, EvaluateFlowResponse, EvaluateRequest,
-    EvaluateResponse, EvaluateSubmissionRequest, FieldConfigDto, FieldResponse, FieldValueDto,
-    FlowListResponse, FlowResponse, FlowSummaryResponse, InputBindingValueDto, InputResponse,
-    MessageResponse, MoveFieldRequest, OutputResponse, ReorderStepRequest, StepIterationDto,
-    StepResponse, SubmissionListResponse, SubmissionResponse, SubmitAnswersRequest,
-    UpdateBindingRequest, UpdateEstimatorRequest, UpdateFieldConfigRequest,
-    UpdateFlowMetadataRequest, UpdateInputRequest, UpdateOutputRequest, UpdateStepMetadataRequest,
+    EstimatorParameterTypeDto, EstimatorResponse, EvaluateBindingsRequest, EvaluateFlowResponse,
+    EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest, FieldConfigDto, FieldResponse,
+    FieldValueDto, FlowEvaluationResponse, FlowListResponse, FlowPreviewResponse, FlowResponse,
+    FlowSummaryResponse, InputBindingValueDto, InputResponse, MessageResponse, MoveFieldRequest,
+    OutputResponse, ReorderStepRequest, StepIterationDto, StepResponse, SubmissionListResponse,
+    SubmissionResponse, SubmitAnswersRequest, UpdateBindingRequest, UpdateEstimatorRequest,
+    UpdateFieldConfigRequest, UpdateFlowMetadataRequest, UpdateInputRequest, UpdateOutputRequest,
+    UpdateStepMetadataRequest,
 };
 
 #[derive(OpenApi)]
@@ -55,6 +56,8 @@ use crate::dto::{
         crate::handlers::binding_handlers::list_bindings,
         crate::handlers::binding_handlers::update_binding,
         crate::handlers::binding_handlers::remove_binding,
+        crate::handlers::evaluation_handlers::evaluate_bindings,
+        crate::handlers::evaluation_handlers::preview_flow,
     ),
     components(schemas(
         CreateFlowRequest,
@@ -98,6 +101,9 @@ use crate::dto::{
         UpdateBindingRequest,
         BindingResponse,
         BindingListResponse,
+        EvaluateBindingsRequest,
+        FlowEvaluationResponse,
+        FlowPreviewResponse,
         ApiResponse<FlowResponse>,
         ApiResponse<FlowListResponse>,
         ApiResponse<StepResponse>,
@@ -122,6 +128,7 @@ use crate::dto::{
         (name = "estimator_signature", description = "Estimator inputs & outputs"),
         (name = "submissions", description = "Flow answer submissions"),
         (name = "bindings", description = "Estimator bindings (Map/Reduce pipeline)"),
+        (name = "evaluation", description = "DAG-based flow evaluation"),
     )
 )]
 pub struct ApiDoc;

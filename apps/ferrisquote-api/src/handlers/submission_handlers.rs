@@ -109,8 +109,9 @@ pub async fn submit_answers<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: ferrisquote_domain::domain::flows::ports::BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(flow_id): Path<String>,
     Json(request): Json<SubmitAnswersRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<SubmissionResponse>>)> {
@@ -155,8 +156,9 @@ pub async fn get_submission_by_id<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: ferrisquote_domain::domain::flows::ports::BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(submission_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<SubmissionResponse>>> {
     let id = SubmissionId::from_uuid(uuid::Uuid::parse_str(&submission_id)?);
@@ -178,8 +180,9 @@ pub async fn list_submissions_for_flow<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: ferrisquote_domain::domain::flows::ports::BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<SubmissionListResponse>>> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
