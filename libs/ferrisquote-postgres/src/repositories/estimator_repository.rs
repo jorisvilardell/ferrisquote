@@ -14,6 +14,7 @@ use ferrisquote_domain::domain::{
     flows::entities::id::FlowId,
 };
 use sqlx::{PgPool, Row};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct PostgresEstimatorRepository {
@@ -163,15 +164,56 @@ impl EstimatorRepository for PostgresEstimatorRepository {
     }
 
     async fn delete_estimator(&self, id: EstimatorId) -> Result<(), DomainError> {
+        // Delete + orphan-binding cleanup in a single transaction so the
+        // flow never observes a "binding points to missing estimator"
+        // state. Bindings live inside the parent flow's `bindings` JSONB
+        // column, filter them in-place.
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| DomainError::repository(e.to_string()))?;
+
+        let flow_id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT flow_id FROM estimators WHERE id = $1",
+        )
+        .bind(id.into_uuid())
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?;
+
+        let flow_id = flow_id
+            .ok_or_else(|| DomainError::not_found("Estimator", id.to_string()))?;
+
         let result = sqlx::query("DELETE FROM estimators WHERE id = $1")
             .bind(id.into_uuid())
-            .execute(&*self.pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| DomainError::repository(e.to_string()))?;
 
         if result.rows_affected() == 0 {
             return Err(DomainError::not_found("Estimator", id.to_string()));
         }
+
+        sqlx::query(
+            "UPDATE flows \
+             SET bindings = COALESCE( \
+                     (SELECT jsonb_agg(b) \
+                      FROM jsonb_array_elements(bindings) AS b \
+                      WHERE b->>'estimator_id' <> $1), \
+                     '[]'::jsonb), \
+                 updated_at = NOW() \
+             WHERE id = $2",
+        )
+        .bind(id.to_string())
+        .bind(flow_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| DomainError::repository(e.to_string()))?;
 
         Ok(())
     }

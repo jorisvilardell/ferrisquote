@@ -8,7 +8,7 @@ import {
   type Node,
   type NodeTypes,
 } from "@xyflow/react"
-import { memo, useRef, useState } from "react"
+import { memo, useMemo, useRef, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +35,14 @@ import {
   useEstimatorDraftStore,
 } from "@/pages/flows/feature/estimator-draft-store"
 import { idsToNames } from "@/pages/flows/lib/expression-refs"
+import {
+  computeDiagnostics,
+  indexDiagnostics,
+  type Diagnostic,
+  type DiagnosticIndex,
+} from "@/pages/flows/lib/flow-diagnostics"
+import { DiagnosticsOverlay } from "@/pages/flows/ui/diagnostics-overlay"
+import { FlowTestDialog } from "@/pages/flows/ui/flow-test-dialog"
 import { useCanvasDragDrop } from "@/pages/flows/hooks/use-canvas-drag-drop"
 import { useDeleteDialogs } from "@/pages/flows/hooks/use-delete-dialogs"
 import { useLinkingMode } from "@/pages/flows/hooks/use-linking-mode"
@@ -109,6 +117,7 @@ function buildGraph(
   estimators: Schemas.EstimatorResponse[],
   rawEstimators: Schemas.EstimatorResponse[],
   bindings: Schemas.BindingResponse[],
+  diagIndex: DiagnosticIndex,
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
   dropIndicatorIndex: number | null,
@@ -370,6 +379,7 @@ function buildGraph(
           inputs: est.inputs,
           outputs: displayOutputs,
           color,
+          errorCount: diagIndex.estimators.get(est.id)?.length ?? 0,
           onDelete: () => onDeleteEstimator(est.id),
         },
       }
@@ -393,63 +403,42 @@ function buildGraph(
     for (const o of est.outputs) {
       const refs = extractExprRefs(o.expression)
       for (const ref of refs) {
-        if (ref.type === "cross") {
-          const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
-          if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
-            const sourceOutputId = estOutputKeyToId
-              .get(ref.estimatorId)
-              ?.get(ref.variableName)
-            const sourceHandle = sourceOutputId ? `source-${sourceOutputId}` : "default-source"
-            edges.push({
-              id: `e-cross-${est.id}-${o.id}-${ref.estimatorId}.${ref.variableName}`,
-              source: sourceNodeId,
-              sourceHandle,
-              target: estimatorNodeId,
-              targetHandle: `target-${o.id}`,
-              type: "smoothstep",
-              animated: true,
-              style: {
-                strokeWidth: 2,
-                stroke: CROSS_COLOR,
-                opacity: 0.8,
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              },
-              label: ref.variableName.replace(/_/g, " "),
-              labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
-              labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
-              labelBgPadding: [4, 2] as [number, number],
-            })
-          }
-        } else {
-          const info = fieldKeyMap.get(ref.key)
-          if (!info) continue
-
-          const sourceId = info.expanded ? info.fieldNodeId : info.stepId
-          const isAgg = ref.aggregation !== false
-
-          edges.push({
-            id: `e-est-${est.id}-${o.id}-${ref.key}-${ref.aggregation || "direct"}`,
-            source: sourceId,
-            sourceHandle: "right",
-            target: estimatorNodeId,
-            targetHandle: `target-${o.id}`,
-            type: "smoothstep",
-            animated: isAgg,
-            style: {
-              strokeWidth: isAgg ? 2 : 1.5,
-              stroke: estColor,
-              opacity: 0.7,
-              strokeDasharray: isAgg ? "6 3" : undefined,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            },
-            label: isAgg ? ref.aggregation : undefined,
-            labelStyle: isAgg ? { fill: estColor, fontSize: 10, fontWeight: 600 } : undefined,
-            labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
-            labelBgPadding: isAgg ? ([4, 2] as [number, number]) : undefined,
-          })
-        }
+        // Only cross-estimator refs (`@#<uuid>.output`) still produce an
+        // edge here. Bare `@name` refs in an output expression now only
+        // reference estimator inputs / sibling outputs — both live inside
+        // the same node and need no edge. Drawing a field edge whenever an
+        // input happened to share a name with a flow field was stale
+        // behavior from before the Inputs/Outputs refactor.
+        if (ref.type !== "cross") continue
+        const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
+        if (!sourceNodeId || sourceNodeId === estimatorNodeId) continue
+        const sourceOutputId = estOutputKeyToId
+          .get(ref.estimatorId)
+          ?.get(ref.variableName)
+        const sourceHandle = sourceOutputId ? `source-${sourceOutputId}` : "default-source"
+        edges.push({
+          id: `e-cross-${est.id}-${o.id}-${ref.estimatorId}.${ref.variableName}`,
+          source: sourceNodeId,
+          sourceHandle,
+          target: estimatorNodeId,
+          targetHandle: `target-${o.id}`,
+          type: "smoothstep",
+          animated: true,
+          style: {
+            strokeWidth: 2,
+            stroke: CROSS_COLOR,
+            opacity: 0.8,
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          },
+          label: ref.variableName.replace(/_/g, " "),
+          labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
+          labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
+        })
       }
     }
+    // Mark estColor as intentionally unused now that bare-ref edges are gone.
+    void estColor
   }
 
   // ─── Binding input wiring edges ──────────────────────────────────────────
@@ -494,16 +483,27 @@ function buildGraph(
         est.inputs.find((i) => i.key === inputKey)
       if (!input) continue
 
+      // If this specific mapping entry has a diagnostic, paint the edge in
+      // destructive style so broken wires stand out even when the field or
+      // upstream binding has vanished from the canvas.
+      const edgeDiagnostics = diagIndex.edges.get(`${binding.id}::${inputKey}`)
+      const brokenStroke = edgeDiagnostics && edgeDiagnostics.length > 0
+        ? "var(--destructive)"
+        : null
+
       if (source.source === "field") {
         const fieldInfo = flow.steps
           .flatMap((s) => s.fields.map((f) => ({ f, stepId: s.id })))
           .find((x) => x.f.id === source.field_id)
+        // When the field is dangling the source node no longer exists —
+        // skip the edge (the node-level badge still surfaces the problem).
         if (!fieldInfo) continue
 
         const stepExpanded = expandedStepIds.has(fieldInfo.stepId)
         const sourceId = stepExpanded
           ? `field-${fieldInfo.f.id}`
           : fieldInfo.stepId
+        const strokeColor = brokenStroke ?? INPUT_COLOR
 
         edges.push({
           id: `e-bind-${binding.id}-${input.id}`,
@@ -515,13 +515,14 @@ function buildGraph(
           animated: false,
           style: {
             strokeWidth: 2,
-            stroke: INPUT_COLOR,
+            stroke: strokeColor,
             opacity: 0.85,
+            strokeDasharray: brokenStroke ? "6 3" : undefined,
             transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           },
-          markerEnd: { type: MarkerType.ArrowClosed, color: INPUT_COLOR },
-          label: inputKey,
-          labelStyle: { fill: INPUT_COLOR, fontSize: 10, fontWeight: 600 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
+          label: brokenStroke ? `⚠ ${inputKey}` : inputKey,
+          labelStyle: { fill: strokeColor, fontSize: 10, fontWeight: 600 },
           labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
           labelBgPadding: [4, 2] as [number, number],
         })
@@ -544,6 +545,7 @@ function buildGraph(
         // fail backend validation — skip to avoid visual noise.
         if (upstreamNodeId === estimatorNodeId) continue
 
+        const strokeColor = brokenStroke ?? OUTPUT_COLOR
         edges.push({
           id: `e-bind-chain-${binding.id}-${input.id}`,
           source: upstreamNodeId,
@@ -554,13 +556,16 @@ function buildGraph(
           animated: false,
           style: {
             strokeWidth: 2,
-            stroke: OUTPUT_COLOR,
+            stroke: strokeColor,
             opacity: 0.85,
+            strokeDasharray: brokenStroke ? "6 3" : undefined,
             transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           },
-          markerEnd: { type: MarkerType.ArrowClosed, color: OUTPUT_COLOR },
-          label: `${source.output_key} → ${inputKey}`,
-          labelStyle: { fill: OUTPUT_COLOR, fontSize: 10, fontWeight: 600 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
+          label: brokenStroke
+            ? `⚠ ${source.output_key} → ${inputKey}`
+            : `${source.output_key} → ${inputKey}`,
+          labelStyle: { fill: strokeColor, fontSize: 10, fontWeight: 600 },
           labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
           labelBgPadding: [4, 2] as [number, number],
         })
@@ -598,7 +603,17 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
   const drafts = useEstimatorDraftStore()
   const estimators = overlayEstimators(rawEstimators, drafts)
 
+  // Live diagnostics — recomputed whenever the flow/estimators/bindings
+  // query data changes. Uses the overlaid estimators so unsaved rename
+  // drafts don't spuriously flag broken bindings.
+  const diagnostics = useMemo<Diagnostic[]>(
+    () => (flow ? computeDiagnostics(flow, estimators, bindings) : []),
+    [flow, estimators, bindings],
+  )
+  const diagIndex = useMemo(() => indexDiagnostics(diagnostics), [diagnostics])
+
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
+  const [testDialogOpen, setTestDialogOpen] = useState(false)
   const stepPositionsRef = useRef<Map<string, number>>(new Map())
 
   // ─── Canvas mutations ─────────────────────────────────────────────────────
@@ -751,6 +766,7 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
       estimators,
       rawEstimators,
       bindings,
+      diagIndex,
       expandedStepIds,
       linkingField,
       dropIndicatorIndex,
@@ -850,7 +866,25 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
         </div>
       )}
 
-      <div className="flex-1" ref={reactFlowWrapper}>
+      <div className="flex-1 relative" ref={reactFlowWrapper}>
+        <DiagnosticsOverlay
+          flowId={flowId}
+          diagnostics={diagnostics}
+          onGoTo={(d) => {
+            // Jump to the panel most relevant to each diagnostic so the
+            // user can fix it without manually hunting for the node.
+            const estId =
+              "estimatorId" in d
+                ? d.estimatorId
+                : d.kind === "cycle_between_bindings"
+                  ? d.estimatorIds[0]
+                  : undefined
+            if (estId) {
+              setPanelState({ mode: "estimator-details", estimatorId: estId })
+              setPendingFocusNodeId(`estimator-${estId}`)
+            }
+          }}
+        />
         <ReactFlow
           key={flowId}
           nodeTypes={nodeTypes}
@@ -879,9 +913,19 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
           <CanvasToolbar
             onClickStep={() => setPanelState({ mode: "add-step" })}
             onClickField={() => setLinkingField("form")}
+            onClickTest={() => setTestDialogOpen(true)}
           />
         </ReactFlow>
       </div>
+
+      <FlowTestDialog
+        flowId={flowId}
+        flow={flow}
+        estimators={estimators}
+        bindings={bindings}
+        open={testDialogOpen}
+        onOpenChange={setTestDialogOpen}
+      />
     </>
   )
 }

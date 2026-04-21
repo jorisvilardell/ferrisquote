@@ -176,10 +176,14 @@ export function OutputCard({
   }, [showSuggestions])
 
   const filterLower = suggestionFilter.toLowerCase()
+  // Flow fields are intentionally NOT exposed here: the backend evaluator
+  // only binds inputs + sibling outputs + cross-estimator outputs into the
+  // expression context. If the user wants to use a field value, they must
+  // declare an input and wire the field to it via the binding.
+  // `availableFieldKeys` is kept in the prop list only to signal intent —
+  // it's discarded here.
+  void availableFieldKeys
   const suggestions: Suggestion[] = [
-    ...availableFieldKeys
-      .filter((k) => k.toLowerCase().includes(filterLower))
-      .map((k) => ({ label: `@${k}`, insert: `@${k}`, group: "Fields" })),
     ...AGG_FUNCTIONS
       .filter((fn) => fn.toLowerCase().includes(filterLower))
       .map((fn) => ({ label: `${fn}(@...)`, insert: `${fn}(@)`, group: "Functions" })),
@@ -369,7 +373,10 @@ export function OutputCard({
                   exprDraft,
                   ownInputKeys,
                   ownOutputKeys,
-                  availableFieldKeys,
+                  // Flow fields are not in the expression scope at eval time,
+                  // so don't paint them as valid (else `@superficie` looked
+                  // OK while blowing up on `evaluate-bindings-preview`).
+                  [],
                 )}
               </div>
               <Textarea

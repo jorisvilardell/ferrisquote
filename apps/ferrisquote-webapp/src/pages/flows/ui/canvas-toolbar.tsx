@@ -1,5 +1,12 @@
 import { Panel, useReactFlow } from "@xyflow/react"
-import { Footprints, TextCursorInput, Calculator, Maximize2 } from "lucide-react"
+import {
+  Footprints,
+  TextCursorInput,
+  Calculator,
+  Maximize2,
+  FlaskConical,
+} from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -49,10 +56,12 @@ function ToolbarItem({
 type Props = {
   onClickStep: () => void
   onClickField: () => void
+  onClickTest: () => void
 }
 
-export function CanvasToolbar({ onClickStep, onClickField }: Props) {
+export function CanvasToolbar({ onClickStep, onClickField, onClickTest }: Props) {
   const { fitView } = useReactFlow()
+  const { t } = useTranslation()
 
   return (
     <Panel position="bottom-center">
@@ -82,6 +91,20 @@ export function CanvasToolbar({ onClickStep, onClickField }: Props) {
           />
 
           <Separator orientation="vertical" className="h-6 mx-1" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                onClick={onClickTest}
+              >
+                <FlaskConical className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("test_flow.button")}</TooltipContent>
+          </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
