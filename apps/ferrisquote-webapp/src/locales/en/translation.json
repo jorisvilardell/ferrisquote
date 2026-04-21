@@ -1,23 +1,23 @@
 {
   "node": {
     "step": {
-      "repeatable_tooltip": "Repeatable step",
+      "repeatable_tooltip": "Repeats for each item",
       "no_description": "No description",
-      "fields_count_one": "{{count}} field",
-      "fields_count_other": "{{count}} fields"
+      "fields_count_one": "{{count}} question",
+      "fields_count_other": "{{count}} questions"
     },
     "field": {
       "types": {
         "text": "text",
         "number": "number",
         "date": "date",
-        "boolean": "boolean",
-        "select": "select"
+        "boolean": "yes/no",
+        "select": "choice"
       }
     },
     "estimator": {
-      "inputs": "Inputs",
-      "outputs": "Outputs",
+      "inputs": "Data needed",
+      "outputs": "Results produced",
       "none": "None"
     }
   },
@@ -30,12 +30,13 @@
     "edit": "Edit",
     "optional": "Optional",
     "loading": "Loading…",
-    "not_mapped": "— Not mapped —"
+    "not_mapped": "— Not connected —",
+    "help": "Help"
   },
   "nav": {
     "dashboard": "Dashboard",
     "quotes": "Quotes",
-    "flows": "Flows",
+    "flows": "Forms",
     "settings": "Settings",
     "navigation": "Navigation",
     "language": "Language"
@@ -43,65 +44,70 @@
   "flow": {
     "description": "Description",
     "add_step": "Add step",
-    "add_field": "Add field"
+    "add_field": "Add question"
   },
   "estimator": {
-    "description": "Description",
-    "description_placeholder": "Optional — describe this estimator",
-    "inputs": "Inputs",
-    "inputs_help": "Parameters required to run this estimator. Types: number, boolean, product.",
-    "outputs": "Outputs",
-    "outputs_help": "Variables produced by the calculation. Reference inputs with @input_key.",
-    "add_input": "Add input",
-    "add_output": "Add output",
-    "execution_context": "Execution context",
-    "execution_help": "Run once globally, or loop over each iteration of a repeatable step.",
-    "global_execution": "Global execution",
-    "loop_over": "Loop over: {{step}}",
-    "no_repeatable_steps": "No repeatable steps in this flow",
-    "arguments": "Arguments",
-    "arguments_help": "Map each input to a flow field or another binding's output.",
-    "reduce": "Reduce",
-    "reduce_help": "How to aggregate each output across iterations of the loop.",
-    "context_locked": "Context is locked while fields from {{steps}} are referenced.",
+    "description": "What this formula does",
+    "description_placeholder": "Optional — describe what this formula computes",
+    "inputs": "Data needed",
+    "inputs_help": "The pieces of information the formula needs to run (a number, a yes/no, or a catalogue product).",
+    "inputs_help_example": "Example: to compute a room's price, the formula needs the \"surface\" and the \"price per m²\".",
+    "outputs": "Results produced",
+    "outputs_help": "What the formula computes from the data it receives. Use @data_name to reference an input value.",
+    "outputs_help_example": "Example: \"room_price = @surface * @price_per_m2\".",
+    "add_input": "Add data",
+    "add_output": "Add result",
+    "execution_context": "When to run this formula",
+    "execution_help": "Once for the whole form, or once per repeated item (e.g. once per room).",
+    "execution_help_example": "Example: if you choose \"Repeat for each room\", the formula runs for every room entered.",
+    "global_execution": "Run once",
+    "loop_over": "Repeat for each: {{step}}",
+    "no_repeatable_steps": "No repeatable steps in this form",
+    "arguments": "Data to use",
+    "arguments_help": "Connect each piece of data to a form question or to the result of an earlier formula.",
+    "arguments_help_example": "Example: connect \"surface\" to the question \"Room surface\".",
+    "reduce": "How to combine the results",
+    "reduce_help": "If the formula runs several times (once per room), how to get a single final value for each result.",
+    "reduce_help_example": "Example: \"room_price\" should give the total across all rooms — choose \"Total\".",
+    "context_locked": "This setting is locked while questions from {{steps}} are in use.",
     "validation": {
       "name_chars": "Name can only contain letters, digits, spaces and underscores.",
-      "name_duplicate": "An estimator named \"{{name}}\" already exists."
+      "name_duplicate": "A formula named \"{{name}}\" already exists."
     }
   },
   "input": {
-    "key": "Key",
-    "type": "Type",
+    "key": "Data name",
+    "type": "Data type",
     "type_number": "Number",
-    "type_boolean": "Boolean",
-    "type_product": "Product",
-    "label_filter": "Label filter (optional)",
-    "delete_title": "Delete input?",
+    "type_boolean": "Yes / No",
+    "type_product": "Catalogue product",
+    "label_filter": "Filter products (optional)",
+    "delete_title": "Delete this data?",
     "delete_confirm": "\"{{key}}\" will be permanently deleted."
   },
   "output": {
-    "key": "Key",
-    "expression": "Expression",
-    "expression_placeholder": "e.g. @surface * @prix_unitaire * 1.2",
-    "delete_title": "Delete output?",
+    "key": "Result name",
+    "expression": "Calculation",
+    "expression_placeholder": "e.g. @surface * @price_per_m2 * 1.2",
+    "delete_title": "Delete this result?",
     "delete_confirm": "\"{{key}}\" will be permanently deleted."
   },
   "aggregation": {
-    "sum": "Sum",
+    "sum": "Total",
     "average": "Average",
-    "max": "Max",
-    "min": "Min",
-    "count": "Count",
+    "max": "Maximum",
+    "min": "Minimum",
+    "count": "Number of times",
     "first": "First",
     "last": "Last"
   },
   "errors": {
     "generic": "Something went wrong",
     "update_failed": "Update failed: {{msg}}",
-    "signature_update_failed": "Signature update failed: {{msg}}",
-    "wiring_update_failed": "Wiring update failed: {{msg}}",
-    "field_not_numeric": "Field \"{{key}}\" is not numeric",
-    "field_needs_context": "Field \"{{label}}\" belongs to repeatable step \"{{step}}\". Set the execution context to loop over this step first.",
-    "context_in_use": "Cannot change execution context — fields from {{steps}} are in use. Remove those references first."
+    "signature_update_failed": "Formula update failed: {{msg}}",
+    "wiring_update_failed": "Connections update failed: {{msg}}",
+    "field_not_numeric": "Question \"{{key}}\" is not a number",
+    "field_needs_context": "Question \"{{label}}\" belongs to repeatable step \"{{step}}\". Set \"When to run\" to that step first.",
+    "context_in_use": "Cannot change \"When to run\" — questions from {{steps}} are in use. Remove those references first."
   }
 }
