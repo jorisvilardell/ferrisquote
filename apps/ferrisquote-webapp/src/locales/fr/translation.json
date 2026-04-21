@@ -171,6 +171,7 @@
     "cycle_between_bindings": "Cycle détecté entre {{count}} tables de calcul — elles s'attendent mutuellement.",
     "type_mismatch": "L'entrée « {{input}} » attend un {{expected}} mais reçoit un {{actual}}.",
     "missing_estimator": "Ce branchement pointe vers une table de calcul qui a été supprimée.",
+    "remove_orphan_binding": "Supprimer le branchement orphelin",
     "show_details": "Voir les détails",
     "go_to": "Aller à"
   },

@@ -171,6 +171,7 @@
     "cycle_between_bindings": "Cycle detected between {{count}} calculation tables — they depend on each other.",
     "type_mismatch": "Input \"{{input}}\" expects a {{expected}} but gets a {{actual}}.",
     "missing_estimator": "This binding points to a calculation table that was deleted.",
+    "remove_orphan_binding": "Remove orphan binding",
     "show_details": "Show details",
     "go_to": "Go to"
   },
