@@ -107,6 +107,7 @@ function extractExprRefs(expression: string): ExprRef[] {
 function buildGraph(
   flow: Schemas.FlowResponse,
   estimators: Schemas.EstimatorResponse[],
+  rawEstimators: Schemas.EstimatorResponse[],
   bindings: Schemas.BindingResponse[],
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
@@ -451,17 +452,31 @@ function buildGraph(
     }
   }
 
-  // ─── Binding input wiring edges (field → estimator input handle) ────────
-  // Draw a green arrow from each flow field that is mapped into an
-  // estimator's input via a binding. Matches the emerald handle color used
-  // by `EstimatorNode` for input targets.
+  // ─── Binding input wiring edges ──────────────────────────────────────────
+  // Two kinds of edges depending on the source:
+  //   - Field → input: emerald (matches input handle color)
+  //   - Binding output → input (chaining): rose (matches output handle color)
   const INPUT_COLOR = "hsl(158, 64%, 52%)"
+  const OUTPUT_COLOR = "hsl(330, 80%, 60%)"
   const estById = new Map<string, Schemas.EstimatorResponse>(
     estimators.map((e) => [e.id, e]),
+  )
+  // Raw (non-overlaid) lookup — bindings persist input/output keys in their
+  // server form, so while a user is renaming an input locally the binding
+  // mapping still refers to the old key. Resolving the input through the
+  // raw estimator by old key gives us the stable id; we then use that id
+  // to target the handle on the overlaid node (handle ids are id-based, not
+  // key-based, so they don't flicker during renames).
+  const rawEstById = new Map<string, Schemas.EstimatorResponse>(
+    rawEstimators.map((e) => [e.id, e]),
+  )
+  const bindingById = new Map<string, Schemas.BindingResponse>(
+    bindings.map((b) => [b.id, b]),
   )
 
   for (const binding of bindings) {
     const est = estById.get(binding.estimator_id)
+    const rawEst = rawEstById.get(binding.estimator_id)
     if (!est) continue
     const estimatorNodeId = `estimator-${binding.estimator_id}`
     // utoipa widens inputs_mapping to Record<string, unknown> — cast locally
@@ -471,39 +486,85 @@ function buildGraph(
     >
 
     for (const [inputKey, source] of Object.entries(mapping)) {
-      if (source.source !== "field") continue
-      const input = est.inputs.find((i) => i.key === inputKey)
+      // Prefer raw match (the binding's key is still the server-side one
+      // during an in-flight local rename); fall back to the overlaid view
+      // so freshly added inputs still wire up.
+      const input =
+        rawEst?.inputs.find((i) => i.key === inputKey) ??
+        est.inputs.find((i) => i.key === inputKey)
       if (!input) continue
-      const fieldInfo = flow.steps
-        .flatMap((s) => s.fields.map((f) => ({ f, stepId: s.id })))
-        .find((x) => x.f.id === source.field_id)
-      if (!fieldInfo) continue
 
-      const stepExpanded = expandedStepIds.has(fieldInfo.stepId)
-      const sourceId = stepExpanded
-        ? `field-${fieldInfo.f.id}`
-        : fieldInfo.stepId
+      if (source.source === "field") {
+        const fieldInfo = flow.steps
+          .flatMap((s) => s.fields.map((f) => ({ f, stepId: s.id })))
+          .find((x) => x.f.id === source.field_id)
+        if (!fieldInfo) continue
 
-      edges.push({
-        id: `e-bind-${binding.id}-${input.id}`,
-        source: sourceId,
-        sourceHandle: "right",
-        target: estimatorNodeId,
-        targetHandle: `target-input-${input.id}`,
-        type: "smoothstep",
-        animated: false,
-        style: {
-          strokeWidth: 2,
-          stroke: INPUT_COLOR,
-          opacity: 0.85,
-          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        },
-        markerEnd: { type: MarkerType.ArrowClosed, color: INPUT_COLOR },
-        label: inputKey,
-        labelStyle: { fill: INPUT_COLOR, fontSize: 10, fontWeight: 600 },
-        labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
-        labelBgPadding: [4, 2] as [number, number],
-      })
+        const stepExpanded = expandedStepIds.has(fieldInfo.stepId)
+        const sourceId = stepExpanded
+          ? `field-${fieldInfo.f.id}`
+          : fieldInfo.stepId
+
+        edges.push({
+          id: `e-bind-${binding.id}-${input.id}`,
+          source: sourceId,
+          sourceHandle: "right",
+          target: estimatorNodeId,
+          targetHandle: `target-input-${input.id}`,
+          type: "smoothstep",
+          animated: false,
+          style: {
+            strokeWidth: 2,
+            stroke: INPUT_COLOR,
+            opacity: 0.85,
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          },
+          markerEnd: { type: MarkerType.ArrowClosed, color: INPUT_COLOR },
+          label: inputKey,
+          labelStyle: { fill: INPUT_COLOR, fontSize: 10, fontWeight: 600 },
+          labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
+        })
+      } else if (source.source === "binding_output") {
+        const upstream = bindingById.get(source.binding_id)
+        if (!upstream) continue
+        const upstreamEst = estById.get(upstream.estimator_id)
+        const upstreamRaw = rawEstById.get(upstream.estimator_id)
+        if (!upstreamEst) continue
+        // Same raw-first fallback as inputs — output keys on the binding
+        // reflect server state, so during a local rename the raw estimator
+        // owns the stable id we need for the handle.
+        const upstreamOutput =
+          upstreamRaw?.outputs.find((o) => o.key === source.output_key) ??
+          upstreamEst.outputs.find((o) => o.key === source.output_key)
+        if (!upstreamOutput) continue
+
+        const upstreamNodeId = `estimator-${upstream.estimator_id}`
+        // Self-chain (binding pointing to itself) makes no sense and would
+        // fail backend validation — skip to avoid visual noise.
+        if (upstreamNodeId === estimatorNodeId) continue
+
+        edges.push({
+          id: `e-bind-chain-${binding.id}-${input.id}`,
+          source: upstreamNodeId,
+          sourceHandle: `source-${upstreamOutput.id}`,
+          target: estimatorNodeId,
+          targetHandle: `target-input-${input.id}`,
+          type: "smoothstep",
+          animated: false,
+          style: {
+            strokeWidth: 2,
+            stroke: OUTPUT_COLOR,
+            opacity: 0.85,
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          },
+          markerEnd: { type: MarkerType.ArrowClosed, color: OUTPUT_COLOR },
+          label: `${source.output_key} → ${inputKey}`,
+          labelStyle: { fill: OUTPUT_COLOR, fontSize: 10, fontWeight: 600 },
+          labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
+        })
+      }
     }
   }
 
@@ -688,6 +749,7 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
     ? buildGraph(
       flow,
       estimators,
+      rawEstimators,
       bindings,
       expandedStepIds,
       linkingField,
