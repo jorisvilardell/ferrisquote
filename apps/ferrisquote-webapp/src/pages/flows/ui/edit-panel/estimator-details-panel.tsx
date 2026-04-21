@@ -157,6 +157,25 @@ export function EstimatorDetailsPanel({
     [flow.steps],
   )
 
+  // Resolve the *current* (draft-aware) key for an input id — bindings are
+  // keyed by input.key, so renaming an input must rekey the binding's
+  // inputs_mapping in step. Same idea for outputs → reduceMap.
+  function currentInputKey(inputId: string): string | null {
+    const temp = drafts.pendingInputAdds.find((v) => v.id === inputId)
+    if (temp) return temp.key
+    const edit = drafts.inputEdits[inputId]?.key
+    const server = estimator.inputs.find((v) => v.id === inputId)
+    return edit ?? server?.key ?? null
+  }
+
+  function currentOutputKey(outputId: string): string | null {
+    const temp = drafts.pendingOutputAdds.find((v) => v.id === outputId)
+    if (temp) return temp.key
+    const edit = drafts.outputEdits[outputId]?.key
+    const server = estimator.outputs.find((v) => v.id === outputId)
+    return edit ?? server?.key ?? null
+  }
+
   // ─── Validation + dirty detection ────────────────────────────────────────
   const normalizedName = nameDisplay.trim().replace(/\s+/g, "_")
   const nameValid = /^[A-Za-z0-9_]+$/.test(normalizedName)
@@ -192,93 +211,129 @@ export function EstimatorDetailsPanel({
     isDirty && nameValid && !duplicateName && normalizedName.length > 0
 
   // ─── Save ────────────────────────────────────────────────────────────────
-  function handleSave() {
+  async function handleSave() {
     if (!canSave) return
+
+    // Estimator signature must land BEFORE the binding update — binding
+    // validation runs against the live estimator state on the server, so a
+    // rename-then-rewire flow would fail the binding PUT otherwise.
+    const signaturePromises: Promise<unknown>[] = []
 
     if (nameDirty || descDirty) {
       const body: Schemas.UpdateEstimatorRequest = {}
       if (nameDirty) body.name = normalizedName
       if (descDirty) body.description = drafts.descDraft ?? ""
-      updateEstimator.mutate(
-        { path: { estimator_id: estimator.id }, body },
-        { onError: (err) => toast.error(`Update failed: ${err.message}`) },
+      signaturePromises.push(
+        updateEstimator.mutateAsync({ path: { estimator_id: estimator.id }, body }),
       )
     }
 
     for (const v of drafts.pendingInputAdds) {
-      addInput.mutate(
-        {
+      signaturePromises.push(
+        addInput.mutateAsync({
           path: { estimator_id: estimator.id },
           body: {
             key: v.key,
             description: v.description || null,
             parameter_type: v.parameter_type,
           },
-        },
-        { onError: (err) => toast.error(`Add input failed: ${err.message}`) },
+        }),
       )
     }
     for (const [inputId, patch] of Object.entries(drafts.inputEdits)) {
-      const body: Schemas.UpdateInputRequest = {
-        key: patch.key,
-        description: patch.description ?? null,
-        parameter_type: patch.parameter_type ?? null,
-      }
-      updateInput.mutate(
-        { path: { estimator_id: estimator.id, input_id: inputId }, body },
-        { onError: (err) => toast.error(`Input update failed: ${err.message}`) },
+      signaturePromises.push(
+        updateInput.mutateAsync({
+          path: { estimator_id: estimator.id, input_id: inputId },
+          body: {
+            key: patch.key,
+            description: patch.description ?? null,
+            parameter_type: patch.parameter_type ?? null,
+          },
+        }),
       )
     }
     for (const inputId of drafts.pendingInputDeletes) {
-      removeInput.mutate(
-        { path: { estimator_id: estimator.id, input_id: inputId } },
-        { onError: (err) => toast.error(`Delete input failed: ${err.message}`) },
+      signaturePromises.push(
+        removeInput.mutateAsync({
+          path: { estimator_id: estimator.id, input_id: inputId },
+        }),
       )
     }
 
     for (const v of drafts.pendingOutputAdds) {
-      addOutput.mutate(
-        {
+      signaturePromises.push(
+        addOutput.mutateAsync({
           path: { estimator_id: estimator.id },
           body: {
             key: v.key,
             expression: v.expression || "0",
             description: v.description || null,
           },
-        },
-        { onError: (err) => toast.error(`Add output failed: ${err.message}`) },
+        }),
       )
     }
     for (const [outputId, patch] of Object.entries(drafts.outputEdits)) {
-      const body: Schemas.UpdateOutputRequest = {
-        key: patch.key,
-        expression: patch.expression,
-        description: patch.description ?? null,
-      }
-      updateOutput.mutate(
-        { path: { estimator_id: estimator.id, output_id: outputId }, body },
-        { onError: (err) => toast.error(`Output update failed: ${err.message}`) },
+      signaturePromises.push(
+        updateOutput.mutateAsync({
+          path: { estimator_id: estimator.id, output_id: outputId },
+          body: {
+            key: patch.key,
+            expression: patch.expression,
+            description: patch.description ?? null,
+          },
+        }),
       )
     }
     for (const outputId of drafts.pendingOutputDeletes) {
-      removeOutput.mutate(
-        { path: { estimator_id: estimator.id, output_id: outputId } },
-        { onError: (err) => toast.error(`Delete output failed: ${err.message}`) },
+      signaturePromises.push(
+        removeOutput.mutateAsync({
+          path: { estimator_id: estimator.id, output_id: outputId },
+        }),
       )
     }
 
+    try {
+      await Promise.all(signaturePromises)
+    } catch (err) {
+      toast.error(`Signature update failed: ${(err as Error).message}`)
+      return
+    }
+
     if (bindingDirty && binding) {
-      updateBinding.mutate(
-        {
+      // Rebuild the mapping keyed strictly by the *current* input/output
+      // keys. This guards against any stale entries that the live rekey
+      // might have missed (double renames, server refetch races, etc.) and
+      // drops entries that point to deleted inputs/outputs.
+      const finalInputsMapping: InputsMap = {}
+      for (const inp of effectiveInputs) {
+        const serverKey = estimator.inputs.find((s) => s.id === inp.id)?.key
+        const entry =
+          inputsMapping[inp.key] ??
+          (serverKey ? inputsMapping[serverKey] : undefined)
+        if (entry) finalInputsMapping[inp.key] = entry
+      }
+
+      const finalReduceMap: ReduceMap = {}
+      for (const out of effectiveOutputs) {
+        const serverKey = estimator.outputs.find((s) => s.id === out.id)?.key
+        const strat =
+          reduceMap[out.key] ?? (serverKey ? reduceMap[serverKey] : undefined)
+        if (strat) finalReduceMap[out.key] = strat
+      }
+
+      try {
+        await updateBinding.mutateAsync({
           path: { flow_id: flowId, binding_id: binding.id },
           body: {
-            inputs_mapping: inputsMapping,
-            outputs_reduce_strategy: reduceMap,
+            inputs_mapping: finalInputsMapping,
+            outputs_reduce_strategy: finalReduceMap,
             map_over_step: mapOverStep,
           },
-        },
-        { onError: (err) => toast.error(`Wiring update failed: ${err.message}`) },
-      )
+        })
+      } catch (err) {
+        toast.error(`Wiring update failed: ${(err as Error).message}`)
+        return
+      }
     }
 
     drafts.clear()
@@ -294,8 +349,24 @@ export function EstimatorDetailsPanel({
     setReduceMap(serverReduceMap)
   }
 
-  // ─── Input/Output draft staging (unchanged) ──────────────────────────────
+  // ─── Input/Output draft staging ──────────────────────────────────────────
   function handleInputPatch(inputId: string, patch: Partial<Schemas.InputResponse>) {
+    // Rename cascade: input key changed → rekey any binding entry that used
+    // the previous key so the PUT body matches the new signature.
+    if (patch.key !== undefined) {
+      const oldKey = currentInputKey(inputId)
+      const newKey = patch.key
+      if (oldKey && newKey && oldKey !== newKey) {
+        setInputsMapping((prev) => {
+          if (!(oldKey in prev)) return prev
+          const next = { ...prev }
+          next[newKey] = next[oldKey]
+          delete next[oldKey]
+          return next
+        })
+      }
+    }
+
     if (inputId.startsWith(TEMP_PREFIX)) {
       const cur = drafts.pendingInputAdds.find((v) => v.id === inputId)
       if (!cur) return
@@ -331,15 +402,38 @@ export function EstimatorDetailsPanel({
   }
 
   function handleDeleteInput(inputId: string) {
+    const key = currentInputKey(inputId)
     if (inputId.startsWith(TEMP_PREFIX)) {
       drafts.removePendingInput(inputId)
     } else {
       drafts.markInputDelete(inputId)
     }
+    if (key) {
+      setInputsMapping((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
     setExpandedCardId((prev) => (prev === inputId ? null : prev))
   }
 
   function handleOutputPatch(outputId: string, patch: Partial<Schemas.OutputResponse>) {
+    if (patch.key !== undefined) {
+      const oldKey = currentOutputKey(outputId)
+      const newKey = patch.key
+      if (oldKey && newKey && oldKey !== newKey) {
+        setReduceMap((prev) => {
+          if (!(oldKey in prev)) return prev
+          const next = { ...prev }
+          next[newKey] = next[oldKey]
+          delete next[oldKey]
+          return next
+        })
+      }
+    }
+
     if (outputId.startsWith(TEMP_PREFIX)) {
       const cur = drafts.pendingOutputAdds.find((v) => v.id === outputId)
       if (!cur) return
@@ -374,10 +468,19 @@ export function EstimatorDetailsPanel({
   }
 
   function handleDeleteOutput(outputId: string) {
+    const key = currentOutputKey(outputId)
     if (outputId.startsWith(TEMP_PREFIX)) {
       drafts.removePendingOutput(outputId)
     } else {
       drafts.markOutputDelete(outputId)
+    }
+    if (key) {
+      setReduceMap((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
     }
     setExpandedCardId((prev) => (prev === outputId ? null : prev))
   }
