@@ -142,10 +142,24 @@
     "first": "Premier",
     "last": "Dernier"
   },
+  "test_flow": {
+    "button": "Tester le flow",
+    "title": "Test du flow",
+    "description": "Le moteur a généré des valeurs aléatoires pour chaque question, puis a exécuté toutes les tables de calcul.",
+    "running": "Calcul en cours…",
+    "error": "Le test a échoué : {{msg}}",
+    "inputs_injected": "Valeurs injectées",
+    "no_inputs": "Aucune question dans ce flow.",
+    "results": "Résultats produits",
+    "no_results": "Aucune table de calcul configurée.",
+    "run_again": "Relancer avec d'autres valeurs",
+    "step_iteration": "Itération {{index}}"
+  },
   "diagnostics": {
     "title_one": "{{count}} problème",
     "title_other": "{{count}} problèmes",
     "none": "Aucun problème détecté",
+    "flow_healthy": "Flux fonctionnel",
     "unmapped_input": "L'entrée « {{input}} » n'est pas reliée.",
     "dangling_field_ref": "L'entrée « {{input}} » pointe vers une question qui a été supprimée.",
     "dangling_binding_missing": "L'entrée « {{input}} » pointe vers une table de calcul qui a été supprimée.",
@@ -156,6 +170,7 @@
     "invalid_expression_missing_ref": "Le résultat « {{output}} » référence « @{{ref}} » qui n'existe pas.",
     "cycle_between_bindings": "Cycle détecté entre {{count}} tables de calcul — elles s'attendent mutuellement.",
     "type_mismatch": "L'entrée « {{input}} » attend un {{expected}} mais reçoit un {{actual}}.",
+    "missing_estimator": "Ce branchement pointe vers une table de calcul qui a été supprimée.",
     "show_details": "Voir les détails",
     "go_to": "Aller à"
   },

@@ -67,6 +67,12 @@ export type Diagnostic =
       expected: "number" | "boolean" | "product"
       actual: string
     }
+  | {
+      kind: "missing_estimator"
+      bindingId: string
+      /** The dangling id the binding still points to. */
+      estimatorId: string
+    }
 
 type InputMapping = Record<string, Schemas.InputBindingValueDto>
 
@@ -106,7 +112,17 @@ export function computeDiagnostics(
   // ─── Per-binding validation ──────────────────────────────────────────────
   for (const binding of bindings) {
     const est = estById.get(binding.estimator_id)
-    if (!est) continue
+    if (!est) {
+      // Binding points to a deleted estimator — backend eval will return
+      // 404. Surface it here so the user sees the issue without running
+      // the preview first.
+      out.push({
+        kind: "missing_estimator",
+        bindingId: binding.id,
+        estimatorId: binding.estimator_id,
+      })
+      continue
+    }
     const mapping = binding.inputs_mapping as InputMapping
 
     // Unmapped inputs: estimator declares an input key not present in mapping
@@ -217,14 +233,13 @@ export function computeDiagnostics(
   }
 
   // ─── Per-estimator expression validation ─────────────────────────────────
-  // For each output expression, check bare refs resolve to either an input,
-  // a sibling output, or a flow field. Cross-refs are handled separately.
+  // The backend eval context only binds estimator inputs + sibling outputs.
+  // Flow field keys (e.g. `@superficie`) look like valid `@refs` to the
+  // user but blow up at eval time — flag them as missing so the user sees
+  // the issue before hitting `/evaluate-bindings-preview`.
   for (const est of estimators) {
     const inputKeys = new Set(est.inputs.map((i) => i.key))
     const outputKeys = new Set(est.outputs.map((o) => o.key))
-    const fieldKeys = new Set(
-      flow.steps.flatMap((s) => s.fields.map((f) => f.key)),
-    )
     for (const output of est.outputs) {
       if (!output.expression.trim()) {
         out.push({
@@ -237,11 +252,7 @@ export function computeDiagnostics(
         continue
       }
       for (const ref of extractBareRefs(output.expression)) {
-        if (
-          !inputKeys.has(ref) &&
-          !outputKeys.has(ref) &&
-          !fieldKeys.has(ref)
-        ) {
+        if (!inputKeys.has(ref) && !outputKeys.has(ref)) {
           out.push({
             kind: "invalid_expression",
             estimatorId: est.id,
@@ -338,6 +349,7 @@ export function indexDiagnostics(diags: Diagnostic[]): DiagnosticIndex {
       case "missing_map_step":
       case "map_step_not_repeatable":
       case "invalid_expression":
+      case "missing_estimator":
         push(estimators, d.estimatorId, d)
         break
       case "cycle_between_bindings":
@@ -403,5 +415,7 @@ export function diagnosticI18n(d: Diagnostic): {
           actual: d.actual,
         },
       }
+    case "missing_estimator":
+      return { key: "diagnostics.missing_estimator", vars: {} }
   }
 }

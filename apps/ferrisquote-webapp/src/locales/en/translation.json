@@ -142,10 +142,24 @@
     "first": "First",
     "last": "Last"
   },
+  "test_flow": {
+    "button": "Test flow",
+    "title": "Flow test",
+    "description": "The engine generated random values for every question, then ran every calculation table.",
+    "running": "Computing…",
+    "error": "Test failed: {{msg}}",
+    "inputs_injected": "Injected values",
+    "no_inputs": "No question in this flow.",
+    "results": "Results produced",
+    "no_results": "No calculation table configured.",
+    "run_again": "Run again with other values",
+    "step_iteration": "Iteration {{index}}"
+  },
   "diagnostics": {
     "title_one": "{{count}} problem",
     "title_other": "{{count}} problems",
     "none": "No problem detected",
+    "flow_healthy": "Flow is working",
     "unmapped_input": "Input \"{{input}}\" is not connected.",
     "dangling_field_ref": "Input \"{{input}}\" points to a deleted question.",
     "dangling_binding_missing": "Input \"{{input}}\" points to a calculation table that was deleted.",
@@ -156,6 +170,7 @@
     "invalid_expression_missing_ref": "Result \"{{output}}\" references \"@{{ref}}\" which does not exist.",
     "cycle_between_bindings": "Cycle detected between {{count}} calculation tables — they depend on each other.",
     "type_mismatch": "Input \"{{input}}\" expects a {{expected}} but gets a {{actual}}.",
+    "missing_estimator": "This binding points to a calculation table that was deleted.",
     "show_details": "Show details",
     "go_to": "Go to"
   },

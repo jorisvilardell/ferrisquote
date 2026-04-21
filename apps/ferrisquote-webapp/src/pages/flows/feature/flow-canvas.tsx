@@ -42,6 +42,7 @@ import {
   type DiagnosticIndex,
 } from "@/pages/flows/lib/flow-diagnostics"
 import { DiagnosticsOverlay } from "@/pages/flows/ui/diagnostics-overlay"
+import { FlowTestDialog } from "@/pages/flows/ui/flow-test-dialog"
 import { useCanvasDragDrop } from "@/pages/flows/hooks/use-canvas-drag-drop"
 import { useDeleteDialogs } from "@/pages/flows/hooks/use-delete-dialogs"
 import { useLinkingMode } from "@/pages/flows/hooks/use-linking-mode"
@@ -402,63 +403,42 @@ function buildGraph(
     for (const o of est.outputs) {
       const refs = extractExprRefs(o.expression)
       for (const ref of refs) {
-        if (ref.type === "cross") {
-          const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
-          if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
-            const sourceOutputId = estOutputKeyToId
-              .get(ref.estimatorId)
-              ?.get(ref.variableName)
-            const sourceHandle = sourceOutputId ? `source-${sourceOutputId}` : "default-source"
-            edges.push({
-              id: `e-cross-${est.id}-${o.id}-${ref.estimatorId}.${ref.variableName}`,
-              source: sourceNodeId,
-              sourceHandle,
-              target: estimatorNodeId,
-              targetHandle: `target-${o.id}`,
-              type: "smoothstep",
-              animated: true,
-              style: {
-                strokeWidth: 2,
-                stroke: CROSS_COLOR,
-                opacity: 0.8,
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              },
-              label: ref.variableName.replace(/_/g, " "),
-              labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
-              labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
-              labelBgPadding: [4, 2] as [number, number],
-            })
-          }
-        } else {
-          const info = fieldKeyMap.get(ref.key)
-          if (!info) continue
-
-          const sourceId = info.expanded ? info.fieldNodeId : info.stepId
-          const isAgg = ref.aggregation !== false
-
-          edges.push({
-            id: `e-est-${est.id}-${o.id}-${ref.key}-${ref.aggregation || "direct"}`,
-            source: sourceId,
-            sourceHandle: "right",
-            target: estimatorNodeId,
-            targetHandle: `target-${o.id}`,
-            type: "smoothstep",
-            animated: isAgg,
-            style: {
-              strokeWidth: isAgg ? 2 : 1.5,
-              stroke: estColor,
-              opacity: 0.7,
-              strokeDasharray: isAgg ? "6 3" : undefined,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            },
-            label: isAgg ? ref.aggregation : undefined,
-            labelStyle: isAgg ? { fill: estColor, fontSize: 10, fontWeight: 600 } : undefined,
-            labelBgStyle: isAgg ? { fill: "var(--background)", fillOpacity: 0.9 } : undefined,
-            labelBgPadding: isAgg ? ([4, 2] as [number, number]) : undefined,
-          })
-        }
+        // Only cross-estimator refs (`@#<uuid>.output`) still produce an
+        // edge here. Bare `@name` refs in an output expression now only
+        // reference estimator inputs / sibling outputs — both live inside
+        // the same node and need no edge. Drawing a field edge whenever an
+        // input happened to share a name with a flow field was stale
+        // behavior from before the Inputs/Outputs refactor.
+        if (ref.type !== "cross") continue
+        const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
+        if (!sourceNodeId || sourceNodeId === estimatorNodeId) continue
+        const sourceOutputId = estOutputKeyToId
+          .get(ref.estimatorId)
+          ?.get(ref.variableName)
+        const sourceHandle = sourceOutputId ? `source-${sourceOutputId}` : "default-source"
+        edges.push({
+          id: `e-cross-${est.id}-${o.id}-${ref.estimatorId}.${ref.variableName}`,
+          source: sourceNodeId,
+          sourceHandle,
+          target: estimatorNodeId,
+          targetHandle: `target-${o.id}`,
+          type: "smoothstep",
+          animated: true,
+          style: {
+            strokeWidth: 2,
+            stroke: CROSS_COLOR,
+            opacity: 0.8,
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          },
+          label: ref.variableName.replace(/_/g, " "),
+          labelStyle: { fill: CROSS_COLOR, fontSize: 10, fontWeight: 600 },
+          labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
+        })
       }
     }
+    // Mark estColor as intentionally unused now that bare-ref edges are gone.
+    void estColor
   }
 
   // ─── Binding input wiring edges ──────────────────────────────────────────
@@ -633,6 +613,7 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
   const diagIndex = useMemo(() => indexDiagnostics(diagnostics), [diagnostics])
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set())
+  const [testDialogOpen, setTestDialogOpen] = useState(false)
   const stepPositionsRef = useRef<Map<string, number>>(new Map())
 
   // ─── Canvas mutations ─────────────────────────────────────────────────────
@@ -931,9 +912,19 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
           <CanvasToolbar
             onClickStep={() => setPanelState({ mode: "add-step" })}
             onClickField={() => setLinkingField("form")}
+            onClickTest={() => setTestDialogOpen(true)}
           />
         </ReactFlow>
       </div>
+
+      <FlowTestDialog
+        flowId={flowId}
+        flow={flow}
+        estimators={estimators}
+        bindings={bindings}
+        open={testDialogOpen}
+        onOpenChange={setTestDialogOpen}
+      />
     </>
   )
 }

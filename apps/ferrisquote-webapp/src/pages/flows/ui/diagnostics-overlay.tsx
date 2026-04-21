@@ -1,5 +1,10 @@
 import { useState } from "react"
-import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 import {
   diagnosticI18n,
@@ -8,9 +13,10 @@ import {
 import { cn } from "@/lib/utils"
 
 /**
- * Floating counter + collapsible list of live diagnostics. Sits above the
- * ReactFlow surface at the bottom-right. Hidden entirely when there are
- * no problems so it doesn't clutter a healthy graph.
+ * Floating health indicator for the flow. Always visible so the user has a
+ * constant "is my flow working?" signal:
+ *   - green ✓ when no diagnostic is reported
+ *   - red ⚠ counter otherwise, expandable into a list with jump-to links.
  */
 export function DiagnosticsOverlay({
   diagnostics,
@@ -21,28 +27,43 @@ export function DiagnosticsOverlay({
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-
-  if (diagnostics.length === 0) return null
+  const healthy = diagnostics.length === 0
 
   return (
-    <div className="absolute right-4 bottom-4 z-20 max-w-sm">
-      <div className="rounded-md border border-destructive/40 bg-background/95 shadow-lg backdrop-blur">
+    <div className="absolute left-4 top-4 z-20 max-w-sm">
+      <div
+        className={cn(
+          "rounded-md border bg-background/95 shadow-lg backdrop-blur",
+          healthy ? "border-emerald-500/40" : "border-destructive/40",
+        )}
+      >
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-destructive"
-          onClick={() => setOpen((p) => !p)}
-        >
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          <span className="flex-1">
-            {t("diagnostics.title", { count: diagnostics.length })}
-          </span>
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-          ) : (
-            <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+          className={cn(
+            "flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium",
+            healthy ? "text-emerald-600" : "text-destructive",
           )}
+          onClick={() => !healthy && setOpen((p) => !p)}
+          disabled={healthy}
+        >
+          {healthy ? (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="flex-1">
+            {healthy
+              ? t("diagnostics.flow_healthy")
+              : t("diagnostics.title", { count: diagnostics.length })}
+          </span>
+          {!healthy &&
+            (open ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+            ))}
         </button>
-        {open && (
+        {!healthy && open && (
           <ul className="max-h-80 overflow-y-auto border-t border-destructive/20">
             {diagnostics.map((d, i) => {
               const { key, vars } = diagnosticI18n(d)
