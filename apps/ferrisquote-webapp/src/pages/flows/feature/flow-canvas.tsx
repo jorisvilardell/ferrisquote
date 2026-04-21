@@ -559,9 +559,17 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
     }
 
     if (node.type !== "stepNode") return
+    // Toggle expand when the step is already selected in the panel; otherwise
+    // select + expand. Keeps a second click on the same step as "collapse".
+    const alreadySelected =
+      panelState?.mode === "step-details" && panelState.stepId === node.id
     setExpandedStepIds((prev) => {
       const next = new Set(prev)
-      next.add(node.id)
+      if (alreadySelected && next.has(node.id)) {
+        next.delete(node.id)
+      } else {
+        next.add(node.id)
+      }
       return next
     })
     setPanelState({ mode: "step-details", stepId: node.id })
