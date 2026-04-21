@@ -868,6 +868,7 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
 
       <div className="flex-1 relative" ref={reactFlowWrapper}>
         <DiagnosticsOverlay
+          flowId={flowId}
           diagnostics={diagnostics}
           onGoTo={(d) => {
             // Jump to the panel most relevant to each diagnostic so the
