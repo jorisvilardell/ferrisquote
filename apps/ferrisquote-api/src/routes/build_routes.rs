@@ -6,11 +6,12 @@ use utoipa_swagger_ui::SwaggerUi;
 use ferrisquote_domain::domain::{
     estimator::ports::EstimatorService,
     flows::ports::{FieldService, FlowService, StepService},
+    submission::ports::SubmissionService,
 };
 
 use crate::{
     openapi::ApiDoc,
-    routes::{estimator_routes, flow_routes},
+    routes::{estimator_routes, flow_routes, submission_routes},
     state::AppState,
 };
 
@@ -18,8 +19,9 @@ use crate::{
 pub fn build_routes<
     FS: FlowService + StepService + FieldService + Clone + 'static,
     ES: EstimatorService + Clone + 'static,
+    SS: SubmissionService + Clone + 'static,
 >(
-    state: AppState<FS, ES>,
+    state: AppState<FS, ES, SS>,
 ) -> Router {
     let allowed_origins = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
@@ -38,8 +40,10 @@ pub fn build_routes<
         .route("/health", get(health_check))
         .nest("/api/v1/flows", flow_routes::flow_routes())
         .nest("/api/v1/flows", estimator_routes::estimator_flow_routes())
+        .nest("/api/v1/flows", submission_routes::submission_flow_routes())
         .nest("/api/v1/estimators", estimator_routes::estimator_routes())
         .nest("/api/v1/variables", estimator_routes::variable_routes())
+        .nest("/api/v1/submissions", submission_routes::submission_routes())
         .with_state(state);
 
     Router::new()
