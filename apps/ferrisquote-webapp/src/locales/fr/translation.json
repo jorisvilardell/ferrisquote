@@ -142,6 +142,27 @@
     "first": "Premier",
     "last": "Dernier"
   },
+  "builder": {
+    "mode_visual": "Visuel",
+    "mode_text": "Expression",
+    "placeholder": "Cliquez les tuiles ci-dessous pour construire votre calcul",
+    "digits_ops": "Nombres & opérateurs",
+    "inputs": "Entrées",
+    "own_outputs": "Autres résultats de cette table",
+    "cross_refs": "Résultats d'autres tables",
+    "aggregations": "Agrégations",
+    "agg_pick_field": "Choisir un champ à agréger",
+    "agg_pick_step": "Choisir une étape à compter",
+    "agg_no_options": "Aucun champ répétable disponible",
+    "clear": "Effacer",
+    "backspace": "Retour arrière",
+    "keyboard_hint": "Tapez chiffres, opérateurs ou retour — ← → pour déplacer, Ctrl+← → pour réordonner",
+    "err_empty": "L'expression est vide.",
+    "err_unknown_ref": "« @{{name}} » n'est pas une entrée ou un résultat déclaré.",
+    "err_unknown_cross": "Cette référence croisée n'existe plus.",
+    "err_paren_mismatch": "Les parenthèses ne correspondent pas.",
+    "err_malformed": "L'expression est incomplète ou mal formée."
+  },
   "test_flow": {
     "button": "Tester le flow",
     "title": "Test du flow",

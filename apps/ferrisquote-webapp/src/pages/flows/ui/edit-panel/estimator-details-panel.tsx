@@ -32,6 +32,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { HelpHint } from "@/components/help-hint"
 import { InputCard } from "./input-card"
 import { OutputCard } from "./output-card"
+import type {
+  RepeatableField,
+  RepeatableStep,
+} from "./expression-builder"
 
 const ROSE = "hsl(330, 80%, 60%)"
 const EMERALD = "hsl(158, 64%, 52%)"
@@ -50,6 +54,8 @@ export function EstimatorDetailsPanel({
   availableFieldKeys,
   otherEstimators,
   estimatorsIndex,
+  repeatableFields,
+  repeatableSteps,
   onClose,
 }: {
   estimator: Schemas.EstimatorResponse
@@ -61,6 +67,8 @@ export function EstimatorDetailsPanel({
   availableFieldKeys: string[]
   otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
   estimatorsIndex: EstimatorIndex
+  repeatableFields: RepeatableField[]
+  repeatableSteps: RepeatableStep[]
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -214,7 +222,7 @@ export function EstimatorDetailsPanel({
     return true
   }
 
-  const repeatableSteps = useMemo(
+  const repeatableStepsFull = useMemo(
     () => flow.steps.filter((s) => s.is_repeatable),
     [flow.steps],
   )
@@ -769,6 +777,8 @@ export function EstimatorDetailsPanel({
             })}
             otherEstimators={otherEstimators}
             estimatorsIndex={estimatorsIndex}
+            repeatableFields={repeatableFields}
+            repeatableSteps={repeatableSteps}
             onUpdate={handleOutputPatch}
             onDelete={handleDeleteOutput}
           />
@@ -820,12 +830,12 @@ export function EstimatorDetailsPanel({
                 >
                   {t("estimator.global_execution")}
                 </SelectItem>
-                {repeatableSteps.length === 0 ? (
+                {repeatableStepsFull.length === 0 ? (
                   <SelectItem value="__none__" disabled>
                     {t("estimator.no_repeatable_steps")}
                   </SelectItem>
                 ) : (
-                  repeatableSteps.map((s) => {
+                  repeatableStepsFull.map((s) => {
                     const allowed = contextOptionAllowed(s.id)
                     return (
                       <SelectItem key={s.id} value={s.id} disabled={!allowed}>

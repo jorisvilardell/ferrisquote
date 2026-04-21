@@ -142,6 +142,27 @@
     "first": "First",
     "last": "Last"
   },
+  "builder": {
+    "mode_visual": "Visual",
+    "mode_text": "Expression",
+    "placeholder": "Click tiles below to build your calculation",
+    "digits_ops": "Numbers & operators",
+    "inputs": "Inputs",
+    "own_outputs": "Other results in this table",
+    "cross_refs": "Results from other tables",
+    "aggregations": "Aggregations",
+    "agg_pick_field": "Pick a field to aggregate",
+    "agg_pick_step": "Pick a step to count",
+    "agg_no_options": "No repeatable field available",
+    "clear": "Clear",
+    "backspace": "Backspace",
+    "keyboard_hint": "Type digits, operators or backspace — ← → to move, Ctrl+← → to reorder",
+    "err_empty": "Expression is empty.",
+    "err_unknown_ref": "\"@{{name}}\" isn't a declared input or result.",
+    "err_unknown_cross": "This cross-table reference no longer exists.",
+    "err_paren_mismatch": "Parentheses don't match.",
+    "err_malformed": "Expression is incomplete or malformed."
+  },
   "test_flow": {
     "button": "Test flow",
     "title": "Flow test",

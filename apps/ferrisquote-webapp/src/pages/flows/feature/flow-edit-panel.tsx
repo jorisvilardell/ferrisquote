@@ -87,6 +87,27 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
     .map((e) => ({ id: e.id, name: e.name, outputs: e.outputs.map((o) => o.key) }))
   const estimatorsIndex = estimators.map((e) => ({ id: e.id, name: e.name }))
 
+  // Repeatable-only lists for the ExpressionBuilder's aggregation picker:
+  // SUM/AVG only work on numeric fields inside a repeatable step, and
+  // COUNT_ITER takes the step key itself.
+  const repeatableSteps =
+    flow?.steps
+      .filter((s) => s.is_repeatable)
+      .map((s) => ({ key: s.key, title: s.title })) ?? []
+  const repeatableFields =
+    flow?.steps
+      .filter((s) => s.is_repeatable)
+      .flatMap((s) =>
+        s.fields
+          .filter((f) => f.config.type === "number")
+          .map((f) => ({
+            key: f.key,
+            label: f.label,
+            stepKey: s.key,
+            stepTitle: s.title,
+          })),
+      ) ?? []
+
   // Form submit handlers (local to the panel)
   const handleAddStep = (data: { title: string; description: string }) => {
     addStep({
@@ -193,6 +214,8 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
             availableFieldKeys={availableFieldKeys}
             otherEstimators={otherEstimators}
             estimatorsIndex={estimatorsIndex}
+            repeatableFields={repeatableFields}
+            repeatableSteps={repeatableSteps}
             onClose={onClose}
           />
         )}

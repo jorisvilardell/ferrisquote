@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { Trash2 } from "lucide-react"
+import { Calculator, Code2, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import {
@@ -24,6 +24,30 @@ import {
   namesToIdsPreservingIds,
   type EstimatorIndex,
 } from "@/pages/flows/lib/expression-refs"
+import {
+  ExpressionBuilder,
+  type RepeatableField,
+  type RepeatableStep,
+} from "./expression-builder"
+
+const MODE_STORAGE_KEY = "flow:expression-mode"
+type ExprMode = "visual" | "text"
+
+function loadMode(): ExprMode {
+  try {
+    const v = localStorage.getItem(MODE_STORAGE_KEY)
+    return v === "text" ? "text" : "visual"
+  } catch {
+    return "visual"
+  }
+}
+function saveMode(mode: ExprMode) {
+  try {
+    localStorage.setItem(MODE_STORAGE_KEY, mode)
+  } catch {
+    // localStorage unavailable (private mode, SSR) — silently ignore
+  }
+}
 
 const ROSE = "hsl(330, 80%, 60%)"
 const EMERALD = "hsl(158, 64%, 52%)"
@@ -91,6 +115,8 @@ export function OutputCard({
   availableFieldKeys,
   otherEstimators,
   estimatorsIndex,
+  repeatableFields,
+  repeatableSteps,
   onUpdate,
   onDelete,
 }: {
@@ -103,14 +129,22 @@ export function OutputCard({
   availableFieldKeys: string[]
   otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
   estimatorsIndex: EstimatorIndex
+  repeatableFields: RepeatableField[]
+  repeatableSteps: RepeatableStep[]
   onUpdate: (outputId: string, patch: Partial<Schemas.OutputResponse>) => void
   onDelete: (outputId: string) => void
 }) {
   const { t } = useTranslation()
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionFilter, setSuggestionFilter] = useState("")
+  const [mode, setMode] = useState<ExprMode>(() => loadMode())
   const exprRef = useRef<HTMLTextAreaElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  function changeMode(next: ExprMode) {
+    setMode(next)
+    saveMode(next)
+  }
 
   const displayExpression = idsToNames(output.expression, estimatorsIndex)
 
@@ -359,7 +393,54 @@ export function OutputCard({
           </div>
 
           <div className="flex flex-col gap-1 relative">
-            <Label className="text-xs">{t("output.expression")}</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">{t("output.expression")}</Label>
+              <div className="inline-flex rounded-md border border-border/60 bg-background p-0.5">
+                <button
+                  type="button"
+                  aria-pressed={mode === "visual"}
+                  aria-label={t("builder.mode_visual")}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
+                    mode === "visual" ? "bg-accent" : "hover:bg-accent/60",
+                  )}
+                  onClick={() => changeMode("visual")}
+                >
+                  <Calculator className="h-3 w-3" />
+                  {t("builder.mode_visual")}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={mode === "text"}
+                  aria-label={t("builder.mode_text")}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
+                    mode === "text" ? "bg-accent" : "hover:bg-accent/60",
+                  )}
+                  onClick={() => changeMode("text")}
+                >
+                  <Code2 className="h-3 w-3" />
+                  {t("builder.mode_text")}
+                </button>
+              </div>
+            </div>
+            {mode === "visual" ? (
+              <ExpressionBuilder
+                value={output.expression}
+                onChange={(next) => {
+                  setExprDraft(idsToNames(next, estimatorsIndex))
+                  if (next !== output.expression) {
+                    onUpdate(output.id, { expression: next })
+                  }
+                }}
+                ownInputKeys={ownInputKeys}
+                ownOutputKeys={ownOutputKeys}
+                otherEstimators={otherEstimators}
+                estimatorsIndex={estimatorsIndex}
+                repeatableFields={repeatableFields}
+                repeatableSteps={repeatableSteps}
+              />
+            ) : (
             <div className="relative">
               {/* Syntax-highlighted layer sits behind a transparent textarea.
                   Both share identical font + padding so glyphs align. The
@@ -402,6 +483,7 @@ export function OutputCard({
                 }}
               />
             </div>
+            )}
             {showSuggestions && suggestions.length > 0 && dropdownPos &&
               createPortal(
                 <div
