@@ -43,7 +43,6 @@ pub struct CreateInputRequest {
     #[validate(length(max = 1000))]
     #[serde(default)]
     pub description: Option<String>,
-    #[serde(flatten)]
     pub parameter_type: EstimatorParameterTypeDto,
 }
 
@@ -100,7 +99,6 @@ pub struct InputResponse {
     pub id: Uuid,
     pub key: String,
     pub description: String,
-    #[serde(flatten)]
     pub parameter_type: EstimatorParameterTypeDto,
 }
 
