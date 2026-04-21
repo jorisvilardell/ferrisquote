@@ -5,7 +5,7 @@ use crate::domain::{
     estimator::{
         entities::estimator::Estimator,
         ports::EstimatorRepository,
-        services::evaluate_estimator,
+        services::{evaluate_estimator_with_cross, extract_expr_refs, ExprRef},
     },
     flows::{
         entities::{
@@ -74,7 +74,30 @@ async fn evaluate_bindings<ER>(
 where
     ER: EstimatorRepository + Send + Sync,
 {
-    let order = topological_sort_bindings(&flow.bindings)?;
+    // Fetch each estimator up-front so the topological sort can inspect
+    // output expressions for cross-estimator refs (and the loop below can
+    // reuse them without re-fetching).
+    let mut estimators_by_binding: HashMap<BindingId, Estimator> = HashMap::new();
+    for b in &flow.bindings {
+        let est = estimator_repo.get_estimator(b.estimator_id).await?;
+        estimators_by_binding.insert(b.id, est);
+    }
+
+    // estimator_id (string) → binding that produces its outputs. When two
+    // bindings target the same estimator, first-in-flow wins — matches the
+    // single-cross-context shape in `evaluate_flow_estimators`.
+    let mut est_id_to_binding: HashMap<String, BindingId> = HashMap::new();
+    for b in &flow.bindings {
+        est_id_to_binding
+            .entry(b.estimator_id.to_string())
+            .or_insert(b.id);
+    }
+
+    let order = topological_sort_bindings(
+        &flow.bindings,
+        &estimators_by_binding,
+        &est_id_to_binding,
+    )?;
 
     // field_id → step_id lookup (so we know which iteration set to pull from)
     let field_step: HashMap<FieldId, StepId> = flow
@@ -87,10 +110,14 @@ where
         flow.bindings.iter().map(|b| (b.id, b)).collect();
 
     let mut accumulator: HashMap<BindingId, HashMap<String, f64>> = HashMap::new();
+    // Cross-estimator context keyed by (estimator_id_string, output_key).
+    // Populated with the *reduced* outputs of each binding so downstream
+    // output expressions can resolve `@#<id>.var` against it.
+    let mut cross_ctx: HashMap<(String, String), f64> = HashMap::new();
 
     for binding_id in order {
         let binding = bindings_by_id[&binding_id];
-        let estimator = estimator_repo.get_estimator(binding.estimator_id).await?;
+        let estimator = &estimators_by_binding[&binding_id];
 
         let iteration_count = iteration_count_for(binding, submission);
 
@@ -105,17 +132,32 @@ where
         for iter_idx in 0..run_count {
             let inputs = resolve_inputs(
                 binding,
-                &estimator,
+                estimator,
                 submission,
                 &field_step,
                 iter_idx,
                 &accumulator,
             )?;
-            let outputs = evaluate_estimator(&estimator, &inputs)?;
+            let outputs = evaluate_estimator_with_cross(
+                estimator,
+                &inputs,
+                &cross_ctx,
+                true,
+            )?;
             per_iteration_outputs.push(outputs);
         }
 
-        let final_outputs = reduce_outputs(binding, &estimator, &per_iteration_outputs);
+        let final_outputs = reduce_outputs(binding, estimator, &per_iteration_outputs);
+        // Expose this binding's results in the cross-estimator context
+        // before any downstream binding runs. Only the binding elected in
+        // `est_id_to_binding` exposes its outputs, so later duplicates
+        // don't clobber the first-in-flow winner.
+        if est_id_to_binding.get(&estimator.id.to_string()) == Some(&binding.id) {
+            let est_id_str = estimator.id.to_string();
+            for (k, v) in &final_outputs {
+                cross_ctx.insert((est_id_str.clone(), k.clone()), *v);
+            }
+        }
         accumulator.insert(binding.id, final_outputs);
     }
 
@@ -289,6 +331,8 @@ fn apply_strategy(strategy: AggregationStrategy, values: &[f64]) -> f64 {
 /// validation already rejects them on add/update.
 fn topological_sort_bindings(
     bindings: &[EstimatorBinding],
+    estimators_by_binding: &HashMap<BindingId, Estimator>,
+    est_id_to_binding: &HashMap<String, BindingId>,
 ) -> Result<Vec<BindingId>, DomainError> {
     let known: HashSet<BindingId> = bindings.iter().map(|b| b.id).collect();
 
@@ -303,6 +347,23 @@ fn topological_sort_bindings(
             if let InputBindingValue::BindingOutput { binding_id, .. } = source {
                 if known.contains(binding_id) && *binding_id != binding.id {
                     deps.insert(*binding_id);
+                }
+            }
+        }
+        // Output expressions can reference other estimators via `@#<id>.var`.
+        // Each such ref implies this binding needs the producing binding to
+        // run first. Without these edges the cross-context would be empty
+        // at strict-resolve time and the eval would fail.
+        if let Some(est) = estimators_by_binding.get(&binding.id) {
+            for output in &est.outputs {
+                for r in extract_expr_refs(&output.expression) {
+                    if let ExprRef::Cross { estimator_id, .. } = r {
+                        if let Some(&dep_binding) = est_id_to_binding.get(&estimator_id) {
+                            if dep_binding != binding.id {
+                                deps.insert(dep_binding);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -613,6 +674,72 @@ mod tests {
 
         let err = evaluate_bindings(&flow, &sub, &repo).await.unwrap_err();
         assert!(matches!(err, DomainError::ValidationError { .. }));
+    }
+
+    #[tokio::test]
+    async fn cross_estimator_ref_in_output_resolves_across_bindings() {
+        // Regression: an output expression on binding B that references
+        // `@#<A_id>.out` must see A's reduced output, not silently 0.0.
+        let in_a = num_input("qty");
+        let out_a = output("total", "@qty * 10.0");
+        let est_a = Est::with_full(
+            EstimatorId::new(),
+            FlowId::new(),
+            "A".into(),
+            String::new(),
+            vec![in_a],
+            vec![out_a],
+        );
+        let est_a_id = est_a.id;
+
+        let in_b = num_input("placeholder");
+        // Expression pulls from est_a via cross-ref; no flow-field input used.
+        let cross_expr = format!("@#{}.total * 1.20", est_a_id);
+        let out_b = output("scaled", &cross_expr);
+        let est_b = Est::with_full(
+            EstimatorId::new(),
+            FlowId::new(),
+            "B".into(),
+            String::new(),
+            vec![in_b],
+            vec![out_b],
+        );
+        let est_b_id = est_b.id;
+
+        let mut a_inputs = HashMap::new();
+        a_inputs.insert(
+            "qty".to_string(),
+            InputBindingValue::Constant { value: FieldValue::Number(7.0) },
+        );
+        let binding_a = EstimatorBinding::new(est_a_id, a_inputs, None, HashMap::new());
+        let binding_a_id = binding_a.id;
+
+        let mut b_inputs = HashMap::new();
+        b_inputs.insert(
+            "placeholder".to_string(),
+            InputBindingValue::Constant { value: FieldValue::Number(0.0) },
+        );
+        let binding_b = EstimatorBinding::new(est_b_id, b_inputs, None, HashMap::new());
+        let binding_b_id = binding_b.id;
+
+        let flow = Flow::with_full(
+            FlowId::new(),
+            "F".into(),
+            String::new(),
+            vec![],
+            // B listed first so topo sort must detect the cross-ref dep.
+            vec![binding_b, binding_a],
+        );
+        let sub = Submission::new(flow.id, UserId::new(), HashMap::new());
+
+        let mut estimators = HashMap::new();
+        estimators.insert(est_a_id, est_a);
+        estimators.insert(est_b_id, est_b);
+        let repo = StubEstRepo { estimators };
+
+        let res = evaluate_bindings(&flow, &sub, &repo).await.unwrap();
+        assert_eq!(res.bindings[&binding_a_id]["total"], 70.0);
+        assert!((res.bindings[&binding_b_id]["scaled"] - 84.0).abs() < 1e-9);
     }
 
     #[tokio::test]

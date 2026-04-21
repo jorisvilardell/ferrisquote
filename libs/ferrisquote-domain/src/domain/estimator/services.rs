@@ -217,6 +217,20 @@ pub fn evaluate_estimator(
     estimator: &Estimator,
     field_values: &HashMap<String, f64>,
 ) -> Result<HashMap<String, f64>, DomainError> {
+    let empty_cross: HashMap<(String, String), f64> = HashMap::new();
+    evaluate_estimator_with_cross(estimator, field_values, &empty_cross, false)
+}
+
+/// Like [`evaluate_estimator`] but threads a cross-estimator context so
+/// `@#<id>.var` references in output expressions resolve to upstream results.
+/// `strict_cross=true` makes unresolved `@#<id>.var` refs return a validation
+/// error instead of silently substituting `0.0`.
+pub fn evaluate_estimator_with_cross(
+    estimator: &Estimator,
+    field_values: &HashMap<String, f64>,
+    cross_ctx: &HashMap<(String, String), f64>,
+    strict_cross: bool,
+) -> Result<HashMap<String, f64>, DomainError> {
     let order = topological_sort(&estimator.outputs)?;
 
     use evalexpr::ContextWithMutableVariables;
@@ -229,12 +243,11 @@ pub fn evaluate_estimator(
     let output_by_id: HashMap<EstimatorOutputId, &EstimatorOutput> =
         estimator.outputs.iter().map(|v| (v.id, v)).collect();
 
-    let empty_cross: HashMap<(String, String), f64> = HashMap::new();
     let mut results = HashMap::new();
 
     for id in order {
         let output = output_by_id[&id];
-        let expr = resolve_cross_refs(&output.expression, &empty_cross, false)?;
+        let expr = resolve_cross_refs(&output.expression, cross_ctx, strict_cross)?;
         let expr = prepare_expression(&expr);
 
         let value = evalexpr::eval_float_with_context(&expr, &ctx).map_err(|e| {
