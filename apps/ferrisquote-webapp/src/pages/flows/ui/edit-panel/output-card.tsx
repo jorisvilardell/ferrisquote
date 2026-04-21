@@ -140,10 +140,36 @@ export function OutputCard({
   const [mode, setMode] = useState<ExprMode>(() => loadMode())
   const exprRef = useRef<HTMLTextAreaElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  // Debounce the visual-mode commit — each tile click would otherwise hit
+  // the server, refetch the flow, and re-run diagnostics. Hold mutations
+  // until the user stops editing for ~600ms (or blurs the builder).
+  const visualCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingVisualExprRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (visualCommitTimer.current) clearTimeout(visualCommitTimer.current)
+    }
+  }, [])
 
   function changeMode(next: ExprMode) {
+    // Flush any pending visual edit before leaving visual mode so the
+    // text editor picks up the latest state.
+    flushVisualCommit()
     setMode(next)
     saveMode(next)
+  }
+
+  function flushVisualCommit() {
+    if (visualCommitTimer.current) {
+      clearTimeout(visualCommitTimer.current)
+      visualCommitTimer.current = null
+    }
+    const pending = pendingVisualExprRef.current
+    pendingVisualExprRef.current = null
+    if (pending != null && pending !== output.expression) {
+      onUpdate(output.id, { expression: pending })
+    }
   }
 
   const displayExpression = idsToNames(output.expression, estimatorsIndex)
@@ -428,11 +454,19 @@ export function OutputCard({
               <ExpressionBuilder
                 value={output.expression}
                 onChange={(next) => {
+                  // Keep the text-mode draft in sync for a seamless toggle,
+                  // but debounce the actual backend commit so we don't
+                  // re-run evaluation/diagnostics on every tile click.
                   setExprDraft(idsToNames(next, estimatorsIndex))
-                  if (next !== output.expression) {
-                    onUpdate(output.id, { expression: next })
+                  pendingVisualExprRef.current = next
+                  if (visualCommitTimer.current) {
+                    clearTimeout(visualCommitTimer.current)
                   }
+                  visualCommitTimer.current = setTimeout(() => {
+                    flushVisualCommit()
+                  }, 600)
                 }}
+                onCommit={flushVisualCommit}
                 ownInputKeys={ownInputKeys}
                 ownOutputKeys={ownOutputKeys}
                 otherEstimators={otherEstimators}

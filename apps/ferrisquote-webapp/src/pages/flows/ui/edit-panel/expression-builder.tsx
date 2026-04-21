@@ -28,6 +28,9 @@ export type RepeatableStep = { key: string; title: string }
 type Props = {
   value: string
   onChange: (next: string) => void
+  /** Fires when the user stops editing (blur) so debounced callers can
+   *  flush pending changes immediately instead of waiting for the timer. */
+  onCommit?: () => void
   ownInputKeys: string[]
   ownOutputKeys: string[]
   otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
@@ -41,6 +44,7 @@ type AggDraft = { fn: "SUM" | "AVG" | "COUNT_ITER" } | null
 export function ExpressionBuilder({
   value,
   onChange,
+  onCommit,
   ownInputKeys,
   ownOutputKeys,
   otherEstimators,
@@ -196,6 +200,13 @@ export function ExpressionBuilder({
       ref={containerRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onBlur={(e) => {
+        // Only fire commit when focus leaves the whole builder (not when
+        // it shifts between the keypad and a palette tile inside it).
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          onCommit?.()
+        }
+      }}
       className="flex flex-col gap-3 rounded-xl border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 p-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/60"
     >
       <DisplayZone
@@ -458,23 +469,14 @@ function DisplayZone({
 }) {
   const { t } = useTranslation()
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [overflowTop, setOverflowTop] = useState(false)
 
   // Autoscroll to the bottom on content change so the cursor line stays
-  // in view — and detect whether there's content scrolled off the top so
-  // we can show the TI-83-style "…" ellipsis indicator.
+  // in view even when older lines scroll off the top.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-    setOverflowTop(el.scrollHeight > el.clientHeight)
   }, [tiles, cursor])
-
-  function handleScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    setOverflowTop(el.scrollTop > 0)
-  }
 
   return (
     <div
@@ -495,19 +497,8 @@ function DisplayZone({
             "repeating-linear-gradient(0deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 3px)",
         }}
       />
-      {/* TI-83-style overflow indicator — three dots at the very top
-          whenever content has scrolled above the viewport. Sits above the
-          scroll container so the glyphs don't move with scrollTop. */}
-      {overflowTop && (
-        <div className="absolute top-1 left-0 right-0 flex justify-center z-10 pointer-events-none">
-          <span className="text-slate-400 text-xs leading-none tracking-widest">
-            •••
-          </span>
-        </div>
-      )}
       <div
         ref={scrollRef}
-        onScroll={handleScroll}
         className={cn(
           // Three-line viewport: line-height-none + text-2xl ≈ 28-30px per
           // line; 3 lines + top padding for the overflow indicator.
