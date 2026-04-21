@@ -25,6 +25,8 @@ import {
 } from "@/pages/flows/lib/expression-refs"
 
 const ROSE = "hsl(330, 80%, 60%)"
+const EMERALD = "hsl(158, 64%, 52%)"
+const FIELD_ORANGE = "hsl(28, 85%, 55%)"
 const AGG_FUNCTIONS = ["SUM", "AVG", "COUNT_ITER"] as const
 
 type Suggestion = {
@@ -33,6 +35,7 @@ type Suggestion = {
   group: string
   groupLabel?: string
   isEstimator?: boolean
+  isInput?: boolean
   estimatorId?: string
 }
 
@@ -143,6 +146,7 @@ export function OutputCard({
         label: `@${k}`,
         insert: `@${k}`,
         group: "Inputs",
+        isInput: true,
       })),
     ...ownOutputKeys
       .filter((k) => k.toLowerCase().includes(filterLower))
@@ -309,22 +313,41 @@ export function OutputCard({
 
           <div className="flex flex-col gap-1 relative">
             <Label className="text-xs">Expression</Label>
-            <Textarea
-              ref={exprRef}
-              className="text-sm font-mono min-h-[60px] resize-none"
-              placeholder="e.g. @surface * @prix_unitaire * 1.2"
-              value={exprDraft}
-              onChange={(e) => handleExpressionChange(e.target.value)}
-              onFocus={() => {
-                if (!exprDraft) setShowSuggestions(true)
-              }}
-              onBlur={() => {
-                setTimeout(() => {
-                  setShowSuggestions(false)
-                  commitExpr()
-                }, 200)
-              }}
-            />
+            <div className="relative">
+              {/* Syntax-highlighted layer sits behind a transparent textarea.
+                  Both share identical font + padding so glyphs align. The
+                  textarea keeps all interaction (caret, selection, input);
+                  the layer only paints colored tokens. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words font-mono text-sm px-3 py-2 rounded-md"
+                style={{ color: "transparent" }}
+              >
+                {renderHighlighted(
+                  exprDraft,
+                  ownInputKeys,
+                  ownOutputKeys,
+                  availableFieldKeys,
+                )}
+              </div>
+              <Textarea
+                ref={exprRef}
+                className="relative text-sm font-mono min-h-[60px] resize-none bg-transparent"
+                style={{ color: "transparent", caretColor: "currentColor" }}
+                placeholder="e.g. @surface * @prix_unitaire * 1.2"
+                value={exprDraft}
+                onChange={(e) => handleExpressionChange(e.target.value)}
+                onFocus={() => {
+                  if (!exprDraft) setShowSuggestions(true)
+                }}
+                onBlur={() => {
+                  setTimeout(() => {
+                    setShowSuggestions(false)
+                    commitExpr()
+                  }, 200)
+                }}
+              />
+            </div>
             {showSuggestions && suggestions.length > 0 && dropdownPos &&
               createPortal(
                 <div
@@ -354,8 +377,14 @@ export function OutputCard({
                         <button
                           className={cn(
                             "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-accent transition-colors",
-                            s.isEstimator && "text-[hsl(330,70%,60%)]",
                           )}
+                          style={{
+                            color: s.isInput
+                              ? EMERALD
+                              : s.isEstimator
+                                ? ROSE
+                                : undefined,
+                          }}
                           onMouseDown={(e) => {
                             e.preventDefault()
                             insertSuggestion(s)
