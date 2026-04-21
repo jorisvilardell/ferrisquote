@@ -448,7 +448,7 @@ export function OutputCard({
           </div>
 
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">{t("estimator.description")}</Label>
+            <Label className="text-xs">{t("output.description")}</Label>
             <Input
               className="h-7 text-sm"
               placeholder={t("common.optional")}

@@ -86,32 +86,32 @@
     "add_submit": "Ajouter la question"
   },
   "estimator": {
-    "description": "À quoi sert cette formule",
-    "description_placeholder": "Optionnel — explique ce que fait cette formule",
+    "description": "À quoi sert cette table de calcul",
+    "description_placeholder": "Optionnel — explique ce que fait cette table de calcul",
     "inputs": "Données à fournir",
-    "inputs_help": "Les éléments dont la formule a besoin pour calculer (un nombre, un oui/non, ou un produit du catalogue).",
-    "inputs_help_example": "Exemple : pour calculer le prix d'une pièce, la formule a besoin de la « surface » et du « prix au m² ».",
+    "inputs_help": "Les éléments dont la table de calcul a besoin pour calculer (un nombre, un oui/non, ou un produit du catalogue).",
+    "inputs_help_example": "Exemple : pour calculer le prix d'une pièce, la table a besoin de la « surface » et du « prix au m² ».",
     "outputs": "Résultats produits",
-    "outputs_help": "Ce que la formule calcule à partir des données fournies. Utilisez @nom_donnée pour faire référence à une donnée d'entrée.",
+    "outputs_help": "Ce que la table de calcul produit à partir des données fournies. Utilisez @nom_donnée pour faire référence à une donnée d'entrée.",
     "outputs_help_example": "Exemple : « prix_pièce = @surface * @prix_au_m2 ».",
     "add_input": "Ajouter une donnée",
     "add_output": "Ajouter un résultat",
-    "execution_context": "Quand exécuter cette formule",
+    "execution_context": "Quand exécuter cette table de calcul",
     "execution_help": "Une seule fois pour l'ensemble du formulaire, ou une fois pour chaque élément répété (ex. une fois par pièce).",
-    "execution_help_example": "Exemple : si vous cochez « Répéter pour chaque pièce », la formule sera calculée pour chaque pièce saisie.",
+    "execution_help_example": "Exemple : si vous cochez « Répéter pour chaque pièce », la table sera calculée pour chaque pièce saisie.",
     "global_execution": "Exécuter une seule fois",
     "loop_over": "Répéter pour chaque : {{step}}",
     "no_repeatable_steps": "Aucune étape répétable dans ce formulaire",
     "arguments": "Données à utiliser",
-    "arguments_help": "Reliez chaque donnée d'entrée à une question du formulaire ou au résultat d'une formule précédente.",
+    "arguments_help": "Reliez chaque donnée d'entrée à une question du formulaire ou au résultat d'une table de calcul précédente.",
     "arguments_help_example": "Exemple : reliez « surface » à la question « Surface de la pièce ».",
     "reduce": "Comment combiner les résultats",
-    "reduce_help": "Si la formule tourne plusieurs fois (une par pièce), comment obtenir une seule valeur finale pour chaque résultat.",
+    "reduce_help": "Si la table tourne plusieurs fois (une par pièce), comment obtenir une seule valeur finale pour chaque résultat.",
     "reduce_help_example": "Exemple : « prix_pièce » doit donner le total sur toutes les pièces — choisissez « Total ».",
     "context_locked": "Ce paramètre est verrouillé tant que des questions de {{steps}} sont utilisées.",
     "validation": {
       "name_chars": "Le nom ne peut contenir que des lettres, chiffres, espaces et tirets bas.",
-      "name_duplicate": "Une formule nommée \"{{name}}\" existe déjà."
+      "name_duplicate": "Une table de calcul nommée \"{{name}}\" existe déjà."
     }
   },
   "input": {
@@ -121,6 +121,7 @@
     "type_boolean": "Oui / Non",
     "type_product": "Produit du catalogue",
     "label_filter": "Filtrer les produits (optionnel)",
+    "description": "Description de la donnée",
     "delete_title": "Supprimer cette donnée ?",
     "delete_confirm": "\"{{key}}\" sera supprimé définitivement."
   },
@@ -128,6 +129,7 @@
     "key": "Nom du résultat",
     "expression": "Calcul",
     "expression_placeholder": "ex. @surface * @prix_au_m2 * 1.2",
+    "description": "Description du résultat",
     "delete_title": "Supprimer ce résultat ?",
     "delete_confirm": "\"{{key}}\" sera supprimé définitivement."
   },
@@ -143,7 +145,7 @@
   "errors": {
     "generic": "Une erreur est survenue",
     "update_failed": "La mise à jour a échoué : {{msg}}",
-    "signature_update_failed": "La mise à jour de la formule a échoué : {{msg}}",
+    "signature_update_failed": "La mise à jour de la table de calcul a échoué : {{msg}}",
     "wiring_update_failed": "La mise à jour des liaisons a échoué : {{msg}}",
     "field_not_numeric": "La question \"{{key}}\" n'est pas un nombre",
     "field_needs_context": "La question \"{{label}}\" appartient à une étape répétable \"{{step}}\". Réglez d'abord « Quand exécuter » sur cette étape.",

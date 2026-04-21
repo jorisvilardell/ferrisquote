@@ -86,32 +86,32 @@
     "add_submit": "Add question"
   },
   "estimator": {
-    "description": "What this formula does",
-    "description_placeholder": "Optional — describe what this formula computes",
+    "description": "What this calculation table does",
+    "description_placeholder": "Optional — describe what this calculation table produces",
     "inputs": "Data needed",
-    "inputs_help": "The pieces of information the formula needs to run (a number, a yes/no, or a catalogue product).",
-    "inputs_help_example": "Example: to compute a room's price, the formula needs the \"surface\" and the \"price per m²\".",
+    "inputs_help": "The pieces of information the calculation table needs to run (a number, a yes/no, or a catalogue product).",
+    "inputs_help_example": "Example: to compute a room's price, the table needs the \"surface\" and the \"price per m²\".",
     "outputs": "Results produced",
-    "outputs_help": "What the formula computes from the data it receives. Use @data_name to reference an input value.",
+    "outputs_help": "What the calculation table produces from the data it receives. Use @data_name to reference an input value.",
     "outputs_help_example": "Example: \"room_price = @surface * @price_per_m2\".",
     "add_input": "Add data",
     "add_output": "Add result",
-    "execution_context": "When to run this formula",
+    "execution_context": "When to run this calculation table",
     "execution_help": "Once for the whole form, or once per repeated item (e.g. once per room).",
-    "execution_help_example": "Example: if you choose \"Repeat for each room\", the formula runs for every room entered.",
+    "execution_help_example": "Example: if you choose \"Repeat for each room\", the table runs for every room entered.",
     "global_execution": "Run once",
     "loop_over": "Repeat for each: {{step}}",
     "no_repeatable_steps": "No repeatable steps in this form",
     "arguments": "Data to use",
-    "arguments_help": "Connect each piece of data to a form question or to the result of an earlier formula.",
+    "arguments_help": "Connect each piece of data to a form question or to the result of an earlier calculation table.",
     "arguments_help_example": "Example: connect \"surface\" to the question \"Room surface\".",
     "reduce": "How to combine the results",
-    "reduce_help": "If the formula runs several times (once per room), how to get a single final value for each result.",
+    "reduce_help": "If the table runs several times (once per room), how to get a single final value for each result.",
     "reduce_help_example": "Example: \"room_price\" should give the total across all rooms — choose \"Total\".",
     "context_locked": "This setting is locked while questions from {{steps}} are in use.",
     "validation": {
       "name_chars": "Name can only contain letters, digits, spaces and underscores.",
-      "name_duplicate": "A formula named \"{{name}}\" already exists."
+      "name_duplicate": "A calculation table named \"{{name}}\" already exists."
     }
   },
   "input": {
@@ -121,6 +121,7 @@
     "type_boolean": "Yes / No",
     "type_product": "Catalogue product",
     "label_filter": "Filter products (optional)",
+    "description": "Data description",
     "delete_title": "Delete this data?",
     "delete_confirm": "\"{{key}}\" will be permanently deleted."
   },
@@ -128,6 +129,7 @@
     "key": "Result name",
     "expression": "Calculation",
     "expression_placeholder": "e.g. @surface * @price_per_m2 * 1.2",
+    "description": "Result description",
     "delete_title": "Delete this result?",
     "delete_confirm": "\"{{key}}\" will be permanently deleted."
   },
@@ -143,7 +145,7 @@
   "errors": {
     "generic": "Something went wrong",
     "update_failed": "Update failed: {{msg}}",
-    "signature_update_failed": "Formula update failed: {{msg}}",
+    "signature_update_failed": "Calculation table update failed: {{msg}}",
     "wiring_update_failed": "Connections update failed: {{msg}}",
     "field_not_numeric": "Question \"{{key}}\" is not a number",
     "field_needs_context": "Question \"{{label}}\" belongs to repeatable step \"{{step}}\". Set \"When to run\" to that step first.",
