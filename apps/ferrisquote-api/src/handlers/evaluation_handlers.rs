@@ -3,16 +3,18 @@ use std::collections::HashMap;
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
 };
 use ferrisquote_domain::domain::{
     estimator::ports::EstimatorService,
+    evaluation::{
+        ports::{FlowEvaluationResult, FlowEvaluationService, FlowPreviewResult},
+    },
     flows::{
         entities::id::{FieldId, FlowId, StepId},
-        ports::{FieldService, FlowService, StepService},
+        ports::{BindingService, FieldService, FlowService, StepService},
     },
     submission::{
-        entities::{FieldValue, StepIteration, Submission, SubmissionId},
+        entities::{FieldValue, StepIteration, Submission},
         ports::SubmissionService,
     },
     user::entities::UserId,
@@ -20,8 +22,8 @@ use ferrisquote_domain::domain::{
 
 use crate::{
     dto::{
-        ApiResponse, FieldValueDto, StepIterationDto, SubmissionListResponse, SubmissionResponse,
-        SubmitAnswersRequest,
+        ApiResponse, EvaluateBindingsRequest, FieldValueDto, FlowEvaluationResponse,
+        FlowPreviewResponse, StepIterationDto, SubmissionResponse,
     },
     error::{ApiError, ApiResult},
     state::AppState,
@@ -31,7 +33,7 @@ use crate::{
 // Mappers
 // ============================================================================
 
-fn field_value_to_domain(v: FieldValueDto) -> FieldValue {
+fn dto_field_value_to_domain(v: FieldValueDto) -> FieldValue {
     match v {
         FieldValueDto::Text(s) => FieldValue::Text(s),
         FieldValueDto::Number(n) => FieldValue::Number(n),
@@ -40,7 +42,7 @@ fn field_value_to_domain(v: FieldValueDto) -> FieldValue {
     }
 }
 
-fn field_value_to_dto(v: FieldValue) -> FieldValueDto {
+fn domain_field_value_to_dto(v: FieldValue) -> FieldValueDto {
     match v {
         FieldValue::Text(s) => FieldValueDto::Text(s),
         FieldValue::Number(n) => FieldValueDto::Number(n),
@@ -54,7 +56,7 @@ fn iteration_to_domain(dto: StepIterationDto) -> ApiResult<StepIteration> {
     for (k, v) in dto.answers {
         let field_uuid = uuid::Uuid::parse_str(&k)
             .map_err(|e| ApiError::BadRequest(format!("Invalid field_id '{k}': {e}")))?;
-        out.insert(FieldId::from_uuid(field_uuid), field_value_to_domain(v));
+        out.insert(FieldId::from_uuid(field_uuid), dto_field_value_to_domain(v));
     }
     Ok(StepIteration::new(out))
 }
@@ -64,7 +66,7 @@ fn iteration_to_dto(iter: StepIteration) -> StepIterationDto {
         answers: iter
             .answers
             .into_iter()
-            .map(|(id, v)| (id.to_string(), field_value_to_dto(v)))
+            .map(|(id, v)| (id.to_string(), domain_field_value_to_dto(v)))
             .collect(),
     }
 }
@@ -88,33 +90,44 @@ fn map_submission(s: Submission) -> SubmissionResponse {
     }
 }
 
+fn map_result(res: FlowEvaluationResult) -> FlowEvaluationResponse {
+    FlowEvaluationResponse {
+        bindings: res
+            .bindings
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect(),
+        flat: res.flat,
+    }
+}
+
 // ============================================================================
 // Handlers
 // ============================================================================
 
 #[utoipa::path(
     post,
-    path = "/api/v1/flows/{flow_id}/submissions",
+    path = "/api/v1/flows/{flow_id}/evaluate-bindings",
     params(("flow_id" = String, Path, description = "Flow UUID")),
-    request_body = SubmitAnswersRequest,
+    request_body = EvaluateBindingsRequest,
     responses(
-        (status = 201, description = "Submission created", body = SubmissionResponse),
-        (status = 400, description = "Validation error"),
+        (status = 200, description = "Evaluation result", body = FlowEvaluationResponse),
+        (status = 400, description = "Validation / cycle error"),
         (status = 404, description = "Flow not found"),
     ),
-    tag = "submissions"
+    tag = "evaluation"
 )]
-pub async fn submit_answers<
+pub async fn evaluate_bindings<
     FS: FlowService + StepService + FieldService,
     ES: EstimatorService,
     SS: SubmissionService,
-    BS: ferrisquote_domain::domain::flows::ports::BindingService,
-    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
+    BS: BindingService,
+    FES: FlowEvaluationService,
 >(
     State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(flow_id): Path<String>,
-    Json(request): Json<SubmitAnswersRequest>,
-) -> ApiResult<(StatusCode, Json<ApiResponse<SubmissionResponse>>)> {
+    Json(request): Json<EvaluateBindingsRequest>,
+) -> ApiResult<Json<ApiResponse<FlowEvaluationResponse>>> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
     let user_id = UserId::from_uuid(request.user_id);
 
@@ -130,70 +143,44 @@ pub async fn submit_answers<
         answers.insert(StepId::from_uuid(step_uuid), iters);
     }
 
-    let submission = state
-        .submission_service
-        .submit_answers(flow_id, user_id, answers)
+    let submission = Submission::new(flow_id, user_id, answers);
+    let res = state
+        .flow_evaluation_service
+        .evaluate_flow_bindings(flow_id, submission)
         .await?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(ApiResponse::success(map_submission(submission))),
-    ))
+    Ok(Json(ApiResponse::success(map_result(res))))
 }
 
 #[utoipa::path(
-    get,
-    path = "/api/v1/submissions/{submission_id}",
-    params(("submission_id" = String, Path, description = "Submission UUID")),
-    responses(
-        (status = 200, description = "Submission found", body = SubmissionResponse),
-        (status = 404, description = "Submission not found"),
-    ),
-    tag = "submissions"
-)]
-pub async fn get_submission_by_id<
-    FS: FlowService + StepService + FieldService,
-    ES: EstimatorService,
-    SS: SubmissionService,
-    BS: ferrisquote_domain::domain::flows::ports::BindingService,
-    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
->(
-    State(state): State<AppState<FS, ES, SS, BS, FES>>,
-    Path(submission_id): Path<String>,
-) -> ApiResult<Json<ApiResponse<SubmissionResponse>>> {
-    let id = SubmissionId::from_uuid(uuid::Uuid::parse_str(&submission_id)?);
-    let submission = state.submission_service.get_submission_by_id(id).await?;
-    Ok(Json(ApiResponse::success(map_submission(submission))))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/flows/{flow_id}/submissions",
+    post,
+    path = "/api/v1/flows/{flow_id}/evaluate-bindings-preview",
     params(("flow_id" = String, Path, description = "Flow UUID")),
     responses(
-        (status = 200, description = "List of submissions", body = SubmissionListResponse),
+        (status = 200, description = "Preview with random values", body = FlowPreviewResponse),
+        (status = 400, description = "Validation / cycle error"),
+        (status = 404, description = "Flow not found"),
     ),
-    tag = "submissions"
+    tag = "evaluation"
 )]
-pub async fn list_submissions_for_flow<
+pub async fn preview_flow<
     FS: FlowService + StepService + FieldService,
     ES: EstimatorService,
     SS: SubmissionService,
-    BS: ferrisquote_domain::domain::flows::ports::BindingService,
-    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
+    BS: BindingService,
+    FES: FlowEvaluationService,
 >(
     State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(flow_id): Path<String>,
-) -> ApiResult<Json<ApiResponse<SubmissionListResponse>>> {
+) -> ApiResult<Json<ApiResponse<FlowPreviewResponse>>> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
-    let submissions = state
-        .submission_service
-        .list_submissions_for_flow(flow_id)
+    let FlowPreviewResult { submission, evaluation } = state
+        .flow_evaluation_service
+        .preview_flow(flow_id)
         .await?;
 
-    let response = SubmissionListResponse {
-        submissions: submissions.into_iter().map(map_submission).collect(),
-    };
-
-    Ok(Json(ApiResponse::success(response)))
+    Ok(Json(ApiResponse::success(FlowPreviewResponse {
+        submission: map_submission(submission),
+        evaluation: map_result(evaluation),
+    })))
 }

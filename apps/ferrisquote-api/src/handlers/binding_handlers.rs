@@ -148,8 +148,9 @@ pub async fn add_binding<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(flow_id): Path<String>,
     Json(request): Json<CreateBindingRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<BindingResponse>>)> {
@@ -193,8 +194,9 @@ pub async fn list_bindings<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<BindingListResponse>>> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
@@ -226,8 +228,9 @@ pub async fn update_binding<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path((flow_id, binding_id)): Path<(String, String)>,
     Json(request): Json<UpdateBindingRequest>,
 ) -> ApiResult<Json<ApiResponse<BindingResponse>>> {
@@ -277,8 +280,9 @@ pub async fn remove_binding<
     ES: EstimatorService,
     SS: SubmissionService,
     BS: BindingService,
+    FES: ferrisquote_domain::domain::evaluation::ports::FlowEvaluationService,
 >(
-    State(state): State<AppState<FS, ES, SS, BS>>,
+    State(state): State<AppState<FS, ES, SS, BS, FES>>,
     Path((flow_id, binding_id)): Path<(String, String)>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let flow_id = FlowId::from_uuid(

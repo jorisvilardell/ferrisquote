@@ -1,5 +1,6 @@
 use ferrisquote_domain::domain::{
     estimator::services::EstimatorServiceImpl,
+    evaluation::services::FlowEvaluationServiceImpl,
     flows::services::{BindingServiceImpl, FlowServiceImpl},
     rank::services::LexoRankProvider,
     submission::services::SubmissionServiceImpl,
@@ -65,13 +66,16 @@ async fn main() -> anyhow::Result<()> {
     let estimator_service = EstimatorServiceImpl::new(estimator_repo.clone());
     let submission_service = SubmissionServiceImpl::new(submission_repo, flow_repo.clone());
     let binding_service =
-        BindingServiceImpl::new(flow_repo.clone(), flow_repo, estimator_repo);
+        BindingServiceImpl::new(flow_repo.clone(), flow_repo.clone(), estimator_repo.clone());
+    let flow_evaluation_service =
+        FlowEvaluationServiceImpl::new(flow_repo, estimator_repo);
 
     let app_state = AppState::new(
         Arc::new(flow_service),
         Arc::new(estimator_service),
         Arc::new(submission_service),
         Arc::new(binding_service),
+        Arc::new(flow_evaluation_service),
     );
 
     let app = build_routes(app_state);
