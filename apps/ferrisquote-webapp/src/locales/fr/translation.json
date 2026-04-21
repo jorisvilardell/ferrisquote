@@ -142,6 +142,23 @@
     "first": "Premier",
     "last": "Dernier"
   },
+  "diagnostics": {
+    "title_one": "{{count}} problème",
+    "title_other": "{{count}} problèmes",
+    "none": "Aucun problème détecté",
+    "unmapped_input": "L'entrée « {{input}} » n'est pas reliée.",
+    "dangling_field_ref": "L'entrée « {{input}} » pointe vers une question qui a été supprimée.",
+    "dangling_binding_missing": "L'entrée « {{input}} » pointe vers une table de calcul qui a été supprimée.",
+    "dangling_binding_output_missing": "L'entrée « {{input}} » référence un résultat « {{output}} » qui n'existe plus.",
+    "missing_map_step": "L'étape ciblée par « Quand exécuter » a été supprimée.",
+    "map_step_not_repeatable": "L'étape ciblée par « Quand exécuter » n'est pas répétable.",
+    "invalid_expression_empty": "Le résultat « {{output}} » n'a pas de calcul.",
+    "invalid_expression_missing_ref": "Le résultat « {{output}} » référence « @{{ref}} » qui n'existe pas.",
+    "cycle_between_bindings": "Cycle détecté entre {{count}} tables de calcul — elles s'attendent mutuellement.",
+    "type_mismatch": "L'entrée « {{input}} » attend un {{expected}} mais reçoit un {{actual}}.",
+    "show_details": "Voir les détails",
+    "go_to": "Aller à"
+  },
   "errors": {
     "generic": "Une erreur est survenue",
     "update_failed": "La mise à jour a échoué : {{msg}}",
