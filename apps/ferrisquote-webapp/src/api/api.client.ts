@@ -1,16 +1,58 @@
 export namespace Schemas {
   // <Schemas>
-  export type VariableResponse = { description: string; expression: string; id: string; name: string };
+  export type AggregationStrategyDto = "sum" | "average" | "max" | "min" | "count" | "first" | "last";
+  export type FieldValueDto = string | number | boolean | Array<string>;
+  export type InputBindingValueDto =
+    | { field_id: string; source: "field" }
+    | { source: "constant"; value: FieldValueDto }
+    | { binding_id: string; output_key: string; source: "binding_output" };
+  export type BindingResponse = {
+    estimator_id: string;
+    id: string;
+    inputs_mapping: Record<string, unknown>;
+    map_over_step?: (string | null) | undefined;
+    outputs_reduce_strategy: Record<string, unknown>;
+  };
+  export type ApiResponse_BindingListResponse = { data: { bindings: Array<BindingResponse> }; success: boolean };
+  export type ApiResponse_BindingResponse = {
+    data: {
+      estimator_id: string;
+      id: string;
+      inputs_mapping: Record<string, unknown>;
+      map_over_step?: (string | null) | undefined;
+      outputs_reduce_strategy: Record<string, unknown>;
+    };
+    success: boolean;
+  };
+  export type EstimatorParameterTypeDto =
+    | { kind: "number" }
+    | { kind: "boolean" }
+    | { kind: "product"; label_filter?: (string | null) | undefined };
+  export type InputResponse = {
+    description: string;
+    id: string;
+    key: string;
+    parameter_type: EstimatorParameterTypeDto;
+  };
+  export type OutputResponse = { description: string; expression: string; id: string; key: string };
   export type EstimatorResponse = {
     description: string;
     flow_id: string;
     id: string;
+    inputs: Array<InputResponse>;
     name: string;
-    variables: Array<VariableResponse>;
+    outputs: Array<OutputResponse>;
   };
   export type ApiResponse_EstimatorListResponse = { data: { estimators: Array<EstimatorResponse> }; success: boolean };
   export type ApiResponse_EstimatorResponse = {
-    data: { description: string; flow_id: string; id: string; name: string; variables: Array<VariableResponse> };
+    data: {
+      description: string;
+      flow_id: string;
+      id: string;
+      inputs: Array<InputResponse>;
+      name: string;
+      outputs: Array<OutputResponse>;
+    };
     success: boolean;
   };
   export type ApiResponse_EvaluateFlowResponse = {
@@ -53,7 +95,15 @@ export namespace Schemas {
     data: { description: string; id: string; name: string; steps: Array<StepResponse> };
     success: boolean;
   };
+  export type ApiResponse_InputResponse = {
+    data: { description: string; id: string; key: string; parameter_type: EstimatorParameterTypeDto };
+    success: boolean;
+  };
   export type ApiResponse_MessageResponse = { data: { message: string }; success: boolean };
+  export type ApiResponse_OutputResponse = {
+    data: { description: string; expression: string; id: string; key: string };
+    success: boolean;
+  };
   export type ApiResponse_StepResponse = {
     data: {
       description: string;
@@ -68,13 +118,44 @@ export namespace Schemas {
     };
     success: boolean;
   };
-  export type ApiResponse_VariableResponse = {
-    data: { description: string; expression: string; id: string; name: string };
+  export type StepIterationDto = { answers: Record<string, unknown> };
+  export type SubmissionResponse = {
+    answers: Record<string, Array<StepIterationDto>>;
+    flow_id: string;
+    id: string;
+    submitted_at: string;
+    user_id: string;
+  };
+  export type ApiResponse_SubmissionListResponse = {
+    data: { submissions: Array<SubmissionResponse> };
     success: boolean;
+  };
+  export type ApiResponse_SubmissionResponse = {
+    data: {
+      answers: Record<string, Array<StepIterationDto>>;
+      flow_id: string;
+      id: string;
+      submitted_at: string;
+      user_id: string;
+    };
+    success: boolean;
+  };
+  export type BindingListResponse = { bindings: Array<BindingResponse> };
+  export type CreateBindingRequest = {
+    estimator_id: string;
+    inputs_mapping: Record<string, unknown>;
+    map_over_step?: (string | null) | undefined;
+    outputs_reduce_strategy?: Record<string, unknown> | undefined;
   };
   export type CreateEstimatorRequest = { name: string };
   export type CreateFieldRequest = { config: FieldConfigDto; key: string; label: string };
   export type CreateFlowRequest = { description?: (string | null) | undefined; name: string };
+  export type CreateInputRequest = {
+    description?: (string | null) | undefined;
+    key: string;
+    parameter_type: EstimatorParameterTypeDto;
+  };
+  export type CreateOutputRequest = { description?: (string | null) | undefined; expression: string; key: string };
   export type CreateStepRequest = {
     description?: (string | null) | undefined;
     is_repeatable?: (boolean | null) | undefined;
@@ -83,7 +164,6 @@ export namespace Schemas {
     repeat_label?: (string | null) | undefined;
     title: string;
   };
-  export type CreateVariableRequest = { description?: (string | null) | undefined; expression: string; name: string };
   export type EstimatorListResponse = { estimators: Array<EstimatorResponse> };
   export type EvaluateFlowResponse = {
     flat_results: Record<string, number>;
@@ -106,6 +186,13 @@ export namespace Schemas {
     target_step_id: string | null;
   }>;
   export type ReorderStepRequest = Partial<{ after_id: string | null; before_id: string | null }>;
+  export type SubmissionListResponse = { submissions: Array<SubmissionResponse> };
+  export type SubmitAnswersRequest = { answers: Record<string, Array<StepIterationDto>>; user_id: string };
+  export type UpdateBindingRequest = Partial<{
+    inputs_mapping: Record<string, unknown> | null;
+    map_over_step: string | null;
+    outputs_reduce_strategy: Record<string, unknown> | null;
+  }>;
   export type UpdateEstimatorRequest = Partial<{ description: string | null; name: string | null }>;
   export type UpdateFieldConfigRequest = Partial<{
     config: null | FieldConfigDto;
@@ -114,6 +201,16 @@ export namespace Schemas {
     label: string | null;
   }>;
   export type UpdateFlowMetadataRequest = { description?: (string | null) | undefined; name: string };
+  export type UpdateInputRequest = Partial<{
+    description: string | null;
+    key: string | null;
+    parameter_type: null | EstimatorParameterTypeDto;
+  }>;
+  export type UpdateOutputRequest = Partial<{
+    description: string | null;
+    expression: string | null;
+    key: string | null;
+  }>;
   export type UpdateStepMetadataRequest = Partial<{
     description: string | null;
     is_repeatable: boolean | null;
@@ -121,11 +218,6 @@ export namespace Schemas {
     min_repeats: number | null;
     repeat_label: string | null;
     title: string | null;
-  }>;
-  export type UpdateVariableRequest = Partial<{
-    description: string | null;
-    expression: string | null;
-    name: string | null;
   }>;
 
   // </Schemas>
@@ -185,16 +277,67 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.EvaluateResponse; 400: unknown; 404: unknown };
   };
-  export type post_Add_variable = {
+  export type post_Add_input = {
     method: "POST";
-    path: "/api/v1/estimators/{estimator_id}/variables";
+    path: "/api/v1/estimators/{estimator_id}/inputs";
     requestFormat: "json";
     parameters: {
       path: { estimator_id: string };
 
-      body: Schemas.CreateVariableRequest;
+      body: Schemas.CreateInputRequest;
     };
-    responses: { 201: Schemas.VariableResponse; 400: unknown; 404: unknown };
+    responses: { 201: Schemas.InputResponse; 400: unknown; 404: unknown };
+  };
+  export type put_Update_input = {
+    method: "PUT";
+    path: "/api/v1/estimators/{estimator_id}/inputs/{input_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string; input_id: string };
+
+      body: Schemas.UpdateInputRequest;
+    };
+    responses: { 200: Schemas.InputResponse; 400: unknown; 404: unknown };
+  };
+  export type delete_Remove_input = {
+    method: "DELETE";
+    path: "/api/v1/estimators/{estimator_id}/inputs/{input_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string; input_id: string };
+    };
+    responses: { 200: Schemas.MessageResponse; 404: unknown };
+  };
+  export type post_Add_output = {
+    method: "POST";
+    path: "/api/v1/estimators/{estimator_id}/outputs";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string };
+
+      body: Schemas.CreateOutputRequest;
+    };
+    responses: { 201: Schemas.OutputResponse; 400: unknown; 404: unknown };
+  };
+  export type put_Update_output = {
+    method: "PUT";
+    path: "/api/v1/estimators/{estimator_id}/outputs/{output_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string; output_id: string };
+
+      body: Schemas.UpdateOutputRequest;
+    };
+    responses: { 200: Schemas.OutputResponse; 400: unknown; 404: unknown };
+  };
+  export type delete_Remove_output = {
+    method: "DELETE";
+    path: "/api/v1/estimators/{estimator_id}/outputs/{output_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { estimator_id: string; output_id: string };
+    };
+    responses: { 200: Schemas.MessageResponse; 404: unknown };
   };
   export type get_List_flows = {
     method: "GET";
@@ -314,6 +457,46 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.MessageResponse; 404: unknown };
   };
+  export type get_List_bindings = {
+    method: "GET";
+    path: "/api/v1/flows/{flow_id}/bindings";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+    };
+    responses: { 200: Schemas.BindingListResponse };
+  };
+  export type post_Add_binding = {
+    method: "POST";
+    path: "/api/v1/flows/{flow_id}/bindings";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+
+      body: Schemas.CreateBindingRequest;
+    };
+    responses: { 201: Schemas.BindingResponse; 400: unknown; 404: unknown };
+  };
+  export type put_Update_binding = {
+    method: "PUT";
+    path: "/api/v1/flows/{flow_id}/bindings/{binding_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string; binding_id: string };
+
+      body: Schemas.UpdateBindingRequest;
+    };
+    responses: { 200: Schemas.BindingResponse; 400: unknown; 404: unknown };
+  };
+  export type delete_Remove_binding = {
+    method: "DELETE";
+    path: "/api/v1/flows/{flow_id}/bindings/{binding_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string; binding_id: string };
+    };
+    responses: { 200: Schemas.MessageResponse; 404: unknown; 409: unknown };
+  };
   export type get_List_estimators = {
     method: "GET";
     path: "/api/v1/flows/{flow_id}/estimators";
@@ -356,25 +539,34 @@ export namespace Endpoints {
     };
     responses: { 201: Schemas.StepResponse; 400: unknown; 404: unknown };
   };
-  export type put_Update_variable = {
-    method: "PUT";
-    path: "/api/v1/variables/{variable_id}";
+  export type get_List_submissions_for_flow = {
+    method: "GET";
+    path: "/api/v1/flows/{flow_id}/submissions";
     requestFormat: "json";
     parameters: {
-      path: { variable_id: string };
-
-      body: Schemas.UpdateVariableRequest;
+      path: { flow_id: string };
     };
-    responses: { 200: Schemas.VariableResponse; 400: unknown; 404: unknown };
+    responses: { 200: Schemas.SubmissionListResponse };
   };
-  export type delete_Remove_variable = {
-    method: "DELETE";
-    path: "/api/v1/variables/{variable_id}";
+  export type post_Submit_answers = {
+    method: "POST";
+    path: "/api/v1/flows/{flow_id}/submissions";
     requestFormat: "json";
     parameters: {
-      path: { variable_id: string };
+      path: { flow_id: string };
+
+      body: Schemas.SubmitAnswersRequest;
     };
-    responses: { 200: Schemas.MessageResponse; 404: unknown };
+    responses: { 201: Schemas.SubmissionResponse; 400: unknown; 404: unknown };
+  };
+  export type get_Get_submission_by_id = {
+    method: "GET";
+    path: "/api/v1/submissions/{submission_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { submission_id: string };
+    };
+    responses: { 200: Schemas.SubmissionResponse; 404: unknown };
   };
 
   // </Endpoints>
@@ -386,33 +578,43 @@ export type EndpointByMethod = {
     "/api/v1/estimators/{estimator_id}": Endpoints.get_Get_estimator;
     "/api/v1/flows": Endpoints.get_List_flows;
     "/api/v1/flows/{flow_id}": Endpoints.get_Get_flow;
+    "/api/v1/flows/{flow_id}/bindings": Endpoints.get_List_bindings;
     "/api/v1/flows/{flow_id}/estimators": Endpoints.get_List_estimators;
+    "/api/v1/flows/{flow_id}/submissions": Endpoints.get_List_submissions_for_flow;
+    "/api/v1/submissions/{submission_id}": Endpoints.get_Get_submission_by_id;
   };
   put: {
     "/api/v1/estimators/{estimator_id}": Endpoints.put_Update_estimator;
+    "/api/v1/estimators/{estimator_id}/inputs/{input_id}": Endpoints.put_Update_input;
+    "/api/v1/estimators/{estimator_id}/outputs/{output_id}": Endpoints.put_Update_output;
     "/api/v1/flows/fields/{field_id}": Endpoints.put_Update_field_config;
     "/api/v1/flows/fields/{field_id}/move": Endpoints.put_Move_field;
     "/api/v1/flows/steps/{step_id}": Endpoints.put_Update_step_metadata;
     "/api/v1/flows/steps/{step_id}/reorder": Endpoints.put_Reorder_step;
     "/api/v1/flows/{flow_id}": Endpoints.put_Update_flow_metadata;
-    "/api/v1/variables/{variable_id}": Endpoints.put_Update_variable;
+    "/api/v1/flows/{flow_id}/bindings/{binding_id}": Endpoints.put_Update_binding;
   };
   delete: {
     "/api/v1/estimators/{estimator_id}": Endpoints.delete_Delete_estimator;
+    "/api/v1/estimators/{estimator_id}/inputs/{input_id}": Endpoints.delete_Remove_input;
+    "/api/v1/estimators/{estimator_id}/outputs/{output_id}": Endpoints.delete_Remove_output;
     "/api/v1/flows/fields/{field_id}": Endpoints.delete_Remove_field;
     "/api/v1/flows/steps/{step_id}": Endpoints.delete_Remove_step;
     "/api/v1/flows/{flow_id}": Endpoints.delete_Delete_flow;
-    "/api/v1/variables/{variable_id}": Endpoints.delete_Remove_variable;
+    "/api/v1/flows/{flow_id}/bindings/{binding_id}": Endpoints.delete_Remove_binding;
   };
   post: {
     "/api/v1/estimators/{estimator_id}/evaluate": Endpoints.post_Evaluate;
     "/api/v1/estimators/{estimator_id}/evaluate-submission": Endpoints.post_Evaluate_submission;
-    "/api/v1/estimators/{estimator_id}/variables": Endpoints.post_Add_variable;
+    "/api/v1/estimators/{estimator_id}/inputs": Endpoints.post_Add_input;
+    "/api/v1/estimators/{estimator_id}/outputs": Endpoints.post_Add_output;
     "/api/v1/flows": Endpoints.post_Create_flow;
     "/api/v1/flows/steps/{step_id}/fields": Endpoints.post_Add_field;
+    "/api/v1/flows/{flow_id}/bindings": Endpoints.post_Add_binding;
     "/api/v1/flows/{flow_id}/estimators": Endpoints.post_Create_estimator;
     "/api/v1/flows/{flow_id}/evaluate-all": Endpoints.post_Evaluate_flow;
     "/api/v1/flows/{flow_id}/steps": Endpoints.post_Add_step;
+    "/api/v1/flows/{flow_id}/submissions": Endpoints.post_Submit_answers;
   };
 };
 

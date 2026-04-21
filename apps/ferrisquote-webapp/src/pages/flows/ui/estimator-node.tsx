@@ -6,35 +6,50 @@ import { NodeDescriptionTooltip } from "./node-description-tooltip"
 export type EstimatorNodeData = {
   name: string
   description: string
-  variables: Schemas.VariableResponse[]
+  inputs: Schemas.InputResponse[]
+  outputs: Schemas.OutputResponse[]
   color: string
   onDelete: () => void
 }
 
-// Layout constants used both for handle positioning and node sizing.
-const HEADER_H = 38 // px — header (icon + title + border)
-const BODY_PY = 8 // px — vertical padding inside variables list
-const ROW_H = 20 // px — each variable row
-const ROW_GAP = 4 // px — space-y-1 gap between rows
+const HEADER_H = 38
+const BODY_PY = 8
+const ROW_H = 20
+const ROW_GAP = 4
+const SECTION_GAP = 12
+const SECTION_HEADER_H = 14
 
-/** Y position (in px from node top) of the center of variable at index `i`. */
-function variableHandleY(i: number): number {
-  return HEADER_H + BODY_PY + i * (ROW_H + ROW_GAP) + ROW_H / 2
+function inputHandleY(i: number): number {
+  return HEADER_H + BODY_PY + SECTION_HEADER_H + i * (ROW_H + ROW_GAP) + ROW_H / 2
+}
+
+function outputHandleY(inputCount: number, i: number): number {
+  const inputsBlock = inputCount * (ROW_H + ROW_GAP) - (inputCount > 0 ? ROW_GAP : 0)
+  const base = HEADER_H + BODY_PY + SECTION_HEADER_H + inputsBlock + SECTION_GAP + SECTION_HEADER_H
+  return base + i * (ROW_H + ROW_GAP) + ROW_H / 2
+}
+
+function paramTypeLabel(pt: Schemas.EstimatorParameterTypeDto): string {
+  if (pt.kind === "product") {
+    return pt.label_filter ? `product<${pt.label_filter}>` : "product"
+  }
+  return pt.kind
 }
 
 export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeData>>) {
   const c = data.color
-  const ringColor = `${c.replace(")", " / 0.2)")}` // e.g. hsl(330, 80%, 60% / 0.2)
+  const ringColor = `${c.replace(")", " / 0.2)")}`
+  const inputColor = "hsl(158, 64%, 52%)"
 
   const nodeInner = (
     <div
-      className="group relative min-w-[200px] max-w-[240px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer"
+      className="group relative min-w-[220px] max-w-[260px] rounded-md border bg-card text-card-foreground shadow-sm transition-shadow cursor-pointer"
       style={{
         borderColor: selected ? c : undefined,
         boxShadow: selected ? `0 0 0 3px ${ringColor}` : undefined,
       }}
     >
-      {/* Fallback handles at the header level (used when no variables exist) */}
+      {/* Fallback handles at header when no inputs/outputs */}
       <Handle
         type="target"
         position={Position.Left}
@@ -50,22 +65,34 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
         style={{ backgroundColor: c, top: HEADER_H / 2 }}
       />
 
-      {/* Per-variable handles: one pair (target left + source right) per variable */}
-      {data.variables.map((v, i) => {
-        const y = variableHandleY(i)
+      {/* Per-input target handles (left) */}
+      {data.inputs.map((i, idx) => (
+        <Handle
+          key={`target-input-${i.id}`}
+          type="target"
+          position={Position.Left}
+          id={`target-input-${i.id}`}
+          className="!border-2 !border-background !w-2 !h-2"
+          style={{ backgroundColor: inputColor, top: inputHandleY(idx) }}
+        />
+      ))}
+
+      {/* Per-output source handles (right) + a target on the output for chaining */}
+      {data.outputs.map((o, idx) => {
+        const y = outputHandleY(data.inputs.length, idx)
         return (
-          <div key={`handles-${v.id}`}>
+          <div key={`handles-${o.id}`}>
             <Handle
               type="target"
               position={Position.Left}
-              id={`target-${v.id}`}
+              id={`target-${o.id}`}
               className="!border-2 !border-background !w-2 !h-2"
               style={{ backgroundColor: c, top: y }}
             />
             <Handle
               type="source"
               position={Position.Right}
-              id={`source-${v.id}`}
+              id={`source-${o.id}`}
               className="!border-2 !border-background !w-2 !h-2"
               style={{ backgroundColor: c, top: y }}
             />
@@ -102,25 +129,72 @@ export function EstimatorNode({ data, selected }: NodeProps<Node<EstimatorNodeDa
         </p>
       </div>
 
-      {/* Variables list — each row uses the same height as our handle offsets */}
+      {/* Body: Inputs section (left-anchored) + Outputs section (right-anchored) */}
       <div className="px-3" style={{ paddingTop: BODY_PY, paddingBottom: BODY_PY }}>
-        {data.variables.length === 0 ? (
-          <p className="text-xs text-muted-foreground/50 italic">No variables</p>
+        {/* Inputs */}
+        <div
+          className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+          style={{ height: SECTION_HEADER_H, lineHeight: `${SECTION_HEADER_H}px` }}
+        >
+          Inputs
+        </div>
+        {data.inputs.length === 0 ? (
+          <div
+            className="text-xs text-muted-foreground/50 italic"
+            style={{ height: ROW_H, lineHeight: `${ROW_H}px` }}
+          >
+            None
+          </div>
         ) : (
-          data.variables.map((v, i) => (
+          data.inputs.map((i, idx) => (
             <div
-              key={v.id}
+              key={i.id}
               className="flex items-center gap-1.5"
-              style={{ height: ROW_H, marginTop: i === 0 ? 0 : ROW_GAP }}
+              style={{ height: ROW_H, marginTop: idx === 0 ? 0 : ROW_GAP }}
             >
               <span
                 className="text-xs font-mono font-medium shrink-0"
-                style={{ color: c }}
+                style={{ color: inputColor }}
               >
-                {v.name.replace(/_/g, " ")}
+                {i.key}
               </span>
-              <span className="text-xs text-muted-foreground truncate">
-                = {v.expression}
+              <span className="text-[10px] text-muted-foreground truncate">
+                : {paramTypeLabel(i.parameter_type)}
+              </span>
+            </div>
+          ))
+        )}
+
+        {/* Outputs */}
+        <div
+          className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right"
+          style={{
+            height: SECTION_HEADER_H,
+            lineHeight: `${SECTION_HEADER_H}px`,
+            marginTop: SECTION_GAP,
+          }}
+        >
+          Outputs
+        </div>
+        {data.outputs.length === 0 ? (
+          <div
+            className="text-xs text-muted-foreground/50 italic text-right"
+            style={{ height: ROW_H, lineHeight: `${ROW_H}px` }}
+          >
+            None
+          </div>
+        ) : (
+          data.outputs.map((o, idx) => (
+            <div
+              key={o.id}
+              className="flex items-center justify-end gap-1.5"
+              style={{ height: ROW_H, marginTop: idx === 0 ? 0 : ROW_GAP }}
+            >
+              <span className="text-[10px] text-muted-foreground truncate">
+                = {o.expression}
+              </span>
+              <span className="text-xs font-mono font-medium shrink-0" style={{ color: c }}>
+                {o.key}
               </span>
             </div>
           ))

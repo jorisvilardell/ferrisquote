@@ -60,12 +60,18 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
       ? estimators.find((e) => e.id === state.estimatorId) ?? null
       : null
 
-  // Autocomplete data
+  // Autocomplete data: only numeric fields make sense as operands in an
+  // estimator expression (text/date/select/boolean are not directly usable
+  // as a number — even a boolean answer isn't implicitly coerced on the
+  // backend for bare `@field` references).
   const availableFieldKeys =
-    flow?.steps.flatMap((s) => s.fields.map((f) => f.key)) ?? []
+    flow?.steps
+      .flatMap((s) => s.fields)
+      .filter((f) => f.config.type === "number")
+      .map((f) => f.key) ?? []
   const otherEstimators = estimators
     .filter((e) => e.id !== estimator?.id)
-    .map((e) => ({ id: e.id, name: e.name, variables: e.variables.map((v) => v.name) }))
+    .map((e) => ({ id: e.id, name: e.name, outputs: e.outputs.map((o) => o.key) }))
   const estimatorsIndex = estimators.map((e) => ({ id: e.id, name: e.name }))
 
   // Form submit handlers (local to the panel)

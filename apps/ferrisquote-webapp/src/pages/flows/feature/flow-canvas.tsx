@@ -188,7 +188,7 @@ function buildGraph(
       })
     }
 
-    if (isExpanded && step.fields.length > 0) {
+    if (step.fields.length > 0) {
       const totalFieldsHeight =
         step.fields.length * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP) - FIELD_NODE_GAP
       const hueStep = step.fields.length > 1 ? 200 / (step.fields.length - 1) : 0
@@ -196,10 +196,13 @@ function buildGraph(
       step.fields.forEach((field, j) => {
         const fieldNodeId = `field-${field.id}`
         const targetY = stepY + j * (FIELD_NODE_HEIGHT + FIELD_NODE_GAP)
-        const fieldY = targetY
-        const xOffset = FIELD_X_OFFSET
-        const opacity = 1
-        const pointerEvents = "auto" as const
+        // When collapsed, fields snap back under the step and fade out —
+        // keeps them in the DOM so React Flow can animate opacity + position
+        // instead of mounting/unmounting.
+        const fieldY = isExpanded ? targetY : stepY
+        const xOffset = isExpanded ? FIELD_X_OFFSET : 0
+        const opacity = isExpanded ? 1 : 0
+        const pointerEvents = isExpanded ? ("auto" as const) : ("none" as const)
         const color = `hsl(${28 + j * hueStep}, 85%, 55%)`
 
         const fieldNode: Node<FieldNodeData> = {
@@ -234,13 +237,19 @@ function buildGraph(
             strokeWidth: 1.5,
             stroke: color,
             opacity,
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            // Fade edges in slightly after the node position settles when
+            // expanding; snap-out fast when collapsing.
+            transition: isExpanded
+              ? "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.15s"
+              : "opacity 0.1s ease-out 0s",
           },
         })
       })
 
-      const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
-      yOffset += extraSpace + STEP_NODE_GAP
+      if (isExpanded) {
+        const extraSpace = Math.max(0, totalFieldsHeight - STEP_NODE_HEIGHT)
+        yOffset += extraSpace + STEP_NODE_GAP
+      }
     }
   }
 
@@ -275,8 +284,8 @@ function buildGraph(
   const estCrossDeps = new Map<string, Set<string>>()
   for (const est of estimators) {
     const deps = new Set<string>()
-    for (const v of est.variables) {
-      for (const ref of extractExprRefs(v.expression)) {
+    for (const o of est.outputs) {
+      for (const ref of extractExprRefs(o.expression)) {
         if (ref.type === "cross" && ref.estimatorId !== est.id) {
           deps.add(ref.estimatorId)
         }
@@ -331,14 +340,16 @@ function buildGraph(
     const x = ESTIMATOR_X_OFFSET + d * ESTIMATOR_X_STEP
     let y = 0
     for (const est of estsAtDepth) {
-      const varCount = est.variables.length
-      const nodeHeight = 54 + Math.max(varCount, 1) * 24
+      const inputCount = est.inputs.length
+      const outputCount = est.outputs.length
+      const nodeHeight =
+        54 + Math.max(inputCount, 1) * 24 + 24 + Math.max(outputCount, 1) * 24
       const estimatorNodeId = `estimator-${est.id}`
       const color = estIdToColor.get(est.id) ?? "hsl(335, 70%, 55%)"
 
-      const displayVariables = est.variables.map((v) => ({
-        ...v,
-        expression: idsToNames(v.expression, estimatorsIndex),
+      const displayOutputs = est.outputs.map((o) => ({
+        ...o,
+        expression: idsToNames(o.expression, estimatorsIndex),
       }))
 
       const estNode: Node<EstimatorNodeData> = {
@@ -352,7 +363,8 @@ function buildGraph(
         data: {
           name: est.name,
           description: est.description,
-          variables: displayVariables,
+          inputs: est.inputs,
+          outputs: displayOutputs,
           color,
           onDelete: () => onDeleteEstimator(est.id),
         },
@@ -362,33 +374,34 @@ function buildGraph(
     }
   }
 
-  const estVariableNameToId = new Map<string, Map<string, string>>()
+  // Build per-estimator lookup: output key → output id (for cross-ref edges)
+  const estOutputKeyToId = new Map<string, Map<string, string>>()
   for (const est of estimators) {
     const m = new Map<string, string>()
-    for (const v of est.variables) m.set(v.name, v.id)
-    estVariableNameToId.set(est.id, m)
+    for (const o of est.outputs) m.set(o.key, o.id)
+    estOutputKeyToId.set(est.id, m)
   }
 
   for (const est of estimators) {
     const estimatorNodeId = `estimator-${est.id}`
     const estColor = estIdToColor.get(est.id) ?? "hsl(330, 75%, 58%)"
 
-    for (const v of est.variables) {
-      const refs = extractExprRefs(v.expression)
+    for (const o of est.outputs) {
+      const refs = extractExprRefs(o.expression)
       for (const ref of refs) {
         if (ref.type === "cross") {
           const sourceNodeId = estIdToNodeId.get(ref.estimatorId)
           if (sourceNodeId && sourceNodeId !== estimatorNodeId) {
-            const sourceVarId = estVariableNameToId
+            const sourceOutputId = estOutputKeyToId
               .get(ref.estimatorId)
               ?.get(ref.variableName)
-            const sourceHandle = sourceVarId ? `source-${sourceVarId}` : "default-source"
+            const sourceHandle = sourceOutputId ? `source-${sourceOutputId}` : "default-source"
             edges.push({
-              id: `e-cross-${est.id}-${v.id}-${ref.estimatorId}.${ref.variableName}`,
+              id: `e-cross-${est.id}-${o.id}-${ref.estimatorId}.${ref.variableName}`,
               source: sourceNodeId,
               sourceHandle,
               target: estimatorNodeId,
-              targetHandle: `target-${v.id}`,
+              targetHandle: `target-${o.id}`,
               type: "smoothstep",
               animated: true,
               style: {
@@ -411,11 +424,11 @@ function buildGraph(
           const isAgg = ref.aggregation !== false
 
           edges.push({
-            id: `e-est-${est.id}-${v.id}-${ref.key}-${ref.aggregation || "direct"}`,
+            id: `e-est-${est.id}-${o.id}-${ref.key}-${ref.aggregation || "direct"}`,
             source: sourceId,
             sourceHandle: "right",
             target: estimatorNodeId,
-            targetHandle: `target-${v.id}`,
+            targetHandle: `target-${o.id}`,
             type: "smoothstep",
             animated: isAgg,
             style: {
@@ -546,9 +559,17 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
     }
 
     if (node.type !== "stepNode") return
+    // Toggle expand when the step is already selected in the panel; otherwise
+    // select + expand. Keeps a second click on the same step as "collapse".
+    const alreadySelected =
+      panelState?.mode === "step-details" && panelState.stepId === node.id
     setExpandedStepIds((prev) => {
       const next = new Set(prev)
-      next.add(node.id)
+      if (alreadySelected && next.has(node.id)) {
+        next.delete(node.id)
+      } else {
+        next.add(node.id)
+      }
       return next
     })
     setPanelState({ mode: "step-details", stepId: node.id })
