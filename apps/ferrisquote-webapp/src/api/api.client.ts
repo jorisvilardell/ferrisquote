@@ -165,6 +165,7 @@ export namespace Schemas {
     title: string;
   };
   export type EstimatorListResponse = { estimators: Array<EstimatorResponse> };
+  export type EvaluateBindingsRequest = { answers: Record<string, Array<StepIterationDto>>; user_id: string };
   export type EvaluateFlowResponse = {
     flat_results: Record<string, number>;
     results: Record<string, Record<string, number>>;
@@ -177,7 +178,12 @@ export namespace Schemas {
     iteration_counts: Record<string, number>;
     iteration_values: Record<string, Array<number>>;
   };
+  export type FlowEvaluationResponse = {
+    bindings: Record<string, Record<string, number>>;
+    flat: Record<string, number>;
+  };
   export type FlowListResponse = { flows: Array<FlowSummaryResponse> };
+  export type FlowPreviewResponse = { evaluation: FlowEvaluationResponse; submission: SubmissionResponse };
   export type FlowResponse = { description: string; id: string; name: string; steps: Array<StepResponse> };
   export type MessageResponse = { message: string };
   export type MoveFieldRequest = Partial<{
@@ -528,6 +534,26 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.EvaluateFlowResponse; 400: unknown; 404: unknown };
   };
+  export type post_Evaluate_bindings = {
+    method: "POST";
+    path: "/api/v1/flows/{flow_id}/evaluate-bindings";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+
+      body: Schemas.EvaluateBindingsRequest;
+    };
+    responses: { 200: Schemas.FlowEvaluationResponse; 400: unknown; 404: unknown };
+  };
+  export type post_Preview_flow = {
+    method: "POST";
+    path: "/api/v1/flows/{flow_id}/evaluate-bindings-preview";
+    requestFormat: "json";
+    parameters: {
+      path: { flow_id: string };
+    };
+    responses: { 200: Schemas.FlowPreviewResponse; 400: unknown; 404: unknown };
+  };
   export type post_Add_step = {
     method: "POST";
     path: "/api/v1/flows/{flow_id}/steps";
@@ -613,6 +639,8 @@ export type EndpointByMethod = {
     "/api/v1/flows/{flow_id}/bindings": Endpoints.post_Add_binding;
     "/api/v1/flows/{flow_id}/estimators": Endpoints.post_Create_estimator;
     "/api/v1/flows/{flow_id}/evaluate-all": Endpoints.post_Evaluate_flow;
+    "/api/v1/flows/{flow_id}/evaluate-bindings": Endpoints.post_Evaluate_bindings;
+    "/api/v1/flows/{flow_id}/evaluate-bindings-preview": Endpoints.post_Preview_flow;
     "/api/v1/flows/{flow_id}/steps": Endpoints.post_Add_step;
     "/api/v1/flows/{flow_id}/submissions": Endpoints.post_Submit_answers;
   };
