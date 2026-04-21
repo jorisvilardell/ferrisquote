@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import type { Schemas } from "@/api/api.client"
 import {
   useAddInput,
@@ -61,6 +62,7 @@ export function EstimatorDetailsPanel({
   estimatorsIndex: EstimatorIndex
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [editingName, setEditingName] = useState(false)
   // Accordion-style: only one input or output card expanded at a time.
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
@@ -685,12 +687,12 @@ export function EstimatorDetailsPanel({
       <div className="flex flex-col gap-3 px-5 py-4 flex-1 min-h-0 overflow-y-auto pb-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="estimator-desc" className="text-xs font-medium">
-            Description
+            {t("estimator.description")}
           </Label>
           <Textarea
             id="estimator-desc"
             rows={2}
-            placeholder="Optional — describe this estimator"
+            placeholder={t("estimator.description_placeholder")}
             value={descDisplay}
             onChange={(e) => drafts.setDesc(e.target.value)}
           />
@@ -698,22 +700,22 @@ export function EstimatorDetailsPanel({
 
         {isDirty && !nameValid && normalizedName.length > 0 && (
           <p className="text-xs text-destructive">
-            Name can only contain letters, digits, spaces and underscores.
+            {t("estimator.validation.name_chars")}
           </p>
         )}
         {isDirty && duplicateName && (
           <p className="text-xs text-destructive">
-            An estimator named "{normalizedName.replace(/_/g, " ")}" already exists.
+            {t("estimator.validation.name_duplicate", {
+              name: normalizedName.replace(/_/g, " "),
+            })}
           </p>
         )}
 
         {/* ─── Inputs ─── */}
         <h3 className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Inputs
+          {t("estimator.inputs")}
         </h3>
-        <p className="text-xs text-muted-foreground">
-          Parameters required to run this estimator. Types: number, boolean, product.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("estimator.inputs_help")}</p>
 
         {effectiveInputs.map((i) => (
           <InputCard
@@ -732,16 +734,14 @@ export function EstimatorDetailsPanel({
           onClick={handleAddInput}
         >
           <Plus className="w-3.5 h-3.5 mr-1.5" />
-          Add input
+          {t("estimator.add_input")}
         </Button>
 
         {/* ─── Outputs ─── */}
         <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Outputs
+          {t("estimator.outputs")}
         </h3>
-        <p className="text-xs text-muted-foreground">
-          Variables produced by the calculation. Reference inputs with <code className="font-mono bg-muted px-1 rounded">@input_key</code>.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("estimator.outputs_help")}</p>
 
         {effectiveOutputs.map((o) => (
           <OutputCard
@@ -771,17 +771,17 @@ export function EstimatorDetailsPanel({
           onClick={handleAddOutput}
         >
           <Plus className="w-3.5 h-3.5 mr-1.5" />
-          Add output
+          {t("estimator.add_output")}
         </Button>
 
         {/* ─── Execution context ─── */}
         {binding && (
           <>
             <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Execution context
+              {t("estimator.execution_context")}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Run once, or loop over each iteration of a repeatable step.
+              {t("estimator.execution_help")}
             </p>
             <Select
               value={mapOverStep ?? "__global__"}
@@ -807,18 +807,18 @@ export function EstimatorDetailsPanel({
                   value="__global__"
                   disabled={!contextOptionAllowed(null)}
                 >
-                  Global execution
+                  {t("estimator.global_execution")}
                 </SelectItem>
                 {repeatableSteps.length === 0 ? (
                   <SelectItem value="__none__" disabled>
-                    No repeatable steps in this flow
+                    {t("estimator.no_repeatable_steps")}
                   </SelectItem>
                 ) : (
                   repeatableSteps.map((s) => {
                     const allowed = contextOptionAllowed(s.id)
                     return (
                       <SelectItem key={s.id} value={s.id} disabled={!allowed}>
-                        Loop over: {s.title}
+                        {t("estimator.loop_over", { step: s.title })}
                         {!allowed ? " — conflicts with current usage" : ""}
                       </SelectItem>
                     )
@@ -828,13 +828,11 @@ export function EstimatorDetailsPanel({
             </Select>
             {pinnedRepeatableSteps.size > 0 && (
               <p className="text-[11px] text-muted-foreground/80">
-                Context is locked while fields from{" "}
-                <code className="font-mono bg-muted px-1 rounded">
-                  {[...pinnedRepeatableSteps]
+                {t("estimator.context_locked", {
+                  steps: [...pinnedRepeatableSteps]
                     .map((id) => flow.steps.find((s) => s.id === id)?.title ?? id)
-                    .join(", ")}
-                </code>{" "}
-                are referenced.
+                    .join(", "),
+                })}
               </p>
             )}
           </>
@@ -844,10 +842,10 @@ export function EstimatorDetailsPanel({
         {binding && hasInputs && (
           <>
             <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Arguments
+              {t("estimator.arguments")}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Map each input to a flow field or another binding's output.
+              {t("estimator.arguments_help")}
             </p>
 
             {effectiveInputs.map((input) => {
@@ -921,10 +919,10 @@ export function EstimatorDetailsPanel({
         {binding && showReduce && (
           <>
             <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Reduce
+              {t("estimator.reduce")}
             </h3>
             <p className="text-xs text-muted-foreground">
-              How to aggregate each output across iterations of the loop.
+              {t("estimator.reduce_help")}
             </p>
 
             {effectiveOutputs.map((out) => (
@@ -948,13 +946,13 @@ export function EstimatorDetailsPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sum">Sum</SelectItem>
-                    <SelectItem value="average">Average</SelectItem>
-                    <SelectItem value="max">Max</SelectItem>
-                    <SelectItem value="min">Min</SelectItem>
-                    <SelectItem value="count">Count</SelectItem>
-                    <SelectItem value="first">First</SelectItem>
-                    <SelectItem value="last">Last</SelectItem>
+                    <SelectItem value="sum">{t("aggregation.sum")}</SelectItem>
+                    <SelectItem value="average">{t("aggregation.average")}</SelectItem>
+                    <SelectItem value="max">{t("aggregation.max")}</SelectItem>
+                    <SelectItem value="min">{t("aggregation.min")}</SelectItem>
+                    <SelectItem value="count">{t("aggregation.count")}</SelectItem>
+                    <SelectItem value="first">{t("aggregation.first")}</SelectItem>
+                    <SelectItem value="last">{t("aggregation.last")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -970,7 +968,7 @@ export function EstimatorDetailsPanel({
           disabled={!isDirty || updateEstimator.isPending}
           onClick={handleCancel}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           className="flex-1"
@@ -980,7 +978,7 @@ export function EstimatorDetailsPanel({
           {updateEstimator.isPending ? (
             <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
           ) : null}
-          Save
+          {t("common.save")}
         </Button>
       </div>
     </>

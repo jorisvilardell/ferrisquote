@@ -1,0 +1,107 @@
+{
+  "node": {
+    "step": {
+      "repeatable_tooltip": "Repeatable step",
+      "no_description": "No description",
+      "fields_count_one": "{{count}} field",
+      "fields_count_other": "{{count}} fields"
+    },
+    "field": {
+      "types": {
+        "text": "text",
+        "number": "number",
+        "date": "date",
+        "boolean": "boolean",
+        "select": "select"
+      }
+    },
+    "estimator": {
+      "inputs": "Inputs",
+      "outputs": "Outputs",
+      "none": "None"
+    }
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "add": "Add",
+    "edit": "Edit",
+    "optional": "Optional",
+    "loading": "Loading…",
+    "not_mapped": "— Not mapped —"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "quotes": "Quotes",
+    "flows": "Flows",
+    "settings": "Settings",
+    "navigation": "Navigation",
+    "language": "Language"
+  },
+  "flow": {
+    "description": "Description",
+    "add_step": "Add step",
+    "add_field": "Add field"
+  },
+  "estimator": {
+    "description": "Description",
+    "description_placeholder": "Optional — describe this estimator",
+    "inputs": "Inputs",
+    "inputs_help": "Parameters required to run this estimator. Types: number, boolean, product.",
+    "outputs": "Outputs",
+    "outputs_help": "Variables produced by the calculation. Reference inputs with @input_key.",
+    "add_input": "Add input",
+    "add_output": "Add output",
+    "execution_context": "Execution context",
+    "execution_help": "Run once globally, or loop over each iteration of a repeatable step.",
+    "global_execution": "Global execution",
+    "loop_over": "Loop over: {{step}}",
+    "no_repeatable_steps": "No repeatable steps in this flow",
+    "arguments": "Arguments",
+    "arguments_help": "Map each input to a flow field or another binding's output.",
+    "reduce": "Reduce",
+    "reduce_help": "How to aggregate each output across iterations of the loop.",
+    "context_locked": "Context is locked while fields from {{steps}} are referenced.",
+    "validation": {
+      "name_chars": "Name can only contain letters, digits, spaces and underscores.",
+      "name_duplicate": "An estimator named \"{{name}}\" already exists."
+    }
+  },
+  "input": {
+    "key": "Key",
+    "type": "Type",
+    "type_number": "Number",
+    "type_boolean": "Boolean",
+    "type_product": "Product",
+    "label_filter": "Label filter (optional)",
+    "delete_title": "Delete input?",
+    "delete_confirm": "\"{{key}}\" will be permanently deleted."
+  },
+  "output": {
+    "key": "Key",
+    "expression": "Expression",
+    "expression_placeholder": "e.g. @surface * @prix_unitaire * 1.2",
+    "delete_title": "Delete output?",
+    "delete_confirm": "\"{{key}}\" will be permanently deleted."
+  },
+  "aggregation": {
+    "sum": "Sum",
+    "average": "Average",
+    "max": "Max",
+    "min": "Min",
+    "count": "Count",
+    "first": "First",
+    "last": "Last"
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "update_failed": "Update failed: {{msg}}",
+    "signature_update_failed": "Signature update failed: {{msg}}",
+    "wiring_update_failed": "Wiring update failed: {{msg}}",
+    "field_not_numeric": "Field \"{{key}}\" is not numeric",
+    "field_needs_context": "Field \"{{label}}\" belongs to repeatable step \"{{step}}\". Set the execution context to loop over this step first.",
+    "context_in_use": "Cannot change execution context — fields from {{steps}} are in use. Remove those references first."
+  }
+}

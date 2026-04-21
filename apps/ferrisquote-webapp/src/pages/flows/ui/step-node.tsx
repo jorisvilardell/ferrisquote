@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react"
 import { Trash2, Repeat } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import type { Schemas } from "@/api/api.client"
 
@@ -19,6 +20,7 @@ type StepNodeProps = NodeProps<Node<StepNodeData>>
 const STEP_COLOR = "hsl(28, 85%, 55%)"
 
 export function StepNode({ data, dragging, selected }: StepNodeProps) {
+  const { t } = useTranslation()
   return (
     <div
       className={cn(
@@ -63,7 +65,7 @@ export function StepNode({ data, dragging, selected }: StepNodeProps) {
         <span className="text-xs font-mono text-muted-foreground">{data.index}</span>
         <p className="text-base font-semibold leading-tight flex-1 truncate">{data.title}</p>
         {data.isRepeatable && (
-          <span className="flex items-center gap-1 text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full shrink-0" title="Repeatable step">
+          <span className="flex items-center gap-1 text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full shrink-0" title={t("node.step.repeatable_tooltip")}>
             <Repeat className="w-3 h-3" />
           </span>
         )}
@@ -74,10 +76,10 @@ export function StepNode({ data, dragging, selected }: StepNodeProps) {
         {data.description ? (
           <p className="text-xs text-muted-foreground leading-tight">{data.description}</p>
         ) : (
-          <p className="text-xs text-muted-foreground/50 italic">No description</p>
+          <p className="text-xs text-muted-foreground/50 italic">{t("node.step.no_description")}</p>
         )}
         <p className="text-xs text-muted-foreground mt-1.5">
-          {data.fields.length} field{data.fields.length !== 1 ? "s" : ""}
+          {t("node.step.fields_count", { count: data.fields.length })}
         </p>
       </div>
 
