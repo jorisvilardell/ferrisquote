@@ -58,7 +58,8 @@ async fn load_variables_for_estimators(
             EstimatorVariableId::from_uuid(row.get("id")),
             row.get("name"),
             row.get("expression"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
         );
         map.entry(row.get("estimator_id")).or_default().push(var);
     }
@@ -84,14 +85,13 @@ impl EstimatorRepository for PostgresEstimatorRepository {
     }
 
     async fn get_estimator(&self, id: EstimatorId) -> Result<Estimator, DomainError> {
-        let row = sqlx::query(
-            "SELECT id, flow_id, name, description FROM estimators WHERE id = $1",
-        )
-        .bind(id.into_uuid())
-        .fetch_optional(&*self.pool)
-        .await
-        .map_err(|e| DomainError::repository(e.to_string()))?
-        .ok_or_else(|| DomainError::not_found("Estimator", id.to_string()))?;
+        let row =
+            sqlx::query("SELECT id, flow_id, name, description FROM estimators WHERE id = $1")
+                .bind(id.into_uuid())
+                .fetch_optional(&*self.pool)
+                .await
+                .map_err(|e| DomainError::repository(e.to_string()))?
+                .ok_or_else(|| DomainError::not_found("Estimator", id.to_string()))?;
 
         let est_uuid: Uuid = row.get("id");
         let mut vars_map = load_variables_for_estimators(&self.pool, &[est_uuid]).await?;
@@ -101,7 +101,8 @@ impl EstimatorRepository for PostgresEstimatorRepository {
             EstimatorId::from_uuid(est_uuid),
             FlowId::from_uuid(row.get("flow_id")),
             row.get("name"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
             variables,
         ))
     }
@@ -132,7 +133,8 @@ impl EstimatorRepository for PostgresEstimatorRepository {
                     EstimatorId::from_uuid(eid),
                     FlowId::from_uuid(row.get("flow_id")),
                     row.get("name"),
-                    row.get::<Option<String>, _>("description").unwrap_or_default(),
+                    row.get::<Option<String>, _>("description")
+                        .unwrap_or_default(),
                     variables,
                 )
             })
@@ -171,7 +173,8 @@ impl EstimatorRepository for PostgresEstimatorRepository {
             EstimatorId::from_uuid(est_uuid),
             FlowId::from_uuid(row.get("flow_id")),
             row.get("name"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
             variables,
         ))
     }
@@ -240,7 +243,8 @@ impl EstimatorRepository for PostgresEstimatorRepository {
             EstimatorVariableId::from_uuid(row.get("id")),
             row.get("name"),
             row.get("expression"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
         ))
     }
 
