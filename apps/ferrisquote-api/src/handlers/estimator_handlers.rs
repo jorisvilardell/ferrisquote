@@ -5,24 +5,73 @@ use axum::{
 };
 use ferrisquote_domain::domain::{
     estimator::{
-        entities::{ids::{EstimatorId, EstimatorVariableId}, submission::SubmissionData},
+        entities::{
+            ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+            output::EstimatorOutput,
+            parameter::{EstimatorParameter, EstimatorParameterType},
+            submission::SubmissionData,
+        },
         ports::EstimatorService,
     },
     flows::ports::{FieldService, FlowService, StepService},
+    submission::ports::SubmissionService,
 };
 use ferrisquote_domain::FlowId;
 use validator::Validate;
 
 use crate::{
     dto::{
-        ApiResponse, CreateEstimatorRequest, CreateVariableRequest, EstimatorListResponse,
-        EstimatorResponse, EvaluateFlowResponse, EvaluateRequest, EvaluateResponse,
-        EvaluateSubmissionRequest, MessageResponse, UpdateEstimatorRequest,
-        UpdateVariableRequest, VariableResponse,
+        ApiResponse, CreateEstimatorRequest, CreateInputRequest, CreateOutputRequest,
+        EstimatorListResponse, EstimatorParameterTypeDto, EstimatorResponse, EvaluateFlowResponse,
+        EvaluateRequest, EvaluateResponse, EvaluateSubmissionRequest, InputResponse,
+        MessageResponse, OutputResponse, UpdateEstimatorRequest, UpdateInputRequest,
+        UpdateOutputRequest,
     },
     error::ApiResult,
     state::AppState,
 };
+
+// ============================================================================
+// Mappers
+// ============================================================================
+
+fn domain_param_type(dto: EstimatorParameterTypeDto) -> EstimatorParameterType {
+    match dto {
+        EstimatorParameterTypeDto::Number => EstimatorParameterType::Number,
+        EstimatorParameterTypeDto::Boolean => EstimatorParameterType::Boolean,
+        EstimatorParameterTypeDto::Product { label_filter } => {
+            EstimatorParameterType::Product { label_filter }
+        }
+    }
+}
+
+fn dto_param_type(pt: EstimatorParameterType) -> EstimatorParameterTypeDto {
+    match pt {
+        EstimatorParameterType::Number => EstimatorParameterTypeDto::Number,
+        EstimatorParameterType::Boolean => EstimatorParameterTypeDto::Boolean,
+        EstimatorParameterType::Product { label_filter } => {
+            EstimatorParameterTypeDto::Product { label_filter }
+        }
+    }
+}
+
+fn map_input(i: EstimatorParameter) -> InputResponse {
+    InputResponse {
+        id: i.id.into_uuid(),
+        key: i.key,
+        description: i.description,
+        parameter_type: dto_param_type(i.parameter_type),
+    }
+}
+
+fn map_output(o: EstimatorOutput) -> OutputResponse {
+    OutputResponse {
+        id: o.id.into_uuid(),
+        key: o.key,
+        expression: o.expression,
+        description: o.description,
+    }
+}
 
 fn map_estimator(e: ferrisquote_domain::Estimator) -> EstimatorResponse {
     EstimatorResponse {
@@ -30,16 +79,8 @@ fn map_estimator(e: ferrisquote_domain::Estimator) -> EstimatorResponse {
         flow_id: e.flow_id.into_uuid(),
         name: e.name,
         description: e.description,
-        variables: e.variables.into_iter().map(map_variable).collect(),
-    }
-}
-
-fn map_variable(v: ferrisquote_domain::EstimatorVariable) -> VariableResponse {
-    VariableResponse {
-        id: v.id.into_uuid(),
-        name: v.name,
-        expression: v.expression,
-        description: v.description,
+        inputs: e.inputs.into_iter().map(map_input).collect(),
+        outputs: e.outputs.into_iter().map(map_output).collect(),
     }
 }
 
@@ -58,7 +99,7 @@ fn map_variable(v: ferrisquote_domain::EstimatorVariable) -> VariableResponse {
     ),
     tag = "estimators"
 )]
-pub async fn create_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn create_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(flow_id): Path<String>,
     Json(request): Json<CreateEstimatorRequest>,
@@ -86,7 +127,7 @@ pub async fn create_estimator<FS: FlowService + StepService + FieldService, ES: 
     ),
     tag = "estimators"
 )]
-pub async fn list_estimators<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn list_estimators<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<EstimatorListResponse>>> {
@@ -113,7 +154,7 @@ pub async fn list_estimators<FS: FlowService + StepService + FieldService, ES: E
     ),
     tag = "estimators"
 )]
-pub async fn get_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn get_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(estimator_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<EstimatorResponse>>> {
@@ -135,7 +176,7 @@ pub async fn get_estimator<FS: FlowService + StepService + FieldService, ES: Est
     ),
     tag = "estimators"
 )]
-pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<UpdateEstimatorRequest>,
@@ -161,7 +202,7 @@ pub async fn update_estimator<FS: FlowService + StepService + FieldService, ES: 
     ),
     tag = "estimators"
 )]
-pub async fn delete_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn delete_estimator<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(estimator_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
@@ -177,34 +218,141 @@ pub async fn delete_estimator<FS: FlowService + StepService + FieldService, ES: 
 }
 
 // ============================================================================
-// Variable CRUD
+// Input CRUD
 // ============================================================================
 
 #[utoipa::path(
     post,
-    path = "/api/v1/estimators/{estimator_id}/variables",
+    path = "/api/v1/estimators/{estimator_id}/inputs",
     params(("estimator_id" = String, Path, description = "Estimator UUID")),
-    request_body = CreateVariableRequest,
+    request_body = CreateInputRequest,
     responses(
-        (status = 201, description = "Variable created", body = VariableResponse),
+        (status = 201, description = "Input created", body = InputResponse),
         (status = 400, description = "Validation error"),
         (status = 404, description = "Estimator not found"),
     ),
-    tag = "estimator_variables"
+    tag = "estimator_signature"
 )]
-pub async fn add_variable<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn add_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(estimator_id): Path<String>,
-    Json(request): Json<CreateVariableRequest>,
-) -> ApiResult<(StatusCode, Json<ApiResponse<VariableResponse>>)> {
+    Json(request): Json<CreateInputRequest>,
+) -> ApiResult<(StatusCode, Json<ApiResponse<InputResponse>>)> {
     request.validate()?;
 
     let id = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
-    let variable = state
+    let input = state
         .estimator_service
-        .add_variable(
+        .add_input(
             id,
-            request.name,
+            request.key,
+            request.description.unwrap_or_default(),
+            domain_param_type(request.parameter_type),
+        )
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiResponse::success(map_input(input))),
+    ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/estimators/{estimator_id}/inputs/{input_id}",
+    params(
+        ("estimator_id" = String, Path, description = "Estimator UUID"),
+        ("input_id" = String, Path, description = "Input UUID"),
+    ),
+    request_body = UpdateInputRequest,
+    responses(
+        (status = 200, description = "Input updated", body = InputResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Input not found"),
+    ),
+    tag = "estimator_signature"
+)]
+pub async fn update_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
+    State(state): State<AppState<FS, ES, SS>>,
+    Path((estimator_id, input_id)): Path<(String, String)>,
+    Json(request): Json<UpdateInputRequest>,
+) -> ApiResult<Json<ApiResponse<InputResponse>>> {
+    request.validate()?;
+
+    let eid = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
+    let iid = EstimatorInputId::from_uuid(uuid::Uuid::parse_str(&input_id)?);
+    let input = state
+        .estimator_service
+        .update_input(
+            eid,
+            iid,
+            request.key,
+            request.description,
+            request.parameter_type.map(domain_param_type),
+        )
+        .await?;
+
+    Ok(Json(ApiResponse::success(map_input(input))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/estimators/{estimator_id}/inputs/{input_id}",
+    params(
+        ("estimator_id" = String, Path, description = "Estimator UUID"),
+        ("input_id" = String, Path, description = "Input UUID"),
+    ),
+    responses(
+        (status = 200, description = "Input deleted", body = MessageResponse),
+        (status = 404, description = "Input not found"),
+    ),
+    tag = "estimator_signature"
+)]
+pub async fn remove_input<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
+    State(state): State<AppState<FS, ES, SS>>,
+    Path((estimator_id, input_id)): Path<(String, String)>,
+) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
+    let eid = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
+    let iid = EstimatorInputId::from_uuid(uuid::Uuid::parse_str(&input_id)?);
+    state.estimator_service.remove_input(eid, iid).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse::success(MessageResponse::new(
+            "Input deleted successfully",
+        ))),
+    ))
+}
+
+// ============================================================================
+// Output CRUD
+// ============================================================================
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/estimators/{estimator_id}/outputs",
+    params(("estimator_id" = String, Path, description = "Estimator UUID")),
+    request_body = CreateOutputRequest,
+    responses(
+        (status = 201, description = "Output created", body = OutputResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Estimator not found"),
+    ),
+    tag = "estimator_signature"
+)]
+pub async fn add_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
+    State(state): State<AppState<FS, ES, SS>>,
+    Path(estimator_id): Path<String>,
+    Json(request): Json<CreateOutputRequest>,
+) -> ApiResult<(StatusCode, Json<ApiResponse<OutputResponse>>)> {
+    request.validate()?;
+
+    let id = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
+    let output = state
+        .estimator_service
+        .add_output(
+            id,
+            request.key,
             request.expression,
             request.description.unwrap_or_default(),
         )
@@ -212,59 +360,67 @@ pub async fn add_variable<FS: FlowService + StepService + FieldService, ES: Esti
 
     Ok((
         StatusCode::CREATED,
-        Json(ApiResponse::success(map_variable(variable))),
+        Json(ApiResponse::success(map_output(output))),
     ))
 }
 
 #[utoipa::path(
     put,
-    path = "/api/v1/variables/{variable_id}",
-    params(("variable_id" = String, Path, description = "Variable UUID")),
-    request_body = UpdateVariableRequest,
-    responses(
-        (status = 200, description = "Variable updated", body = VariableResponse),
-        (status = 400, description = "Validation error"),
-        (status = 404, description = "Variable not found"),
+    path = "/api/v1/estimators/{estimator_id}/outputs/{output_id}",
+    params(
+        ("estimator_id" = String, Path, description = "Estimator UUID"),
+        ("output_id" = String, Path, description = "Output UUID"),
     ),
-    tag = "estimator_variables"
+    request_body = UpdateOutputRequest,
+    responses(
+        (status = 200, description = "Output updated", body = OutputResponse),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Output not found"),
+    ),
+    tag = "estimator_signature"
 )]
-pub async fn update_variable<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn update_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
-    Path(variable_id): Path<String>,
-    Json(request): Json<UpdateVariableRequest>,
-) -> ApiResult<Json<ApiResponse<VariableResponse>>> {
+    Path((estimator_id, output_id)): Path<(String, String)>,
+    Json(request): Json<UpdateOutputRequest>,
+) -> ApiResult<Json<ApiResponse<OutputResponse>>> {
     request.validate()?;
 
-    let id = EstimatorVariableId::from_uuid(uuid::Uuid::parse_str(&variable_id)?);
-    let variable = state
+    let eid = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
+    let oid = EstimatorOutputId::from_uuid(uuid::Uuid::parse_str(&output_id)?);
+    let output = state
         .estimator_service
-        .update_variable(id, request.name, request.expression, request.description)
+        .update_output(eid, oid, request.key, request.expression, request.description)
         .await?;
 
-    Ok(Json(ApiResponse::success(map_variable(variable))))
+    Ok(Json(ApiResponse::success(map_output(output))))
 }
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/variables/{variable_id}",
-    params(("variable_id" = String, Path, description = "Variable UUID")),
-    responses(
-        (status = 200, description = "Variable deleted", body = MessageResponse),
-        (status = 404, description = "Variable not found"),
+    path = "/api/v1/estimators/{estimator_id}/outputs/{output_id}",
+    params(
+        ("estimator_id" = String, Path, description = "Estimator UUID"),
+        ("output_id" = String, Path, description = "Output UUID"),
     ),
-    tag = "estimator_variables"
+    responses(
+        (status = 200, description = "Output deleted", body = MessageResponse),
+        (status = 404, description = "Output not found"),
+    ),
+    tag = "estimator_signature"
 )]
-pub async fn remove_variable<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn remove_output<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
-    Path(variable_id): Path<String>,
+    Path((estimator_id, output_id)): Path<(String, String)>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
-    let id = EstimatorVariableId::from_uuid(uuid::Uuid::parse_str(&variable_id)?);
-    state.estimator_service.remove_variable(id).await?;
+    let eid = EstimatorId::from_uuid(uuid::Uuid::parse_str(&estimator_id)?);
+    let oid = EstimatorOutputId::from_uuid(uuid::Uuid::parse_str(&output_id)?);
+    state.estimator_service.remove_output(eid, oid).await?;
 
     Ok((
         StatusCode::OK,
         Json(ApiResponse::success(MessageResponse::new(
-            "Variable deleted successfully",
+            "Output deleted successfully",
         ))),
     ))
 }
@@ -285,7 +441,7 @@ pub async fn remove_variable<FS: FlowService + StepService + FieldService, ES: E
     ),
     tag = "estimators"
 )]
-pub async fn evaluate<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn evaluate<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<EvaluateRequest>,
@@ -311,7 +467,7 @@ pub async fn evaluate<FS: FlowService + StepService + FieldService, ES: Estimato
     ),
     tag = "estimators"
 )]
-pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(estimator_id): Path<String>,
     Json(request): Json<EvaluateSubmissionRequest>,
@@ -338,12 +494,12 @@ pub async fn evaluate_submission<FS: FlowService + StepService + FieldService, E
     request_body = EvaluateSubmissionRequest,
     responses(
         (status = 200, description = "Flow-wide evaluation result", body = EvaluateFlowResponse),
-        (status = 400, description = "Evaluation error (cycle, missing ref, etc.)"),
+        (status = 400, description = "Evaluation error"),
         (status = 404, description = "Flow not found"),
     ),
     tag = "estimators"
 )]
-pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
+pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: SubmissionService>(
     State(state): State<AppState<FS, ES, SS>>,
     Path(flow_id): Path<String>,
     Json(request): Json<EvaluateSubmissionRequest>,
@@ -358,7 +514,6 @@ pub async fn evaluate_flow<FS: FlowService + StepService + FieldService, ES: Est
 
     let nested = state.estimator_service.evaluate_flow(flow_id, data).await?;
 
-    // Flatten to "EstName.varName" → value for convenience
     let mut flat = std::collections::HashMap::new();
     for (est_name, vars) in &nested {
         for (var_name, value) in vars {

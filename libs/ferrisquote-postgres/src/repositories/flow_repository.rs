@@ -77,14 +77,16 @@ async fn load_steps_for_flows(
         .map_err(|e| DomainError::repository(e.to_string()))?;
 
         for row in field_rows {
-            let config_json: sqlx::types::Json<FieldConfig> = row
-                .try_get("config")
-                .map_err(|e| DomainError::internal(format!("Failed to decode field config: {e}")))?;
+            let config_json: sqlx::types::Json<FieldConfig> =
+                row.try_get("config").map_err(|e| {
+                    DomainError::internal(format!("Failed to decode field config: {e}"))
+                })?;
             let field = Field::with_id(
                 FieldId::from_uuid(row.get("id")),
                 row.get("key"),
                 row.get("label"),
-                row.get::<Option<String>, _>("description").unwrap_or_default(),
+                row.get::<Option<String>, _>("description")
+                    .unwrap_or_default(),
                 row.get("rank"),
                 config_json.0,
             );
@@ -103,7 +105,8 @@ async fn load_steps_for_flows(
         let step = Step::with_fields(
             StepId::from_uuid(step_id),
             row.get("title"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
             row.get("rank"),
             row.get("is_repeatable"),
             row.get("repeat_label"),
@@ -125,7 +128,8 @@ fn build_flow(row: &sqlx::postgres::PgRow, steps: Vec<Step>) -> Flow {
     Flow::with_steps(
         FlowId::from_uuid(row.get("id")),
         row.get("name"),
-        row.get::<Option<String>, _>("description").unwrap_or_default(),
+        row.get::<Option<String>, _>("description")
+            .unwrap_or_default(),
         steps,
     )
 }
@@ -166,12 +170,10 @@ impl FlowRepository for PostgresFlowRepository {
     }
 
     async fn list_flows(&self) -> Result<Vec<Flow>, DomainError> {
-        let rows = sqlx::query(
-            "SELECT id, name, description FROM flows ORDER BY created_at DESC",
-        )
-        .fetch_all(&*self.pool)
-        .await
-        .map_err(|e| DomainError::repository(e.to_string()))?;
+        let rows = sqlx::query("SELECT id, name, description FROM flows ORDER BY created_at DESC")
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| DomainError::repository(e.to_string()))?;
 
         let flow_ids: Vec<Uuid> = rows.iter().map(|r| r.get("id")).collect();
         let mut steps_map = load_steps_for_flows(&self.pool, &flow_ids).await?;
@@ -280,14 +282,16 @@ impl StepRepository for PostgresFlowRepository {
 
         let mut fields = Vec::new();
         for fr in field_rows {
-            let config_json: sqlx::types::Json<FieldConfig> = fr
-                .try_get("config")
-                .map_err(|e| DomainError::internal(format!("Failed to decode field config: {e}")))?;
+            let config_json: sqlx::types::Json<FieldConfig> =
+                fr.try_get("config").map_err(|e| {
+                    DomainError::internal(format!("Failed to decode field config: {e}"))
+                })?;
             fields.push(Field::with_id(
                 FieldId::from_uuid(fr.get("id")),
                 fr.get("key"),
                 fr.get("label"),
-                fr.get::<Option<String>, _>("description").unwrap_or_default(),
+                fr.get::<Option<String>, _>("description")
+                    .unwrap_or_default(),
                 fr.get("rank"),
                 config_json.0,
             ));
@@ -296,7 +300,8 @@ impl StepRepository for PostgresFlowRepository {
         Ok(Step::with_fields(
             StepId::from_uuid(step_uuid),
             row.get("title"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
             row.get("rank"),
             row.get("is_repeatable"),
             row.get("repeat_label"),
@@ -356,7 +361,8 @@ impl StepRepository for PostgresFlowRepository {
         Ok(Step::with_fields(
             StepId::from_uuid(row.get("id")),
             row.get("title"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
             row.get("rank"),
             row.get("is_repeatable"),
             row.get("repeat_label"),
@@ -443,7 +449,8 @@ impl FieldRepository for PostgresFlowRepository {
             FieldId::from_uuid(row.get("id")),
             row.get("key"),
             row.get("label"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
+            row.get::<Option<String>, _>("description")
+                .unwrap_or_default(),
             row.get("rank"),
             config_json.0,
         ))
@@ -485,14 +492,16 @@ impl FieldRepository for PostgresFlowRepository {
 
         let mut fields = Vec::new();
         for row in rows {
-            let config_json: sqlx::types::Json<FieldConfig> = row
-                .try_get("config")
-                .map_err(|e| DomainError::internal(format!("Failed to decode field config: {e}")))?;
+            let config_json: sqlx::types::Json<FieldConfig> =
+                row.try_get("config").map_err(|e| {
+                    DomainError::internal(format!("Failed to decode field config: {e}"))
+                })?;
             fields.push(Field::with_id(
                 FieldId::from_uuid(row.get("id")),
                 row.get("key"),
                 row.get("label"),
-                row.get::<Option<String>, _>("description").unwrap_or_default(),
+                row.get::<Option<String>, _>("description")
+                    .unwrap_or_default(),
                 row.get("rank"),
                 config_json.0,
             ));

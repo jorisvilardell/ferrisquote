@@ -114,7 +114,9 @@ where
         let flow = self.flow_repo.get_flow(flow_id).await?;
 
         let next_rank = match flow.steps.get(flow.steps.len().saturating_sub(1)) {
-            Some(last_step) => self.rank_service.after(&Rank::from_string(last_step.rank.clone())),
+            Some(last_step) => self
+                .rank_service
+                .after(&Rank::from_string(last_step.rank.clone())),
             None => self.rank_service.initial(),
         };
 
@@ -144,16 +146,25 @@ where
         };
 
         let new_rank = match (after_rank, before_rank) {
-            (Some(a), Some(b)) => {
-                self.rank_service.between(&Rank::from_string(a), &Rank::from_string(b))
-            }
+            (Some(a), Some(b)) => self
+                .rank_service
+                .between(&Rank::from_string(a), &Rank::from_string(b)),
             (Some(a), None) => self.rank_service.after(&Rank::from_string(a)),
             (None, Some(b)) => self.rank_service.before(&Rank::from_string(b)),
             (None, None) => self.rank_service.initial(),
         };
 
         self.step_repo
-            .update_step(step_id, None, None, Some(new_rank.as_str().to_string()), None, None, None, None)
+            .update_step(
+                step_id,
+                None,
+                None,
+                Some(new_rank.as_str().to_string()),
+                None,
+                None,
+                None,
+                None,
+            )
             .await?;
 
         let flows = self.flow_repo.list_flows().await?;
@@ -174,7 +185,16 @@ where
         max_repeats: Option<Option<u32>>,
     ) -> Result<Step, DomainError> {
         self.step_repo
-            .update_step(step_id, title, description, None, is_repeatable, repeat_label, min_repeats, max_repeats)
+            .update_step(
+                step_id,
+                title,
+                description,
+                None,
+                is_repeatable,
+                repeat_label,
+                min_repeats,
+                max_repeats,
+            )
             .await
     }
 }
@@ -196,7 +216,9 @@ where
         let step = self.step_repo.get_step(step_id).await?;
 
         let next_rank = match step.fields.get(step.fields.len().saturating_sub(1)) {
-            Some(last_field) => self.rank_service.after(&Rank::from_string(last_field.rank.clone())),
+            Some(last_field) => self
+                .rank_service
+                .after(&Rank::from_string(last_field.rank.clone())),
             None => self.rank_service.initial(),
         };
 
@@ -267,15 +289,16 @@ where
         let before_rank = before_id.and_then(find_field_rank);
 
         let new_rank = match (after_rank, before_rank) {
-            (Some(a), Some(b)) => {
-                self.rank_service.between(&Rank::from_string(a), &Rank::from_string(b))
-            }
+            (Some(a), Some(b)) => self
+                .rank_service
+                .between(&Rank::from_string(a), &Rank::from_string(b)),
             (Some(a), None) => self.rank_service.after(&Rank::from_string(a)),
             (None, Some(b)) => self.rank_service.before(&Rank::from_string(b)),
             (None, None) => {
                 if let Ok(ts) = self.step_repo.get_step(target_step).await {
                     if let Some(last) = ts.fields.get(ts.fields.len().saturating_sub(1)) {
-                        self.rank_service.after(&Rank::from_string(last.rank.clone()))
+                        self.rank_service
+                            .after(&Rank::from_string(last.rank.clone()))
                     } else {
                         self.rank_service.initial()
                     }

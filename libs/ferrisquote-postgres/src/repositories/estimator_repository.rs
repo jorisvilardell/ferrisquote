@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use ferrisquote_domain::domain::{
@@ -6,15 +5,15 @@ use ferrisquote_domain::domain::{
     estimator::{
         entities::{
             estimator::Estimator,
-            ids::{EstimatorId, EstimatorVariableId},
-            variable::EstimatorVariable,
+            ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+            output::EstimatorOutput,
+            parameter::{EstimatorParameter, EstimatorParameterType},
         },
         ports::EstimatorRepository,
     },
     flows::entities::ids::FlowId,
 };
 use sqlx::{PgPool, Row};
-use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct PostgresEstimatorRepository {
@@ -33,49 +32,74 @@ impl PostgresEstimatorRepository {
     }
 }
 
-async fn load_variables_for_estimators(
+fn row_to_estimator(row: &sqlx::postgres::PgRow) -> Result<Estimator, DomainError> {
+    let inputs_json: sqlx::types::Json<Vec<EstimatorParameter>> = row
+        .try_get("inputs")
+        .map_err(|e| DomainError::internal(format!("Failed to decode inputs: {e}")))?;
+    let outputs_json: sqlx::types::Json<Vec<EstimatorOutput>> = row
+        .try_get("outputs")
+        .map_err(|e| DomainError::internal(format!("Failed to decode outputs: {e}")))?;
+
+    Ok(Estimator::with_full(
+        EstimatorId::from_uuid(row.get("id")),
+        FlowId::from_uuid(row.get("flow_id")),
+        row.get("name"),
+        row.get::<Option<String>, _>("description").unwrap_or_default(),
+        inputs_json.0,
+        outputs_json.0,
+    ))
+}
+
+async fn write_inputs(
     pool: &PgPool,
-    estimator_ids: &[Uuid],
-) -> Result<HashMap<Uuid, Vec<EstimatorVariable>>, DomainError> {
-    if estimator_ids.is_empty() {
-        return Ok(HashMap::new());
+    estimator_id: EstimatorId,
+    inputs: &[EstimatorParameter],
+) -> Result<(), DomainError> {
+    let json = sqlx::types::Json(inputs);
+    let result = sqlx::query("UPDATE estimators SET inputs = $2, updated_at = NOW() WHERE id = $1")
+        .bind(estimator_id.into_uuid())
+        .bind(json)
+        .execute(pool)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?;
+    if result.rows_affected() == 0 {
+        return Err(DomainError::not_found("Estimator", estimator_id.to_string()));
     }
+    Ok(())
+}
 
-    let rows = sqlx::query(
-        "SELECT id, estimator_id, name, expression, description \
-         FROM estimator_variables \
-         WHERE estimator_id = ANY($1) \
-         ORDER BY estimator_id, rank",
-    )
-    .bind(estimator_ids)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| DomainError::repository(e.to_string()))?;
-
-    let mut map: HashMap<Uuid, Vec<EstimatorVariable>> = HashMap::new();
-    for row in rows {
-        let var = EstimatorVariable::with_id(
-            EstimatorVariableId::from_uuid(row.get("id")),
-            row.get("name"),
-            row.get("expression"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
-        );
-        map.entry(row.get("estimator_id")).or_default().push(var);
+async fn write_outputs(
+    pool: &PgPool,
+    estimator_id: EstimatorId,
+    outputs: &[EstimatorOutput],
+) -> Result<(), DomainError> {
+    let json = sqlx::types::Json(outputs);
+    let result = sqlx::query("UPDATE estimators SET outputs = $2, updated_at = NOW() WHERE id = $1")
+        .bind(estimator_id.into_uuid())
+        .bind(json)
+        .execute(pool)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?;
+    if result.rows_affected() == 0 {
+        return Err(DomainError::not_found("Estimator", estimator_id.to_string()));
     }
-
-    Ok(map)
+    Ok(())
 }
 
 impl EstimatorRepository for PostgresEstimatorRepository {
     async fn create_estimator(&self, estimator: Estimator) -> Result<Estimator, DomainError> {
+        let inputs_json = sqlx::types::Json(&estimator.inputs);
+        let outputs_json = sqlx::types::Json(&estimator.outputs);
         sqlx::query(
-            "INSERT INTO estimators (id, flow_id, name, description, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, NOW(), NOW())",
+            "INSERT INTO estimators (id, flow_id, name, description, inputs, outputs, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())",
         )
         .bind(estimator.id.into_uuid())
         .bind(estimator.flow_id.into_uuid())
         .bind(&estimator.name)
         .bind(&estimator.description)
+        .bind(inputs_json)
+        .bind(outputs_json)
         .execute(&*self.pool)
         .await
         .map_err(|e| DomainError::repository(e.to_string()))?;
@@ -85,7 +109,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
 
     async fn get_estimator(&self, id: EstimatorId) -> Result<Estimator, DomainError> {
         let row = sqlx::query(
-            "SELECT id, flow_id, name, description FROM estimators WHERE id = $1",
+            "SELECT id, flow_id, name, description, inputs, outputs FROM estimators WHERE id = $1",
         )
         .bind(id.into_uuid())
         .fetch_optional(&*self.pool)
@@ -93,17 +117,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         .map_err(|e| DomainError::repository(e.to_string()))?
         .ok_or_else(|| DomainError::not_found("Estimator", id.to_string()))?;
 
-        let est_uuid: Uuid = row.get("id");
-        let mut vars_map = load_variables_for_estimators(&self.pool, &[est_uuid]).await?;
-        let variables = vars_map.remove(&est_uuid).unwrap_or_default();
-
-        Ok(Estimator::with_full(
-            EstimatorId::from_uuid(est_uuid),
-            FlowId::from_uuid(row.get("flow_id")),
-            row.get("name"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
-            variables,
-        ))
+        row_to_estimator(&row)
     }
 
     async fn list_estimators_for_flow(
@@ -111,7 +125,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         flow_id: FlowId,
     ) -> Result<Vec<Estimator>, DomainError> {
         let rows = sqlx::query(
-            "SELECT id, flow_id, name, description FROM estimators \
+            "SELECT id, flow_id, name, description, inputs, outputs FROM estimators \
              WHERE flow_id = $1 \
              ORDER BY created_at",
         )
@@ -120,25 +134,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         .await
         .map_err(|e| DomainError::repository(e.to_string()))?;
 
-        let est_ids: Vec<Uuid> = rows.iter().map(|r| r.get("id")).collect();
-        let mut vars_map = load_variables_for_estimators(&self.pool, &est_ids).await?;
-
-        let estimators = rows
-            .iter()
-            .map(|row| {
-                let eid: Uuid = row.get("id");
-                let variables = vars_map.remove(&eid).unwrap_or_default();
-                Estimator::with_full(
-                    EstimatorId::from_uuid(eid),
-                    FlowId::from_uuid(row.get("flow_id")),
-                    row.get("name"),
-                    row.get::<Option<String>, _>("description").unwrap_or_default(),
-                    variables,
-                )
-            })
-            .collect();
-
-        Ok(estimators)
+        rows.iter().map(row_to_estimator).collect()
     }
 
     async fn update_estimator(
@@ -153,7 +149,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
                  description = COALESCE($3, description), \
                  updated_at = NOW() \
              WHERE id = $1 \
-             RETURNING id, flow_id, name, description",
+             RETURNING id, flow_id, name, description, inputs, outputs",
         )
         .bind(id.into_uuid())
         .bind(name)
@@ -163,17 +159,7 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         .map_err(|e| DomainError::repository(e.to_string()))?
         .ok_or_else(|| DomainError::not_found("Estimator", id.to_string()))?;
 
-        let est_uuid: Uuid = row.get("id");
-        let mut vars_map = load_variables_for_estimators(&self.pool, &[est_uuid]).await?;
-        let variables = vars_map.remove(&est_uuid).unwrap_or_default();
-
-        Ok(Estimator::with_full(
-            EstimatorId::from_uuid(est_uuid),
-            FlowId::from_uuid(row.get("flow_id")),
-            row.get("name"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
-            variables,
-        ))
+        row_to_estimator(&row)
     }
 
     async fn delete_estimator(&self, id: EstimatorId) -> Result<(), DomainError> {
@@ -190,71 +176,137 @@ impl EstimatorRepository for PostgresEstimatorRepository {
         Ok(())
     }
 
-    async fn add_variable(
+    async fn add_input(
         &self,
         estimator_id: EstimatorId,
-        variable: EstimatorVariable,
-    ) -> Result<EstimatorVariable, DomainError> {
-        sqlx::query(
-            "INSERT INTO estimator_variables (id, estimator_id, name, expression, description, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
-        )
-        .bind(variable.id.into_uuid())
-        .bind(estimator_id.into_uuid())
-        .bind(&variable.name)
-        .bind(&variable.expression)
-        .bind(&variable.description)
-        .execute(&*self.pool)
-        .await
-        .map_err(|e| DomainError::repository(e.to_string()))?;
-
-        Ok(variable)
+        input: EstimatorParameter,
+    ) -> Result<EstimatorParameter, DomainError> {
+        let mut est = self.get_estimator(estimator_id).await?;
+        if est.inputs.iter().any(|i| i.key == input.key) {
+            return Err(DomainError::conflict(format!(
+                "Input with key '{}' already exists on this estimator",
+                input.key
+            )));
+        }
+        est.inputs.push(input.clone());
+        write_inputs(&self.pool, estimator_id, &est.inputs).await?;
+        Ok(input)
     }
 
-    async fn update_variable(
+    async fn update_input(
         &self,
-        id: EstimatorVariableId,
-        name: Option<String>,
-        expression: Option<String>,
+        estimator_id: EstimatorId,
+        id: EstimatorInputId,
+        key: Option<String>,
         description: Option<String>,
-    ) -> Result<EstimatorVariable, DomainError> {
-        let row = sqlx::query(
-            "UPDATE estimator_variables \
-             SET name = COALESCE($2, name), \
-                 expression = COALESCE($3, expression), \
-                 description = COALESCE($4, description), \
-                 updated_at = NOW() \
-             WHERE id = $1 \
-             RETURNING id, name, expression, description",
-        )
-        .bind(id.into_uuid())
-        .bind(name)
-        .bind(expression)
-        .bind(description)
-        .fetch_optional(&*self.pool)
-        .await
-        .map_err(|e| DomainError::repository(e.to_string()))?
-        .ok_or_else(|| DomainError::not_found("EstimatorVariable", id.to_string()))?;
+        parameter_type: Option<EstimatorParameterType>,
+    ) -> Result<EstimatorParameter, DomainError> {
+        let mut est = self.get_estimator(estimator_id).await?;
+        let pos = est
+            .inputs
+            .iter()
+            .position(|i| i.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorInput", id.to_string()))?;
 
-        Ok(EstimatorVariable::with_id(
-            EstimatorVariableId::from_uuid(row.get("id")),
-            row.get("name"),
-            row.get("expression"),
-            row.get::<Option<String>, _>("description").unwrap_or_default(),
-        ))
-    }
-
-    async fn remove_variable(&self, id: EstimatorVariableId) -> Result<(), DomainError> {
-        let result = sqlx::query("DELETE FROM estimator_variables WHERE id = $1")
-            .bind(id.into_uuid())
-            .execute(&*self.pool)
-            .await
-            .map_err(|e| DomainError::repository(e.to_string()))?;
-
-        if result.rows_affected() == 0 {
-            return Err(DomainError::not_found("EstimatorVariable", id.to_string()));
+        if let Some(k) = key {
+            if est.inputs.iter().enumerate().any(|(i, inp)| i != pos && inp.key == k) {
+                return Err(DomainError::conflict(format!(
+                    "Input with key '{k}' already exists on this estimator"
+                )));
+            }
+            est.inputs[pos].key = k;
+        }
+        if let Some(d) = description {
+            est.inputs[pos].description = d;
+        }
+        if let Some(pt) = parameter_type {
+            est.inputs[pos].parameter_type = pt;
         }
 
-        Ok(())
+        let updated = est.inputs[pos].clone();
+        write_inputs(&self.pool, estimator_id, &est.inputs).await?;
+        Ok(updated)
+    }
+
+    async fn remove_input(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorInputId,
+    ) -> Result<(), DomainError> {
+        let mut est = self.get_estimator(estimator_id).await?;
+        let pos = est
+            .inputs
+            .iter()
+            .position(|i| i.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorInput", id.to_string()))?;
+        est.inputs.remove(pos);
+        write_inputs(&self.pool, estimator_id, &est.inputs).await
+    }
+
+    async fn add_output(
+        &self,
+        estimator_id: EstimatorId,
+        output: EstimatorOutput,
+    ) -> Result<EstimatorOutput, DomainError> {
+        let mut est = self.get_estimator(estimator_id).await?;
+        if est.outputs.iter().any(|o| o.key == output.key) {
+            return Err(DomainError::conflict(format!(
+                "Output with key '{}' already exists on this estimator",
+                output.key
+            )));
+        }
+        est.outputs.push(output.clone());
+        write_outputs(&self.pool, estimator_id, &est.outputs).await?;
+        Ok(output)
+    }
+
+    async fn update_output(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorOutputId,
+        key: Option<String>,
+        expression: Option<String>,
+        description: Option<String>,
+    ) -> Result<EstimatorOutput, DomainError> {
+        let mut est = self.get_estimator(estimator_id).await?;
+        let pos = est
+            .outputs
+            .iter()
+            .position(|o| o.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorOutput", id.to_string()))?;
+
+        if let Some(k) = key {
+            if est.outputs.iter().enumerate().any(|(i, o)| i != pos && o.key == k) {
+                return Err(DomainError::conflict(format!(
+                    "Output with key '{k}' already exists on this estimator"
+                )));
+            }
+            est.outputs[pos].key = k;
+        }
+        if let Some(e) = expression {
+            est.outputs[pos].expression = e;
+        }
+        if let Some(d) = description {
+            est.outputs[pos].description = d;
+        }
+
+        let updated = est.outputs[pos].clone();
+        write_outputs(&self.pool, estimator_id, &est.outputs).await?;
+        Ok(updated)
+    }
+
+    async fn remove_output(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorOutputId,
+    ) -> Result<(), DomainError> {
+        let mut est = self.get_estimator(estimator_id).await?;
+        let pos = est
+            .outputs
+            .iter()
+            .position(|o| o.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorOutput", id.to_string()))?;
+        est.outputs.remove(pos);
+        write_outputs(&self.pool, estimator_id, &est.outputs).await
     }
 }

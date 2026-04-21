@@ -5,8 +5,9 @@ pub mod infrastructure;
 pub use domain::error::DomainError;
 pub use domain::estimator::entities::{
     estimator::Estimator,
-    ids::{EstimatorId, EstimatorVariableId},
-    variable::EstimatorVariable,
+    ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+    output::EstimatorOutput,
+    parameter::{EstimatorParameter, EstimatorParameterType},
 };
 pub use domain::flows::entities::{
     field::{Field, FieldBoolean, FieldConfig, FieldDate, FieldNumber, FieldSelect, FieldText},

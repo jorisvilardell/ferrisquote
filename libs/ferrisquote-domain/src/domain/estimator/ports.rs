@@ -4,9 +4,10 @@ use crate::domain::{error::DomainError, flows::entities::ids::FlowId};
 
 use super::entities::{
     estimator::Estimator,
-    ids::{EstimatorId, EstimatorVariableId},
+    ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+    output::EstimatorOutput,
+    parameter::{EstimatorParameter, EstimatorParameterType},
     submission::SubmissionData,
-    variable::EstimatorVariable,
 };
 
 /// Repository trait for Estimator persistence.
@@ -26,7 +27,6 @@ pub trait EstimatorRepository: Send + Sync {
         flow_id: FlowId,
     ) -> impl Future<Output = Result<Vec<Estimator>, DomainError>> + Send;
 
-    /// Partial update: only fields set to `Some(...)` are written.
     fn update_estimator(
         &self,
         id: EstimatorId,
@@ -39,31 +39,51 @@ pub trait EstimatorRepository: Send + Sync {
         id: EstimatorId,
     ) -> impl Future<Output = Result<(), DomainError>> + Send;
 
-    fn add_variable(
+    fn add_input(
         &self,
         estimator_id: EstimatorId,
-        variable: EstimatorVariable,
-    ) -> impl Future<Output = Result<EstimatorVariable, DomainError>> + Send;
+        input: EstimatorParameter,
+    ) -> impl Future<Output = Result<EstimatorParameter, DomainError>> + Send;
 
-    /// Partial update: only fields set to `Some(...)` are written.
-    fn update_variable(
+    fn update_input(
         &self,
-        id: EstimatorVariableId,
-        name: Option<String>,
+        estimator_id: EstimatorId,
+        id: EstimatorInputId,
+        key: Option<String>,
+        description: Option<String>,
+        parameter_type: Option<EstimatorParameterType>,
+    ) -> impl Future<Output = Result<EstimatorParameter, DomainError>> + Send;
+
+    fn remove_input(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorInputId,
+    ) -> impl Future<Output = Result<(), DomainError>> + Send;
+
+    fn add_output(
+        &self,
+        estimator_id: EstimatorId,
+        output: EstimatorOutput,
+    ) -> impl Future<Output = Result<EstimatorOutput, DomainError>> + Send;
+
+    fn update_output(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorOutputId,
+        key: Option<String>,
         expression: Option<String>,
         description: Option<String>,
-    ) -> impl Future<Output = Result<EstimatorVariable, DomainError>> + Send;
+    ) -> impl Future<Output = Result<EstimatorOutput, DomainError>> + Send;
 
-    fn remove_variable(
+    fn remove_output(
         &self,
-        id: EstimatorVariableId,
+        estimator_id: EstimatorId,
+        id: EstimatorOutputId,
     ) -> impl Future<Output = Result<(), DomainError>> + Send;
 }
 
 /// Service trait for Estimator domain logic.
 pub trait EstimatorService: Send + Sync {
-    // --- CRUD ---
-
     fn create_estimator(
         &self,
         flow_id: FlowId,
@@ -92,28 +112,51 @@ pub trait EstimatorService: Send + Sync {
         id: EstimatorId,
     ) -> impl Future<Output = Result<(), DomainError>> + Send;
 
-    fn add_variable(
+    fn add_input(
         &self,
         estimator_id: EstimatorId,
-        name: String,
-        expression: String,
+        key: String,
         description: String,
-    ) -> impl Future<Output = Result<EstimatorVariable, DomainError>> + Send;
+        parameter_type: EstimatorParameterType,
+    ) -> impl Future<Output = Result<EstimatorParameter, DomainError>> + Send;
 
-    fn update_variable(
+    fn update_input(
         &self,
-        id: EstimatorVariableId,
-        name: Option<String>,
-        expression: Option<String>,
+        estimator_id: EstimatorId,
+        id: EstimatorInputId,
+        key: Option<String>,
         description: Option<String>,
-    ) -> impl Future<Output = Result<EstimatorVariable, DomainError>> + Send;
+        parameter_type: Option<EstimatorParameterType>,
+    ) -> impl Future<Output = Result<EstimatorParameter, DomainError>> + Send;
 
-    fn remove_variable(
+    fn remove_input(
         &self,
-        id: EstimatorVariableId,
+        estimator_id: EstimatorId,
+        id: EstimatorInputId,
     ) -> impl Future<Output = Result<(), DomainError>> + Send;
 
-    // --- Evaluation ---
+    fn add_output(
+        &self,
+        estimator_id: EstimatorId,
+        key: String,
+        expression: String,
+        description: String,
+    ) -> impl Future<Output = Result<EstimatorOutput, DomainError>> + Send;
+
+    fn update_output(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorOutputId,
+        key: Option<String>,
+        expression: Option<String>,
+        description: Option<String>,
+    ) -> impl Future<Output = Result<EstimatorOutput, DomainError>> + Send;
+
+    fn remove_output(
+        &self,
+        estimator_id: EstimatorId,
+        id: EstimatorOutputId,
+    ) -> impl Future<Output = Result<(), DomainError>> + Send;
 
     fn evaluate(
         &self,
@@ -127,9 +170,6 @@ pub trait EstimatorService: Send + Sync {
         data: SubmissionData,
     ) -> impl Future<Output = Result<HashMap<String, f64>, DomainError>> + Send;
 
-    /// Evaluate every estimator of a flow, resolving cross-estimator refs.
-    ///
-    /// Returns a nested map `estimator_name → variable_name → value`.
     fn evaluate_flow(
         &self,
         flow_id: FlowId,
