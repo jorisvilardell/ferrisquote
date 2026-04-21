@@ -275,8 +275,8 @@ function buildGraph(
   const estCrossDeps = new Map<string, Set<string>>()
   for (const est of estimators) {
     const deps = new Set<string>()
-    for (const v of est.variables) {
-      for (const ref of extractExprRefs(v.expression)) {
+    for (const o of est.outputs) {
+      for (const ref of extractExprRefs(o.expression)) {
         if (ref.type === "cross" && ref.estimatorId !== est.id) {
           deps.add(ref.estimatorId)
         }
