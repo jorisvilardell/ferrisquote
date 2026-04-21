@@ -240,7 +240,7 @@ export function OutputCard({
   }
 
   return (
-    <div className="rounded-md border border-border/60 overflow-hidden">
+    <div className="rounded-md border border-border/60 overflow-hidden shrink-0">
       <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/30">
         <button className="flex-1 text-left" onClick={() => setExpanded((p) => !p)}>
           <span className="text-sm font-mono font-semibold" style={{ color: ROSE }}>

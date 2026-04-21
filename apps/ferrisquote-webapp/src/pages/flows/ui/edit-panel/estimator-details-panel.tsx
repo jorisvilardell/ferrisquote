@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Schemas } from "@/api/api.client"
@@ -11,6 +11,7 @@ import {
   useUpdateInput,
   useUpdateOutput,
 } from "@/api/estimators.api"
+import { useUpdateBinding } from "@/api/bindings.api"
 import { type EstimatorIndex } from "@/pages/flows/lib/expression-refs"
 import {
   TEMP_PREFIX,
@@ -19,15 +20,31 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { InputCard } from "./input-card"
 import { OutputCard } from "./output-card"
 
 const ROSE = "hsl(330, 80%, 60%)"
+const EMERALD = "hsl(158, 64%, 52%)"
+
+// OpenAPI generator widens these to `Record<string, unknown>` — we restore the
+// real wire shape locally instead of leaking `unknown` through the UI.
+type InputsMap = Record<string, Schemas.InputBindingValueDto>
+type ReduceMap = Record<string, Schemas.AggregationStrategyDto>
 
 export function EstimatorDetailsPanel({
   estimator,
   flowId,
+  flow,
+  binding,
+  otherBindings,
   availableFieldKeys,
   otherEstimators,
   estimatorsIndex,
@@ -35,6 +52,10 @@ export function EstimatorDetailsPanel({
 }: {
   estimator: Schemas.EstimatorResponse
   flowId: string
+  flow: Schemas.FlowResponse
+  /** Optional — unified panel also edits the binding's wiring when one exists. */
+  binding: Schemas.BindingResponse | null
+  otherBindings: Schemas.BindingResponse[]
   availableFieldKeys: string[]
   otherEstimators: Array<{ id: string; name: string; outputs: string[] }>
   estimatorsIndex: EstimatorIndex
@@ -65,6 +86,7 @@ export function EstimatorDetailsPanel({
   const addOutput = useAddOutput(flowId, estimator.id)
   const updateOutput = useUpdateOutput(flowId, estimator.id)
   const removeOutput = useRemoveOutput(flowId, estimator.id)
+  const updateBinding = useUpdateBinding(flowId)
 
   const nameDisplay =
     drafts.nameDraft != null ? drafts.nameDraft : estimator.name.replace(/_/g, " ")
@@ -90,6 +112,42 @@ export function EstimatorDetailsPanel({
     ...drafts.pendingOutputAdds,
   ]
 
+  // ─── Binding wiring local state ──────────────────────────────────────────
+  const serverInputsMap = (binding?.inputs_mapping ?? {}) as InputsMap
+  const serverReduceMap = (binding?.outputs_reduce_strategy ?? {}) as ReduceMap
+  const serverMapOver = binding?.map_over_step ?? null
+
+  const [mapOverStep, setMapOverStep] = useState<string | null>(serverMapOver)
+  const [inputsMapping, setInputsMapping] = useState<InputsMap>(serverInputsMap)
+  const [reduceMap, setReduceMap] = useState<ReduceMap>(serverReduceMap)
+
+  useEffect(() => {
+    setMapOverStep(serverMapOver)
+    setInputsMapping(serverInputsMap)
+    setReduceMap(serverReduceMap)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [binding?.id])
+
+  const allFields = useMemo(
+    () =>
+      flow.steps.flatMap((s) =>
+        s.fields.map((f) => ({
+          id: f.id,
+          key: f.key,
+          label: f.label,
+          stepId: s.id,
+          numeric: f.config.type === "number",
+        })),
+      ),
+    [flow.steps],
+  )
+
+  const repeatableSteps = useMemo(
+    () => flow.steps.filter((s) => s.is_repeatable),
+    [flow.steps],
+  )
+
+  // ─── Validation + dirty detection ────────────────────────────────────────
   const normalizedName = nameDisplay.trim().replace(/\s+/g, "_")
   const nameValid = /^[A-Za-z0-9_]+$/.test(normalizedName)
   const duplicateName = otherEstimators.some((e) => e.name === normalizedName)
@@ -102,6 +160,13 @@ export function EstimatorDetailsPanel({
   const outputEditsDirty = Object.keys(drafts.outputEdits).length > 0
   const outputAddsDirty = drafts.pendingOutputAdds.length > 0
   const outputDelsDirty = drafts.pendingOutputDeletes.size > 0
+
+  const bindingDirty =
+    binding != null &&
+    (mapOverStep !== serverMapOver ||
+      JSON.stringify(inputsMapping) !== JSON.stringify(serverInputsMap) ||
+      JSON.stringify(reduceMap) !== JSON.stringify(serverReduceMap))
+
   const isDirty =
     nameDirty ||
     descDirty ||
@@ -110,11 +175,13 @@ export function EstimatorDetailsPanel({
     inputDelsDirty ||
     outputEditsDirty ||
     outputAddsDirty ||
-    outputDelsDirty
+    outputDelsDirty ||
+    bindingDirty
 
   const canSave =
     isDirty && nameValid && !duplicateName && normalizedName.length > 0
 
+  // ─── Save ────────────────────────────────────────────────────────────────
   function handleSave() {
     if (!canSave) return
 
@@ -128,7 +195,6 @@ export function EstimatorDetailsPanel({
       )
     }
 
-    // Inputs
     for (const v of drafts.pendingInputAdds) {
       addInput.mutate(
         {
@@ -160,7 +226,6 @@ export function EstimatorDetailsPanel({
       )
     }
 
-    // Outputs
     for (const v of drafts.pendingOutputAdds) {
       addOutput.mutate(
         {
@@ -192,6 +257,20 @@ export function EstimatorDetailsPanel({
       )
     }
 
+    if (bindingDirty && binding) {
+      updateBinding.mutate(
+        {
+          path: { flow_id: flowId, binding_id: binding.id },
+          body: {
+            inputs_mapping: inputsMapping,
+            outputs_reduce_strategy: reduceMap,
+            map_over_step: mapOverStep,
+          },
+        },
+        { onError: (err) => toast.error(`Wiring update failed: ${err.message}`) },
+      )
+    }
+
     drafts.clear()
     drafts.setActive(estimator.id)
   }
@@ -200,9 +279,12 @@ export function EstimatorDetailsPanel({
     drafts.clear()
     drafts.setActive(estimator.id)
     setEditingName(false)
+    setMapOverStep(serverMapOver)
+    setInputsMapping(serverInputsMap)
+    setReduceMap(serverReduceMap)
   }
 
-  // ─── Input draft staging ──────────────────────────────────────────────────
+  // ─── Input/Output draft staging (unchanged) ──────────────────────────────
   function handleInputPatch(inputId: string, patch: Partial<Schemas.InputResponse>) {
     if (inputId.startsWith(TEMP_PREFIX)) {
       const cur = drafts.pendingInputAdds.find((v) => v.id === inputId)
@@ -245,7 +327,6 @@ export function EstimatorDetailsPanel({
     drafts.markInputDelete(inputId)
   }
 
-  // ─── Output draft staging ─────────────────────────────────────────────────
   function handleOutputPatch(outputId: string, patch: Partial<Schemas.OutputResponse>) {
     if (outputId.startsWith(TEMP_PREFIX)) {
       const cur = drafts.pendingOutputAdds.find((v) => v.id === outputId)
@@ -290,6 +371,49 @@ export function EstimatorDetailsPanel({
   const ownInputKeys = effectiveInputs.map((i) => i.key)
   const ownOutputKeys = effectiveOutputs.map((o) => o.key)
 
+  // ─── Wiring helpers ──────────────────────────────────────────────────────
+  function currentSelectValue(inputKey: string): string {
+    const v = inputsMapping[inputKey]
+    if (!v) return ""
+    if (v.source === "field") return `field:${v.field_id}`
+    if (v.source === "binding_output") return `binding:${v.binding_id}.${v.output_key}`
+    return ""
+  }
+
+  function handleSourceChange(inputKey: string, raw: string, numericOnly: boolean) {
+    if (raw === "__unset__") {
+      setInputsMapping((prev) => {
+        const next = { ...prev }
+        delete next[inputKey]
+        return next
+      })
+      return
+    }
+    if (raw.startsWith("field:")) {
+      const fid = raw.slice("field:".length)
+      const meta = allFields.find((f) => f.id === fid)
+      if (!meta) return
+      if (numericOnly && !meta.numeric) {
+        toast.error(`Field '${meta.key}' is not numeric`)
+        return
+      }
+      setInputsMapping((prev) => ({ ...prev, [inputKey]: { source: "field", field_id: fid } }))
+    } else if (raw.startsWith("binding:")) {
+      const [bid, okey] = raw.slice("binding:".length).split(".", 2)
+      setInputsMapping((prev) => ({
+        ...prev,
+        [inputKey]: { source: "binding_output", binding_id: bid, output_key: okey },
+      }))
+    }
+  }
+
+  function setReduceStrategy(outputKey: string, strategy: Schemas.AggregationStrategyDto) {
+    setReduceMap((prev) => ({ ...prev, [outputKey]: strategy }))
+  }
+
+  const hasInputs = effectiveInputs.length > 0
+  const showReduce = mapOverStep !== null && effectiveOutputs.length > 0
+
   return (
     <>
       <div className="flex items-center gap-2 px-5 pt-4 pb-2 border-b shrink-0">
@@ -324,7 +448,7 @@ export function EstimatorDetailsPanel({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 px-5 py-4 flex-1 overflow-y-auto pb-4">
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1 min-h-0 overflow-y-auto pb-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="estimator-desc" className="text-xs font-medium">
             Description
@@ -350,11 +474,9 @@ export function EstimatorDetailsPanel({
         )}
 
         {/* ─── Inputs ─── */}
-        <div className="flex items-center justify-between mt-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Inputs
-          </h3>
-        </div>
+        <h3 className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Inputs
+        </h3>
         <p className="text-xs text-muted-foreground">
           Parameters required to run this estimator. Types: number, boolean, product.
         </p>
@@ -367,7 +489,6 @@ export function EstimatorDetailsPanel({
             onDelete={handleDeleteInput}
           />
         ))}
-
         <Button
           variant="outline"
           size="sm"
@@ -379,11 +500,9 @@ export function EstimatorDetailsPanel({
         </Button>
 
         {/* ─── Outputs ─── */}
-        <div className="flex items-center justify-between mt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Outputs
-          </h3>
-        </div>
+        <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Outputs
+        </h3>
         <p className="text-xs text-muted-foreground">
           Variables produced by the calculation. Reference inputs with <code className="font-mono bg-muted px-1 rounded">@input_key</code>.
         </p>
@@ -402,7 +521,6 @@ export function EstimatorDetailsPanel({
             onDelete={handleDeleteOutput}
           />
         ))}
-
         <Button
           variant="outline"
           size="sm"
@@ -412,6 +530,147 @@ export function EstimatorDetailsPanel({
           <Plus className="w-3.5 h-3.5 mr-1.5" />
           Add output
         </Button>
+
+        {/* ─── Execution context ─── */}
+        {binding && (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Execution context
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Run once, or loop over each iteration of a repeatable step.
+            </p>
+            <Select
+              value={mapOverStep ?? "__global__"}
+              onValueChange={(v) => setMapOverStep(v === "__global__" ? null : v)}
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__global__">Global execution</SelectItem>
+                {repeatableSteps.length === 0 ? (
+                  <SelectItem value="__none__" disabled>
+                    No repeatable steps in this flow
+                  </SelectItem>
+                ) : (
+                  repeatableSteps.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      Loop over: {s.title}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        {/* ─── Argument mapping ─── */}
+        {binding && hasInputs && (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Arguments
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Map each input to a flow field or another binding's output.
+            </p>
+
+            {effectiveInputs.map((input) => {
+              const numericOnly = input.parameter_type.kind !== "product"
+              return (
+                <div
+                  key={`wiring-${input.id}`}
+                  className="flex flex-col gap-1 rounded-md border border-border/60 px-3 py-2"
+                >
+                  <Label className="text-xs">
+                    <span className="font-mono font-semibold" style={{ color: EMERALD }}>
+                      {input.key}
+                    </span>
+                    <span className="ml-2 text-[10px] text-muted-foreground">
+                      : {input.parameter_type.kind}
+                      {input.parameter_type.kind === "product" && input.parameter_type.label_filter
+                        ? ` (${input.parameter_type.label_filter})`
+                        : ""}
+                    </span>
+                  </Label>
+                  <Select
+                    value={currentSelectValue(input.key) || "__unset__"}
+                    onValueChange={(raw) => handleSourceChange(input.key, raw, numericOnly)}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Not mapped" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__unset__">— Not mapped —</SelectItem>
+                      {allFields
+                        .filter((f) => !numericOnly || f.numeric)
+                        .map((f) => (
+                          <SelectItem key={`f-${f.id}`} value={`field:${f.id}`}>
+                            Field: {f.label || f.key}
+                          </SelectItem>
+                        ))}
+                      {otherBindings.flatMap((b) =>
+                        Object.keys(b.outputs_reduce_strategy as ReduceMap).map((key) => (
+                          <SelectItem
+                            key={`b-${b.id}-${key}`}
+                            value={`binding:${b.id}.${key}`}
+                          >
+                            Binding {b.id.slice(0, 8)} → {key}
+                          </SelectItem>
+                        )),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {/* ─── Reduce ─── */}
+        {binding && showReduce && (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Reduce
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              How to aggregate each output across iterations of the loop.
+            </p>
+
+            {effectiveOutputs.map((out) => (
+              <div
+                key={`reduce-${out.id}`}
+                className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2"
+              >
+                <span
+                  className="text-xs font-mono font-semibold flex-1 min-w-0 truncate"
+                  style={{ color: ROSE }}
+                >
+                  {out.key}
+                </span>
+                <Select
+                  value={reduceMap[out.key] ?? "first"}
+                  onValueChange={(v) =>
+                    setReduceStrategy(out.key, v as Schemas.AggregationStrategyDto)
+                  }
+                >
+                  <SelectTrigger className="h-7 w-32 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sum">Sum</SelectItem>
+                    <SelectItem value="average">Average</SelectItem>
+                    <SelectItem value="max">Max</SelectItem>
+                    <SelectItem value="min">Min</SelectItem>
+                    <SelectItem value="count">Count</SelectItem>
+                    <SelectItem value="first">First</SelectItem>
+                    <SelectItem value="last">Last</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       <div className="flex gap-2 px-5 py-4 border-t shrink-0">
