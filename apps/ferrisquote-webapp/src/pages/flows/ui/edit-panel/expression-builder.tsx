@@ -461,28 +461,44 @@ function DisplayZone({
   return (
     <div
       className={cn(
-        "relative rounded-lg border shadow-inner",
-        // Dark "LCD screen" look. Subtle gradient so the chips pop.
+        "relative rounded-lg border shadow-inner overflow-hidden",
+        // Dark "LCD screen" with a subtle scanline/grain hint.
         "bg-gradient-to-b from-slate-900 to-slate-950 dark:from-slate-800 dark:to-slate-900",
-        error ? "border-destructive/70 ring-1 ring-destructive/40" : "border-slate-700",
+        error
+          ? "border-destructive/70 ring-1 ring-destructive/40"
+          : "border-slate-700",
       )}
     >
+      {/* Faint gridline pattern for the "display panel" feel. */}
       <div
-        className="min-h-[72px] px-3 py-2.5 flex flex-wrap items-center gap-1"
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 3px)",
+        }}
+      />
+      <div
+        className={cn(
+          "relative min-h-[96px] px-4 pt-6 pb-3",
+          "flex flex-wrap items-baseline justify-end gap-y-1",
+          "font-mono text-slate-100 leading-tight tracking-tight",
+          "cursor-text",
+        )}
         onClick={(e) => {
           if (e.target === e.currentTarget) setCursor(tiles.length)
         }}
       >
         {tiles.length === 0 && (
-          <span className="text-xs text-slate-400 italic flex items-center gap-1.5">
-            <Calculator className="h-3 w-3" />
+          <span className="flex items-center gap-1.5 text-sm text-slate-400/80 italic mr-auto">
+            <Calculator className="h-3.5 w-3.5" />
             {t("builder.placeholder")}
           </span>
         )}
         {tiles.map((tile, i) => (
-          <span key={tile.id} className="flex items-center">
+          <span key={tile.id} className="inline-flex items-baseline">
             <Caret active={cursor === i} onClick={() => setCursor(i)} />
-            <TileChip
+            <TileToken
               tile={tile}
               selected={cursor === i + 1}
               onClick={() => setCursor(i + 1)}
@@ -497,13 +513,15 @@ function DisplayZone({
       </div>
       {/* Help icon floating in the top-right corner of the screen — holds
           the keyboard-shortcut hint so the display itself stays clean. */}
-      <div className="absolute top-1.5 right-1.5">
+      <div className="absolute top-1.5 right-1.5 z-10">
         <div className="text-slate-300 hover:text-slate-100">
           <HelpHint text={hint} label={t("common.help")} />
         </div>
       </div>
       {error && (
-        <div className="px-3 pb-2 text-[11px] text-red-300">{error}</div>
+        <div className="relative border-t border-red-500/30 bg-red-950/40 px-4 py-1.5 text-[11px] text-red-300">
+          {error}
+        </div>
       )}
     </div>
   )
@@ -515,16 +533,21 @@ function Caret({ active, onClick }: { active: boolean; onClick: () => void }) {
       role="presentation"
       onClick={onClick}
       className={cn(
-        "inline-block w-[2px] h-5 cursor-text mx-0.5 transition-colors rounded-sm",
+        "inline-block w-[2px] h-6 cursor-text mx-px align-baseline rounded-sm transition-colors",
         active
-          ? "bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.7)]"
+          ? "bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.8)]"
           : "bg-transparent hover:bg-slate-600",
       )}
     />
   )
 }
 
-function TileChip({
+/**
+ * Text-first render of a single tile on the calc display. Numbers and
+ * operators read as flowing typography (classic calc feel); refs and
+ * aggregations get a tinted pill so they stand out as "symbolic" values.
+ */
+function TileToken({
   tile,
   selected,
   onClick,
@@ -535,30 +558,66 @@ function TileChip({
   onClick: () => void
   onRemove: () => void
 }) {
-  const label = tileLabel(tile)
-  const color = tileColor(tile)
-  // Tiles live on the dark "screen" — use saturated text + tinted bg so
-  // they read like pill-shaped LED labels rather than muted form chips.
-  const bg = color ? `${color}30` : "rgba(148,163,184,0.18)"
-  const border = color ?? "rgba(148,163,184,0.35)"
-  const text = color ?? "rgb(226, 232, 240)"
+  // Plain glyphs: numbers + operators + parens — no pill, just colored text.
+  if (tile.kind === "num") {
+    return (
+      <GlyphToken
+        onClick={onClick}
+        onRemove={onRemove}
+        selected={selected}
+        className="text-2xl text-slate-50 font-semibold px-0.5"
+      >
+        {tile.text}
+      </GlyphToken>
+    )
+  }
+  if (tile.kind === "op") {
+    const sym = tile.op === "*" ? "×" : tile.op === "/" ? "÷" : tile.op === "-" ? "−" : "+"
+    return (
+      <GlyphToken
+        onClick={onClick}
+        onRemove={onRemove}
+        selected={selected}
+        className="text-2xl text-amber-400 font-medium mx-1.5"
+      >
+        {sym}
+      </GlyphToken>
+    )
+  }
+  if (tile.kind === "lparen" || tile.kind === "rparen") {
+    return (
+      <GlyphToken
+        onClick={onClick}
+        onRemove={onRemove}
+        selected={selected}
+        className="text-2xl text-slate-400 font-medium px-0.5"
+      >
+        {tile.kind === "lparen" ? "(" : ")"}
+      </GlyphToken>
+    )
+  }
+
+  // Symbolic tokens: refs + aggregations — tinted pill with prefix glyph.
+  const { bg, fg, prefix, body } = symbolicStyle(tile)
   return (
     <span
       onClick={onClick}
       className={cn(
-        "group inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-mono cursor-pointer select-none shadow-sm",
-        selected ? "ring-1 ring-offset-1 ring-offset-slate-900 ring-primary" : "",
+        "group relative inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 mx-0.5",
+        "text-base font-medium cursor-pointer select-none transition-shadow",
+        selected ? "ring-1 ring-amber-400/60" : "ring-0",
       )}
-      style={{ color: text, borderColor: border, backgroundColor: bg }}
+      style={{ color: fg, backgroundColor: bg }}
     >
-      {label}
+      {prefix && <span className="opacity-70 text-xs">{prefix}</span>}
+      <span>{body}</span>
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation()
           onRemove()
         }}
-        className="opacity-0 group-hover:opacity-100 transition-opacity"
+        className="ml-0.5 opacity-0 group-hover:opacity-80 hover:opacity-100 transition-opacity"
         aria-label="Remove tile"
       >
         <X className="h-3 w-3" />
@@ -567,42 +626,93 @@ function TileChip({
   )
 }
 
-function tileLabel(t: Tile): string {
-  switch (t.kind) {
-    case "num":
-      return t.text
-    case "op":
-      return t.op === "*" ? "×" : t.op === "/" ? "÷" : t.op
-    case "lparen":
-      return "("
-    case "rparen":
-      return ")"
-    case "input":
-      return `@${t.name}`
-    case "output":
-      return `@${t.name}`
-    case "cross":
-      return `@${t.estimatorName.replace(/_/g, " ")}.${t.variable}`
-    case "agg":
-      return `${t.fn === "SUM" ? "Σ" : t.fn === "AVG" ? "μ" : "#"}(${t.argLabel})`
-  }
+function GlyphToken({
+  children,
+  className,
+  onClick,
+  onRemove,
+  selected,
+}: {
+  children: React.ReactNode
+  className: string
+  onClick: () => void
+  onRemove: () => void
+  selected: boolean
+}) {
+  return (
+    <span
+      onClick={onClick}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onRemove()
+      }}
+      className={cn(
+        "group relative cursor-pointer select-none",
+        selected &&
+          "underline underline-offset-4 decoration-amber-400 decoration-2",
+        className,
+      )}
+    >
+      {children}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
+        className={cn(
+          "absolute -top-1.5 -right-1.5 rounded-full bg-slate-800 border border-slate-600 p-0.5",
+          "opacity-0 group-hover:opacity-100 transition-opacity",
+        )}
+        aria-label="Remove"
+      >
+        <X className="h-2.5 w-2.5 text-slate-200" />
+      </button>
+    </span>
+  )
 }
 
-function tileColor(t: Tile): string | undefined {
-  switch (t.kind) {
+function symbolicStyle(tile: Tile): {
+  bg: string
+  fg: string
+  prefix: string
+  body: string
+} {
+  switch (tile.kind) {
     case "input":
-      return EMERALD
+      return {
+        bg: "rgba(52, 211, 153, 0.15)",
+        fg: "rgb(110, 231, 183)",
+        prefix: "@",
+        body: tile.name,
+      }
     case "output":
+      return {
+        bg: "rgba(244, 114, 182, 0.15)",
+        fg: "rgb(249, 168, 212)",
+        prefix: "@",
+        body: tile.name,
+      }
     case "cross":
-      return ROSE
-    case "agg":
-      return VIOLET
-    case "num":
-      return undefined
-    case "op":
-    case "lparen":
-    case "rparen":
-      return AMBER
+      return {
+        bg: "rgba(244, 114, 182, 0.15)",
+        fg: "rgb(249, 168, 212)",
+        prefix: "↗",
+        body: `${tile.estimatorName.replace(/_/g, " ")}.${tile.variable}`,
+      }
+    case "agg": {
+      const sym =
+        tile.fn === "SUM" ? "Σ" : tile.fn === "AVG" ? "μ" : "#"
+      return {
+        bg: "rgba(167, 139, 250, 0.15)",
+        fg: "rgb(196, 181, 253)",
+        prefix: sym,
+        body: tile.argLabel,
+      }
+    }
+    // Unreachable: the early returns above handle num/op/lparen/rparen.
+    default:
+      return { bg: "", fg: "", prefix: "", body: "" }
   }
 }
 
