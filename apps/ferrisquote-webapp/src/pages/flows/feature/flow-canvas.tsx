@@ -1,6 +1,7 @@
 import {
   Background,
   Controls,
+  MarkerType,
   ReactFlow,
   useReactFlow,
   type Edge,
@@ -106,6 +107,7 @@ function extractExprRefs(expression: string): ExprRef[] {
 function buildGraph(
   flow: Schemas.FlowResponse,
   estimators: Schemas.EstimatorResponse[],
+  bindings: Schemas.BindingResponse[],
   expandedStepIds: Set<string>,
   linkingField: false | "form" | "quick",
   dropIndicatorIndex: number | null,
@@ -449,6 +451,62 @@ function buildGraph(
     }
   }
 
+  // ─── Binding input wiring edges (field → estimator input handle) ────────
+  // Draw a green arrow from each flow field that is mapped into an
+  // estimator's input via a binding. Matches the emerald handle color used
+  // by `EstimatorNode` for input targets.
+  const INPUT_COLOR = "hsl(158, 64%, 52%)"
+  const estById = new Map<string, Schemas.EstimatorResponse>(
+    estimators.map((e) => [e.id, e]),
+  )
+
+  for (const binding of bindings) {
+    const est = estById.get(binding.estimator_id)
+    if (!est) continue
+    const estimatorNodeId = `estimator-${binding.estimator_id}`
+    // utoipa widens inputs_mapping to Record<string, unknown> — cast locally
+    const mapping = binding.inputs_mapping as Record<
+      string,
+      Schemas.InputBindingValueDto
+    >
+
+    for (const [inputKey, source] of Object.entries(mapping)) {
+      if (source.source !== "field") continue
+      const input = est.inputs.find((i) => i.key === inputKey)
+      if (!input) continue
+      const fieldInfo = flow.steps
+        .flatMap((s) => s.fields.map((f) => ({ f, stepId: s.id })))
+        .find((x) => x.f.id === source.field_id)
+      if (!fieldInfo) continue
+
+      const stepExpanded = expandedStepIds.has(fieldInfo.stepId)
+      const sourceId = stepExpanded
+        ? `field-${fieldInfo.f.id}`
+        : fieldInfo.stepId
+
+      edges.push({
+        id: `e-bind-${binding.id}-${input.id}`,
+        source: sourceId,
+        sourceHandle: "right",
+        target: estimatorNodeId,
+        targetHandle: `target-input-${input.id}`,
+        type: "smoothstep",
+        animated: false,
+        style: {
+          strokeWidth: 2,
+          stroke: INPUT_COLOR,
+          opacity: 0.85,
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        },
+        markerEnd: { type: MarkerType.ArrowClosed, color: INPUT_COLOR },
+        label: inputKey,
+        labelStyle: { fill: INPUT_COLOR, fontSize: 10, fontWeight: 600 },
+        labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+        labelBgPadding: [4, 2] as [number, number],
+      })
+    }
+  }
+
   return { nodes, edges, stepPositions }
 }
 
@@ -616,13 +674,20 @@ function FlowCanvasImpl({ flowId, panelState, setPanelState }: Props) {
   }
 
   function handlePaneClick() {
-    if (linkingField) setLinkingField(false)
+    // Linking mode always takes priority — a blank-canvas click cancels it
+    // rather than closing the edit panel.
+    if (linkingField) {
+      setLinkingField(false)
+      return
+    }
+    if (panelState) setPanelState(null)
   }
 
   const { nodes, edges, stepPositions } = flow
     ? buildGraph(
       flow,
       estimators,
+      bindings,
       expandedStepIds,
       linkingField,
       dropIndicatorIndex,
