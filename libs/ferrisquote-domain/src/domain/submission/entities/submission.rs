@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::domain::flows::entities::ids::{FlowId, StepId};
+use crate::domain::flows::entities::id::{FlowId, StepId};
 use crate::domain::user::entities::UserId;
 
 use super::id::SubmissionId;

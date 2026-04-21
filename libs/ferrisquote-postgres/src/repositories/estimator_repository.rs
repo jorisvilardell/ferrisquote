@@ -5,13 +5,13 @@ use ferrisquote_domain::domain::{
     estimator::{
         entities::{
             estimator::Estimator,
-            ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+            id::{EstimatorId, EstimatorInputId, EstimatorOutputId},
             output::EstimatorOutput,
             parameter::{EstimatorParameter, EstimatorParameterType},
         },
         ports::EstimatorRepository,
     },
-    flows::entities::ids::FlowId,
+    flows::entities::id::FlowId,
 };
 use sqlx::{PgPool, Row};
 

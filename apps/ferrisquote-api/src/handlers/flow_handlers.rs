@@ -28,8 +28,8 @@ use super::mappers::map_flow_to_response;
     ),
     tag = "flows"
 )]
-pub async fn create_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn create_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Json(request): Json<CreateFlowRequest>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<FlowResponse>>)> {
     request.validate()?;
@@ -51,8 +51,8 @@ pub async fn create_flow<FS: FlowService + StepService + FieldService, ES: Estim
     ),
     tag = "flows"
 )]
-pub async fn get_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn get_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<Json<ApiResponse<FlowResponse>>> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);
@@ -71,8 +71,8 @@ pub async fn get_flow<FS: FlowService + StepService + FieldService, ES: Estimato
     ),
     tag = "flows"
 )]
-pub async fn list_flows<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn list_flows<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
 ) -> ApiResult<Json<ApiResponse<FlowListResponse>>> {
     let flows = state.flow_service.list_flows().await?;
 
@@ -104,8 +104,8 @@ pub async fn list_flows<FS: FlowService + StepService + FieldService, ES: Estima
     ),
     tag = "flows"
 )]
-pub async fn update_flow_metadata<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn update_flow_metadata<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(flow_id): Path<String>,
     Json(request): Json<UpdateFlowMetadataRequest>,
 ) -> ApiResult<Json<ApiResponse<FlowResponse>>> {
@@ -133,8 +133,8 @@ pub async fn update_flow_metadata<FS: FlowService + StepService + FieldService, 
     ),
     tag = "flows"
 )]
-pub async fn delete_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService>(
-    State(state): State<AppState<FS, ES, SS>>,
+pub async fn delete_flow<FS: FlowService + StepService + FieldService, ES: EstimatorService, SS: ferrisquote_domain::domain::submission::ports::SubmissionService, BS: ferrisquote_domain::domain::flows::ports::BindingService>(
+    State(state): State<AppState<FS, ES, SS, BS>>,
     Path(flow_id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<ApiResponse<MessageResponse>>)> {
     let flow_id = FlowId::from_uuid(uuid::Uuid::parse_str(&flow_id)?);

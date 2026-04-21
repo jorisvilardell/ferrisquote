@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ids::EstimatorInputId;
+use super::id::EstimatorInputId;
 
 /// The type of an input parameter. Determines what kind of value the
 /// estimator expects to receive when bound.

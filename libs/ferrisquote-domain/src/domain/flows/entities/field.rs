@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ids::FieldId;
+use super::id::FieldId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Field {

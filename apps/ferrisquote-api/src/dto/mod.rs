@@ -1,3 +1,4 @@
+pub mod bindings;
 pub mod estimators;
 pub mod flows;
 pub mod submissions;
@@ -18,4 +19,8 @@ pub use flows::{
 pub use submissions::{
     FieldValueDto, StepIterationDto, SubmissionListResponse, SubmissionResponse,
     SubmitAnswersRequest,
+};
+pub use bindings::{
+    AggregationStrategyDto, BindingListResponse, BindingResponse, CreateBindingRequest,
+    InputBindingValueDto, UpdateBindingRequest,
 };

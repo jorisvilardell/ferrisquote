@@ -5,12 +5,13 @@ use ferrisquote_domain::domain::{
     error::DomainError,
     flows::{
         entities::{
+            binding::{AggregationStrategy, EstimatorBinding, InputBindingValue},
             field::{Field, FieldConfig},
             flow::Flow,
-            ids::{FieldId, FlowId, StepId},
+            id::{BindingId, FieldId, FlowId, StepId},
             step::Step,
         },
-        ports::{FieldRepository, FlowRepository, StepRepository},
+        ports::{BindingRepository, FieldRepository, FlowRepository, StepRepository},
     },
 };
 use sqlx::{PgPool, Row};
@@ -124,14 +125,18 @@ async fn load_steps_for_flows(
 }
 
 /// Build a full `Flow` from a row + pre-loaded steps map.
-fn build_flow(row: &sqlx::postgres::PgRow, steps: Vec<Step>) -> Flow {
-    Flow::with_steps(
+fn build_flow(row: &sqlx::postgres::PgRow, steps: Vec<Step>) -> Result<Flow, DomainError> {
+    let bindings_json: sqlx::types::Json<Vec<EstimatorBinding>> = row
+        .try_get("bindings")
+        .map_err(|e| DomainError::internal(format!("Failed to decode bindings: {e}")))?;
+    Ok(Flow::with_full(
         FlowId::from_uuid(row.get("id")),
         row.get("name"),
         row.get::<Option<String>, _>("description")
             .unwrap_or_default(),
         steps,
-    )
+        bindings_json.0,
+    ))
 }
 
 // ============================================================================
@@ -155,39 +160,40 @@ impl FlowRepository for PostgresFlowRepository {
     }
 
     async fn get_flow(&self, id: FlowId) -> Result<Flow, DomainError> {
-        let row = sqlx::query("SELECT id, name, description FROM flows WHERE id = $1")
-            .bind(id.into_uuid())
-            .fetch_optional(&*self.pool)
-            .await
-            .map_err(|e| DomainError::repository(e.to_string()))?
-            .ok_or_else(|| DomainError::not_found("Flow", id.to_string()))?;
+        let row = sqlx::query(
+            "SELECT id, name, description, bindings FROM flows WHERE id = $1",
+        )
+        .bind(id.into_uuid())
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?
+        .ok_or_else(|| DomainError::not_found("Flow", id.to_string()))?;
 
         let flow_uuid: Uuid = row.get("id");
         let mut steps_map = load_steps_for_flows(&self.pool, &[flow_uuid]).await?;
         let steps = steps_map.remove(&flow_uuid).unwrap_or_default();
 
-        Ok(build_flow(&row, steps))
+        build_flow(&row, steps)
     }
 
     async fn list_flows(&self) -> Result<Vec<Flow>, DomainError> {
-        let rows = sqlx::query("SELECT id, name, description FROM flows ORDER BY created_at DESC")
-            .fetch_all(&*self.pool)
-            .await
-            .map_err(|e| DomainError::repository(e.to_string()))?;
+        let rows = sqlx::query(
+            "SELECT id, name, description, bindings FROM flows ORDER BY created_at DESC",
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?;
 
         let flow_ids: Vec<Uuid> = rows.iter().map(|r| r.get("id")).collect();
         let mut steps_map = load_steps_for_flows(&self.pool, &flow_ids).await?;
 
-        let flows = rows
-            .iter()
+        rows.iter()
             .map(|row| {
                 let fid: Uuid = row.get("id");
                 let steps = steps_map.remove(&fid).unwrap_or_default();
                 build_flow(row, steps)
             })
-            .collect();
-
-        Ok(flows)
+            .collect()
     }
 
     async fn update_flow(
@@ -202,7 +208,7 @@ impl FlowRepository for PostgresFlowRepository {
                  description = COALESCE($3, description), \
                  updated_at = NOW() \
              WHERE id = $1 \
-             RETURNING id, name, description",
+             RETURNING id, name, description, bindings",
         )
         .bind(id.into_uuid())
         .bind(name)
@@ -216,7 +222,7 @@ impl FlowRepository for PostgresFlowRepository {
         let mut steps_map = load_steps_for_flows(&self.pool, &[flow_uuid]).await?;
         let steps = steps_map.remove(&flow_uuid).unwrap_or_default();
 
-        Ok(build_flow(&row, steps))
+        build_flow(&row, steps)
     }
 
     async fn delete_flow(&self, id: FlowId) -> Result<(), DomainError> {
@@ -508,5 +514,115 @@ impl FieldRepository for PostgresFlowRepository {
         }
 
         Ok(fields)
+    }
+}
+
+// ============================================================================
+// BindingRepository
+// ============================================================================
+
+use std::collections::HashMap as StdHashMap;
+
+async fn load_bindings(
+    pool: &PgPool,
+    flow_id: FlowId,
+) -> Result<Vec<EstimatorBinding>, DomainError> {
+    let row = sqlx::query("SELECT bindings FROM flows WHERE id = $1")
+        .bind(flow_id.into_uuid())
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| DomainError::repository(e.to_string()))?
+        .ok_or_else(|| DomainError::not_found("Flow", flow_id.to_string()))?;
+    let j: sqlx::types::Json<Vec<EstimatorBinding>> = row
+        .try_get("bindings")
+        .map_err(|e| DomainError::internal(format!("Failed to decode bindings: {e}")))?;
+    Ok(j.0)
+}
+
+async fn write_bindings(
+    pool: &PgPool,
+    flow_id: FlowId,
+    bindings: &[EstimatorBinding],
+) -> Result<(), DomainError> {
+    let json = sqlx::types::Json(bindings);
+    let result =
+        sqlx::query("UPDATE flows SET bindings = $2, updated_at = NOW() WHERE id = $1")
+            .bind(flow_id.into_uuid())
+            .bind(json)
+            .execute(pool)
+            .await
+            .map_err(|e| DomainError::repository(e.to_string()))?;
+    if result.rows_affected() == 0 {
+        return Err(DomainError::not_found("Flow", flow_id.to_string()));
+    }
+    Ok(())
+}
+
+impl BindingRepository for PostgresFlowRepository {
+    async fn add_binding(
+        &self,
+        flow_id: FlowId,
+        binding: EstimatorBinding,
+    ) -> Result<EstimatorBinding, DomainError> {
+        let mut bindings = load_bindings(&self.pool, flow_id).await?;
+        if bindings.iter().any(|b| b.id == binding.id) {
+            return Err(DomainError::conflict(format!(
+                "Binding with id '{}' already exists on this flow",
+                binding.id
+            )));
+        }
+        bindings.push(binding.clone());
+        write_bindings(&self.pool, flow_id, &bindings).await?;
+        Ok(binding)
+    }
+
+    async fn update_binding(
+        &self,
+        flow_id: FlowId,
+        id: BindingId,
+        inputs_mapping: Option<StdHashMap<String, InputBindingValue>>,
+        map_over_step: Option<Option<StepId>>,
+        outputs_reduce_strategy: Option<StdHashMap<String, AggregationStrategy>>,
+    ) -> Result<EstimatorBinding, DomainError> {
+        let mut bindings = load_bindings(&self.pool, flow_id).await?;
+        let pos = bindings
+            .iter()
+            .position(|b| b.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorBinding", id.to_string()))?;
+
+        if let Some(m) = inputs_mapping {
+            bindings[pos].inputs_mapping = m;
+        }
+        if let Some(s) = map_over_step {
+            bindings[pos].map_over_step = s;
+        }
+        if let Some(r) = outputs_reduce_strategy {
+            bindings[pos].outputs_reduce_strategy = r;
+        }
+
+        let updated = bindings[pos].clone();
+        write_bindings(&self.pool, flow_id, &bindings).await?;
+        Ok(updated)
+    }
+
+    async fn remove_binding(
+        &self,
+        flow_id: FlowId,
+        id: BindingId,
+    ) -> Result<(), DomainError> {
+        let mut bindings = load_bindings(&self.pool, flow_id).await?;
+        let pos = bindings
+            .iter()
+            .position(|b| b.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorBinding", id.to_string()))?;
+        bindings.remove(pos);
+        write_bindings(&self.pool, flow_id, &bindings).await
+    }
+
+    async fn list_bindings(
+        &self,
+        flow_id: FlowId,
+    ) -> Result<Vec<EstimatorBinding>, DomainError> {
+        load_bindings(&self.pool, flow_id).await
     }
 }

@@ -7,7 +7,7 @@ use super::{
     entities::{
         field::{Field, FieldConfig},
         flow::Flow,
-        ids::{FieldId, FlowId, StepId},
+        id::{FieldId, FlowId, StepId},
         step::Step,
     },
     ports::{
@@ -330,5 +330,264 @@ where
         query: Option<String>,
     ) -> Result<Vec<Field>, DomainError> {
         self.field_repo.get_flow_fields(flow_id, query).await
+    }
+}
+
+// ============================================================================
+// Binding service
+// ============================================================================
+
+use std::collections::HashMap;
+
+use crate::domain::estimator::{entities::id::EstimatorId, ports::EstimatorRepository};
+
+use super::entities::binding::{AggregationStrategy, EstimatorBinding, InputBindingValue};
+use super::entities::id::BindingId;
+use super::ports::{BindingRepository, BindingService};
+
+/// Orchestrates EstimatorBinding CRUD, validating wiring against the target
+/// estimator's signature and the parent flow's structure before persisting.
+#[derive(Clone)]
+pub struct BindingServiceImpl<BR, FR, ER> {
+    binding_repo: BR,
+    flow_repo: FR,
+    estimator_repo: ER,
+}
+
+impl<BR, FR, ER> BindingServiceImpl<BR, FR, ER> {
+    pub fn new(binding_repo: BR, flow_repo: FR, estimator_repo: ER) -> Self {
+        Self {
+            binding_repo,
+            flow_repo,
+            estimator_repo,
+        }
+    }
+}
+
+/// Validate a binding proposal against the flow and the referenced estimator.
+/// Checks: estimator belongs to the flow; input_mapping keys match estimator
+/// input keys; mapped fields exist on the flow; map_over_step exists and is
+/// repeatable; output reduce keys match estimator output keys; chained
+/// BindingOutput refs point to bindings that already exist on the flow and
+/// expose the referenced output key.
+async fn validate_binding<FR, ER>(
+    flow_repo: &FR,
+    estimator_repo: &ER,
+    flow_id: FlowId,
+    estimator_id: EstimatorId,
+    inputs_mapping: &HashMap<String, InputBindingValue>,
+    map_over_step: Option<StepId>,
+    outputs_reduce_strategy: &HashMap<String, AggregationStrategy>,
+    exclude_binding_id: Option<BindingId>,
+) -> Result<(), DomainError>
+where
+    FR: FlowRepository + Send + Sync,
+    ER: EstimatorRepository + Send + Sync,
+{
+    let flow = flow_repo.get_flow(flow_id).await?;
+    let estimator = estimator_repo.get_estimator(estimator_id).await?;
+
+    if estimator.flow_id != flow_id {
+        return Err(DomainError::validation(
+            "Estimator does not belong to this flow",
+        ));
+    }
+
+    // Input key coverage: every input_key in mapping must exist on estimator.inputs
+    let input_keys: std::collections::HashSet<&str> =
+        estimator.inputs.iter().map(|i| i.key.as_str()).collect();
+    for key in inputs_mapping.keys() {
+        if !input_keys.contains(key.as_str()) {
+            return Err(DomainError::validation(format!(
+                "Input key '{key}' is not declared on the referenced estimator"
+            )));
+        }
+    }
+
+    // Output reduce keys must match estimator outputs
+    let output_keys: std::collections::HashSet<&str> =
+        estimator.outputs.iter().map(|o| o.key.as_str()).collect();
+    for key in outputs_reduce_strategy.keys() {
+        if !output_keys.contains(key.as_str()) {
+            return Err(DomainError::validation(format!(
+                "Output key '{key}' is not declared on the referenced estimator"
+            )));
+        }
+    }
+
+    // Collect all (step_id, field_id) pairs on the flow
+    let field_ids: std::collections::HashSet<FieldId> = flow
+        .steps
+        .iter()
+        .flat_map(|s| s.fields.iter().map(|f| f.id))
+        .collect();
+
+    if let Some(sid) = map_over_step {
+        let step = flow
+            .steps
+            .iter()
+            .find(|s| s.id == sid)
+            .ok_or_else(|| DomainError::validation(format!(
+                "map_over_step '{sid}' does not belong to this flow"
+            )))?;
+        if !step.is_repeatable {
+            return Err(DomainError::validation(format!(
+                "map_over_step '{}' targets a non-repeatable step",
+                step.title
+            )));
+        }
+    }
+
+    // Index existing bindings by id (excluding the one being updated so a
+    // binding's own outputs aren't counted)
+    let existing_bindings: HashMap<BindingId, &EstimatorBinding> = flow
+        .bindings
+        .iter()
+        .filter(|b| Some(b.id) != exclude_binding_id)
+        .map(|b| (b.id, b))
+        .collect();
+
+    for (input_key, value) in inputs_mapping {
+        match value {
+            InputBindingValue::Field { field_id } => {
+                if !field_ids.contains(field_id) {
+                    return Err(DomainError::validation(format!(
+                        "Input '{input_key}': field '{field_id}' does not belong to this flow"
+                    )));
+                }
+            }
+            InputBindingValue::Constant { .. } => {}
+            InputBindingValue::BindingOutput {
+                binding_id,
+                output_key,
+            } => {
+                let upstream = existing_bindings.get(binding_id).ok_or_else(|| {
+                    DomainError::validation(format!(
+                        "Input '{input_key}': binding '{binding_id}' does not exist on this flow"
+                    ))
+                })?;
+                let upstream_est = estimator_repo
+                    .get_estimator(upstream.estimator_id)
+                    .await?;
+                if !upstream_est.outputs.iter().any(|o| &o.key == output_key) {
+                    return Err(DomainError::validation(format!(
+                        "Input '{input_key}': upstream binding does not expose output '{output_key}'"
+                    )));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+impl<BR, FR, ER> BindingService for BindingServiceImpl<BR, FR, ER>
+where
+    BR: BindingRepository + Send + Sync,
+    FR: FlowRepository + Send + Sync,
+    ER: EstimatorRepository + Send + Sync,
+{
+    async fn add_binding(
+        &self,
+        flow_id: FlowId,
+        estimator_id: EstimatorId,
+        inputs_mapping: HashMap<String, InputBindingValue>,
+        map_over_step: Option<StepId>,
+        outputs_reduce_strategy: HashMap<String, AggregationStrategy>,
+    ) -> Result<EstimatorBinding, DomainError> {
+        validate_binding(
+            &self.flow_repo,
+            &self.estimator_repo,
+            flow_id,
+            estimator_id,
+            &inputs_mapping,
+            map_over_step,
+            &outputs_reduce_strategy,
+            None,
+        )
+        .await?;
+
+        let binding = EstimatorBinding::new(
+            estimator_id,
+            inputs_mapping,
+            map_over_step,
+            outputs_reduce_strategy,
+        );
+        self.binding_repo.add_binding(flow_id, binding).await
+    }
+
+    async fn update_binding(
+        &self,
+        flow_id: FlowId,
+        id: BindingId,
+        inputs_mapping: Option<HashMap<String, InputBindingValue>>,
+        map_over_step: Option<Option<StepId>>,
+        outputs_reduce_strategy: Option<HashMap<String, AggregationStrategy>>,
+    ) -> Result<EstimatorBinding, DomainError> {
+        let current = self
+            .binding_repo
+            .list_bindings(flow_id)
+            .await?
+            .into_iter()
+            .find(|b| b.id == id)
+            .ok_or_else(|| DomainError::not_found("EstimatorBinding", id.to_string()))?;
+
+        let new_inputs = inputs_mapping.clone().unwrap_or_else(|| current.inputs_mapping.clone());
+        let new_map = match &map_over_step {
+            Some(v) => *v,
+            None => current.map_over_step,
+        };
+        let new_reduce = outputs_reduce_strategy
+            .clone()
+            .unwrap_or_else(|| current.outputs_reduce_strategy.clone());
+
+        validate_binding(
+            &self.flow_repo,
+            &self.estimator_repo,
+            flow_id,
+            current.estimator_id,
+            &new_inputs,
+            new_map,
+            &new_reduce,
+            Some(id),
+        )
+        .await?;
+
+        self.binding_repo
+            .update_binding(flow_id, id, inputs_mapping, map_over_step, outputs_reduce_strategy)
+            .await
+    }
+
+    async fn remove_binding(
+        &self,
+        flow_id: FlowId,
+        id: BindingId,
+    ) -> Result<(), DomainError> {
+        // Prevent removing a binding that's referenced by a later binding's
+        // input mapping — would leave dangling chain.
+        let bindings = self.binding_repo.list_bindings(flow_id).await?;
+        for b in &bindings {
+            if b.id == id {
+                continue;
+            }
+            for v in b.inputs_mapping.values() {
+                if let InputBindingValue::BindingOutput { binding_id, .. } = v {
+                    if *binding_id == id {
+                        return Err(DomainError::conflict(format!(
+                            "Binding '{id}' is referenced by binding '{}' and cannot be deleted",
+                            b.id
+                        )));
+                    }
+                }
+            }
+        }
+        self.binding_repo.remove_binding(flow_id, id).await
+    }
+
+    async fn list_bindings(
+        &self,
+        flow_id: FlowId,
+    ) -> Result<Vec<EstimatorBinding>, DomainError> {
+        self.binding_repo.list_bindings(flow_id).await
     }
 }

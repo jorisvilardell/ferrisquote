@@ -15,7 +15,8 @@ pub fn estimator_flow_routes<
     FS: FlowService + StepService + FieldService + Clone + 'static,
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
->() -> Router<AppState<FS, ES, SS>> {
+    BS: ferrisquote_domain::domain::flows::ports::BindingService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS, BS>> {
     Router::new()
         .route("/{flow_id}/estimators", post(handlers::create_estimator))
         .route("/{flow_id}/estimators", get(handlers::list_estimators))
@@ -26,7 +27,8 @@ pub fn estimator_routes<
     FS: FlowService + StepService + FieldService + Clone + 'static,
     ES: EstimatorService + Clone + 'static,
     SS: SubmissionService + Clone + 'static,
->() -> Router<AppState<FS, ES, SS>> {
+    BS: ferrisquote_domain::domain::flows::ports::BindingService + Clone + 'static,
+>() -> Router<AppState<FS, ES, SS, BS>> {
     Router::new()
         .route("/{estimator_id}", get(handlers::get_estimator))
         .route("/{estimator_id}", put(handlers::update_estimator))

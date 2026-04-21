@@ -1,10 +1,10 @@
 use std::{collections::HashMap, future::Future};
 
-use crate::domain::{error::DomainError, flows::entities::ids::FlowId};
+use crate::domain::{error::DomainError, flows::entities::id::FlowId};
 
 use super::entities::{
     estimator::Estimator,
-    ids::{EstimatorId, EstimatorInputId, EstimatorOutputId},
+    id::{EstimatorId, EstimatorInputId, EstimatorOutputId},
     output::EstimatorOutput,
     parameter::{EstimatorParameter, EstimatorParameterType},
     submission::SubmissionData,

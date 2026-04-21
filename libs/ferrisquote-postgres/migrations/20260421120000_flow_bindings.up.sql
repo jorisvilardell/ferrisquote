@@ -1,0 +1,2 @@
+ALTER TABLE flows
+  ADD COLUMN IF NOT EXISTS bindings JSONB NOT NULL DEFAULT '[]'::jsonb;
