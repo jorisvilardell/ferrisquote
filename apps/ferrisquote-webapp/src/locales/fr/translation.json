@@ -1,0 +1,85 @@
+{
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "close": "Fermer",
+    "add": "Ajouter",
+    "edit": "Modifier",
+    "optional": "Optionnel",
+    "loading": "Chargement…",
+    "not_mapped": "— Non relié —"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "quotes": "Devis",
+    "flows": "Flux",
+    "settings": "Paramètres",
+    "navigation": "Navigation",
+    "language": "Langue"
+  },
+  "flow": {
+    "description": "Description",
+    "add_step": "Ajouter une étape",
+    "add_field": "Ajouter un champ"
+  },
+  "estimator": {
+    "description": "Description",
+    "description_placeholder": "Optionnel — décrit cet estimateur",
+    "inputs": "Entrées",
+    "inputs_help": "Paramètres requis pour exécuter cet estimateur. Types : nombre, booléen, produit.",
+    "outputs": "Sorties",
+    "outputs_help": "Variables produites par le calcul. Référencez les entrées avec @input_key.",
+    "add_input": "Ajouter une entrée",
+    "add_output": "Ajouter une sortie",
+    "execution_context": "Contexte d'exécution",
+    "execution_help": "Exécuter une seule fois, ou boucler sur chaque itération d'une étape répétable.",
+    "global_execution": "Exécution globale",
+    "loop_over": "Boucler sur : {{step}}",
+    "no_repeatable_steps": "Aucune étape répétable dans ce flux",
+    "arguments": "Arguments",
+    "arguments_help": "Associez chaque entrée à un champ du flux ou à la sortie d'un autre bloc.",
+    "reduce": "Combinaison",
+    "reduce_help": "Comment agréger chaque sortie sur les itérations de la boucle.",
+    "context_locked": "Le contexte est verrouillé tant que les champs de {{steps}} sont référencés.",
+    "validation": {
+      "name_chars": "Le nom ne peut contenir que des lettres, chiffres, espaces et tirets bas.",
+      "name_duplicate": "Un estimateur nommé \"{{name}}\" existe déjà."
+    }
+  },
+  "input": {
+    "key": "Clé",
+    "type": "Type",
+    "type_number": "Nombre",
+    "type_boolean": "Booléen",
+    "type_product": "Produit",
+    "label_filter": "Filtre de libellé (optionnel)",
+    "delete_title": "Supprimer cette entrée ?",
+    "delete_confirm": "\"{{key}}\" sera supprimé définitivement."
+  },
+  "output": {
+    "key": "Clé",
+    "expression": "Expression",
+    "expression_placeholder": "ex. @surface * @prix_unitaire * 1.2",
+    "delete_title": "Supprimer cette sortie ?",
+    "delete_confirm": "\"{{key}}\" sera supprimé définitivement."
+  },
+  "aggregation": {
+    "sum": "Somme",
+    "average": "Moyenne",
+    "max": "Maximum",
+    "min": "Minimum",
+    "count": "Nombre",
+    "first": "Premier",
+    "last": "Dernier"
+  },
+  "errors": {
+    "generic": "Une erreur est survenue",
+    "update_failed": "La mise à jour a échoué : {{msg}}",
+    "signature_update_failed": "La mise à jour de la signature a échoué : {{msg}}",
+    "wiring_update_failed": "La mise à jour du câblage a échoué : {{msg}}",
+    "field_not_numeric": "Le champ \"{{key}}\" n'est pas numérique",
+    "field_needs_context": "Le champ \"{{label}}\" appartient à l'étape répétable \"{{step}}\". Définissez d'abord le contexte d'exécution sur cette étape.",
+    "context_in_use": "Impossible de changer le contexte d'exécution — des champs de {{steps}} sont utilisés. Retirez ces références d'abord."
+  }
+}
