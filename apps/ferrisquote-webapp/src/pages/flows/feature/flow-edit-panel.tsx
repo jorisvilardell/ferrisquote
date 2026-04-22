@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useEffect, useState } from "react"
 import type { Schemas } from "@/api/api.client"
 import {
   useAddField,
@@ -166,10 +166,18 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
     }
   }
 
-  // Estimator-details holds the ExpressionBuilder calculator — give it more
-  // room to breathe (wider on desktop, full-width on mobile). Other modes
-  // stay at the compact 320px width so the canvas keeps its real-estate.
-  const wide = state?.mode === "estimator-details"
+  // The calculator lives inside an expanded output card. Widen the panel
+  // only when such a card is open so the compact layout holds for the rest
+  // of the time. EstimatorDetailsPanel notifies us via `onOutputExpandedChange`.
+  const [outputExpanded, setOutputExpanded] = useState(false)
+  // Collapse the wide mode whenever we leave estimator-details so the panel
+  // reverts to compact without waiting for a child-side callback.
+  useEffect(() => {
+    if (state?.mode !== "estimator-details" && outputExpanded) {
+      setOutputExpanded(false)
+    }
+  }, [state?.mode, outputExpanded])
+  const wide = state?.mode === "estimator-details" && outputExpanded
   const widthCls = !state
     ? "w-0"
     : wide
@@ -179,13 +187,17 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
   return (
     <div
       className={cn(
-        "shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out",
+        // Long + soft easing so the widen-for-calculator transition feels
+        // intentional rather than snappy. Matches the inner div below so
+        // the border + content slide in lockstep.
+        "shrink-0 overflow-hidden transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
         widthCls,
       )}
     >
       <div
         className={cn(
           "h-full border-l bg-background flex flex-col overflow-hidden",
+          "transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
           wide ? "w-full sm:w-[460px] lg:w-[520px]" : "w-full sm:w-80",
         )}
       >
@@ -231,6 +243,7 @@ function FlowEditPanelImpl({ flowId, state, onClose, setPanelState }: Props) {
             estimatorsIndex={estimatorsIndex}
             repeatableFields={repeatableFields}
             repeatableSteps={repeatableSteps}
+            onOutputExpandedChange={setOutputExpanded}
             onClose={onClose}
           />
         )}

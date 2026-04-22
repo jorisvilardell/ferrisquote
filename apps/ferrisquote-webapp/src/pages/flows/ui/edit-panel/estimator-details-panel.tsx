@@ -56,6 +56,7 @@ export function EstimatorDetailsPanel({
   estimatorsIndex,
   repeatableFields,
   repeatableSteps,
+  onOutputExpandedChange,
   onClose,
 }: {
   estimator: Schemas.EstimatorResponse
@@ -69,6 +70,9 @@ export function EstimatorDetailsPanel({
   estimatorsIndex: EstimatorIndex
   repeatableFields: RepeatableField[]
   repeatableSteps: RepeatableStep[]
+  /** Notifies parent when an output card is expanded so the panel can
+   *  widen for the calculator UI. */
+  onOutputExpandedChange?: (expanded: boolean) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -99,6 +103,22 @@ export function EstimatorDetailsPanel({
   useEffect(() => {
     setExpandedCardId(null)
   }, [estimator.id])
+
+  // Tell parent whether an *output* (calculator) card is open so it can
+  // widen the side panel. Input cards don't trigger the expansion.
+  const outputIds = useMemo(() => {
+    const ids = new Set(estimator.outputs.map((o) => o.id))
+    for (const p of drafts.pendingOutputAdds) ids.add(p.id)
+    return ids
+  }, [estimator.outputs, drafts.pendingOutputAdds])
+  useEffect(() => {
+    const isOutput =
+      expandedCardId != null && outputIds.has(expandedCardId)
+    onOutputExpandedChange?.(isOutput)
+  }, [expandedCardId, outputIds, onOutputExpandedChange])
+  useEffect(() => {
+    return () => onOutputExpandedChange?.(false)
+  }, [onOutputExpandedChange])
 
   const updateEstimator = useUpdateEstimator(flowId, estimator.id)
   const addInput = useAddInput(flowId, estimator.id)
