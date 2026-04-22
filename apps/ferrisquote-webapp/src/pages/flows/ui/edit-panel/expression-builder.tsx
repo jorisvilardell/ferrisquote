@@ -500,14 +500,13 @@ function DisplayZone({
       <div
         ref={scrollRef}
         className={cn(
-          // Three-line viewport: line-height-none + text-2xl ≈ 28-30px per
-          // line; 3 lines + top padding for the overflow indicator.
-          "relative max-h-[108px] overflow-y-auto px-4 pt-5 pb-3",
-          "flex flex-wrap items-center justify-start gap-y-1",
+          // Fixed 3-line viewport — height stays constant whether the
+          // expression is empty, one line, or overflowing.
+          "relative h-[108px] overflow-y-auto px-4 pt-5 pb-3",
+          "flex flex-wrap items-center justify-start gap-y-1 content-start",
           "font-mono text-slate-100 leading-none tracking-tight",
           "cursor-text",
-          // Hide scrollbar chrome on all engines — the `•••` glyph is the
-          // only overflow cue, TI-style.
+          // Hide scrollbar chrome on all engines.
           "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none]",
         )}
         style={{ scrollbarWidth: "none" }}
@@ -544,11 +543,20 @@ function DisplayZone({
           <HelpHint text={hint} label={t("common.help")} />
         </div>
       </div>
-      {error && (
-        <div className="relative border-t border-red-500/30 bg-red-950/40 px-4 py-1.5 text-[11px] text-red-300">
-          {error}
-        </div>
-      )}
+      {/* Reserved-space error row — always rendered at a fixed height so
+          toggling an error on/off never shifts the keypad below. Border
+          and background appear only when an error is present; otherwise
+          the row is visually empty but structurally present. */}
+      <div
+        className={cn(
+          "relative px-4 py-1.5 text-[11px] leading-tight min-h-[26px]",
+          error
+            ? "border-t border-red-500/30 bg-red-950/40 text-red-300"
+            : "border-t border-slate-800 bg-slate-900 text-transparent",
+        )}
+      >
+        {error ?? "\u00A0"}
+      </div>
     </div>
   )
 }
